@@ -13,10 +13,10 @@ import androidx.compose.ui.platform.LocalContext
 import com.patil.coconut_pfa.data.local.datastore.ThemeMode
 
 private val DarkColorScheme = darkColorScheme(
-    primary = Emerald80,
-    onPrimary = Color(0xFF003732),
-    primaryContainer = EmeraldPrimaryContainerDark,
-    onPrimaryContainer = Color(0xFFB0F2EA),
+    primary = Orange80,
+    onPrimary = Color.White,
+    primaryContainer = OrangePrimaryContainerDark,
+    onPrimaryContainer = Color(0xFFFFEDD5),
     secondary = SlateSecondary80,
     onSecondary = Color(0xFF1E293B),
     secondaryContainer = SlateSecondaryContainerDark,
@@ -40,10 +40,10 @@ private val DarkColorScheme = darkColorScheme(
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = Emerald40,
+    primary = Orange40,
     onPrimary = Color.White,
-    primaryContainer = EmeraldPrimaryContainerLight,
-    onPrimaryContainer = Color(0xFF042F2C),
+    primaryContainer = OrangePrimaryContainerLight,
+    onPrimaryContainer = Color(0xFF431407),
     secondary = SlateSecondary40,
     onSecondary = Color.White,
     secondaryContainer = SlateSecondaryContainerLight,

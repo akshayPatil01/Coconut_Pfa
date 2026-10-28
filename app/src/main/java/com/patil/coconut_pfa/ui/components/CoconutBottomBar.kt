@@ -4,6 +4,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -48,13 +49,13 @@ import androidx.compose.ui.unit.dp
 import com.patil.coconut_pfa.navigation.Screen
 import com.patil.coconut_pfa.ui.theme.Coconut_PfaTheme
 import com.patil.coconut_pfa.ui.theme.DarkSlateNavBar
-import com.patil.coconut_pfa.ui.theme.GradientPurpleStart
-import com.patil.coconut_pfa.ui.theme.GradientPurpleEnd
+import com.patil.coconut_pfa.ui.theme.GradientOrangeCoralEnd
 import com.patil.coconut_pfa.ui.theme.GradientOrangeCoralStart
 
 /**
  * Bottom Navigation Bar for Coconut PFA with 5 destinations.
- * Features a custom curved dark slate bottom bar and a glowing purple FAB.
+ * Features a custom curved bottom bar matching the Accounts tab Net Worth card (#121518),
+ * a subtle vertical depth gradient with top accent line, spring animations, and an orange FAB.
  */
 @Composable
 fun CoconutBottomBar(
@@ -71,98 +72,121 @@ fun CoconutBottomBar(
         ),
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
         color = DarkSlateNavBar,
+        border = BorderStroke(
+            width = 1.dp,
+            brush = Brush.horizontalGradient(
+                colors = listOf(
+                    Color(0xFF262A30),
+                    GradientOrangeCoralStart.copy(alpha = 0.35f),
+                    Color(0xFF262A30)
+                )
+            )
+        )
     ) {
-        Row(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .navigationBarsPadding()
-                .height(72.dp)
-                .padding(horizontal = 8.dp),
-            horizontalArrangement = Arrangement.SpaceAround,
-            verticalAlignment = Alignment.CenterVertically
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            Color(0xFF1B1E22),
+                            DarkSlateNavBar
+                        )
+                    )
+                )
         ) {
-            // 1. Home tab
-            BottomNavItem(
-                icon = Icons.Rounded.Home,
-                label = "Home",
-                selected = currentDestination == Screen.Home,
-                onClick = { onNavigateToTab(Screen.Home) },
-                modifier = Modifier.weight(1f)
-            )
-
-            // 2. Transactions tab
-            BottomNavItem(
-                icon = Icons.AutoMirrored.Rounded.ReceiptLong,
-                label = "Transactions",
-                selected = currentDestination is Screen.Transactions,
-                onClick = { onNavigateToTab(Screen.Transactions()) },
-                modifier = Modifier.weight(1f)
-            )
-
-            // 3. Center Raised '+' Add Button
-            Box(
-                modifier = Modifier.weight(1.2f),
-                contentAlignment = Alignment.Center
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .height(72.dp)
+                    .padding(horizontal = 8.dp),
+                horizontalArrangement = Arrangement.SpaceAround,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // Outer glow effect box
+                // 1. Home tab
+                BottomNavItem(
+                    icon = Icons.Rounded.Home,
+                    label = "Home",
+                    selected = currentDestination == Screen.Home,
+                    onClick = { onNavigateToTab(Screen.Home) },
+                    modifier = Modifier.weight(1f)
+                )
+
+                // 2. Transactions tab
+                BottomNavItem(
+                    icon = Icons.AutoMirrored.Rounded.ReceiptLong,
+                    label = "Transactions",
+                    selected = currentDestination is Screen.Transactions,
+                    onClick = { onNavigateToTab(Screen.Transactions()) },
+                    modifier = Modifier.weight(1f)
+                )
+
+                // 3. Center Raised '+' Add Button
                 Box(
-                    modifier = Modifier
-                        .size(56.dp)
-                        .clip(CircleShape)
-                        .background(
-                            Brush.linearGradient(
-                                colors = listOf(
-                                    GradientPurpleStart.copy(alpha = 0.4f),
-                                    GradientPurpleEnd.copy(alpha = 0.4f)
+                    modifier = Modifier.weight(1.2f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    // Outer glow effect box
+                    Box(
+                        modifier = Modifier
+                            .size(56.dp)
+                            .clip(CircleShape)
+                            .background(
+                                Brush.linearGradient(
+                                    colors = listOf(
+                                        GradientOrangeCoralStart.copy(alpha = 0.35f),
+                                        GradientOrangeCoralEnd.copy(alpha = 0.35f)
+                                    )
                                 )
                             )
-                        )
-                ) {
-                    FloatingActionButton(
-                        onClick = onAddClick,
-                        shape = CircleShape,
-                        containerColor = Color.Transparent,
-                        elevation = FloatingActionButtonDefaults.elevation(
-                            defaultElevation = 0.dp,
-                            pressedElevation = 0.dp
-                        ),
-                        modifier = Modifier
-                            .size(52.dp)
-                            .align(Alignment.Center)
-                            .background(
-                                brush = Brush.linearGradient(
-                                    colors = listOf(GradientPurpleStart, GradientPurpleEnd)
-                                ),
-                                shape = CircleShape
-                            )
                     ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Add,
-                            contentDescription = "Add Transaction",
-                            tint = Color.White,
-                            modifier = Modifier.size(28.dp)
-                        )
+                        FloatingActionButton(
+                            onClick = onAddClick,
+                            shape = CircleShape,
+                            containerColor = Color.Transparent,
+                            elevation = FloatingActionButtonDefaults.elevation(
+                                defaultElevation = 0.dp,
+                                pressedElevation = 0.dp
+                            ),
+                            modifier = Modifier
+                                .size(52.dp)
+                                .align(Alignment.Center)
+                                .background(
+                                    brush = Brush.linearGradient(
+                                        colors = listOf(GradientOrangeCoralStart, GradientOrangeCoralEnd)
+                                    ),
+                                    shape = CircleShape
+                                )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Add,
+                                contentDescription = "Add Transaction",
+                                tint = Color.White,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
                     }
                 }
+
+                // 4. Reports tab
+                BottomNavItem(
+                    icon = Icons.Rounded.Payments,
+                    label = "Reports",
+                    selected = currentDestination == Screen.Reports,
+                    onClick = { onNavigateToTab(Screen.Reports) },
+                    modifier = Modifier.weight(1f)
+                )
+
+                // 5. Accounts tab
+                BottomNavItem(
+                    icon = Icons.Rounded.AccountBalance,
+                    label = "Accounts",
+                    selected = currentDestination == Screen.Accounts,
+                    onClick = { onNavigateToTab(Screen.Accounts) },
+                    modifier = Modifier.weight(1f)
+                )
             }
-
-            // 4. Payments tab // actually the plan uses 'Reports' instead of 'Payments' in text "Home, Transactions, Central +, Reports, Accounts", but Screen.Payments and Screen.Reports might differ. I will stick to what exists in code, e.g. Screen.Payments or if it doesn't exist I'll use it. Code says Payments.
-            BottomNavItem(
-                icon = Icons.Rounded.Payments,
-                label = "Reports",
-                selected = currentDestination == Screen.Reports,
-                onClick = { onNavigateToTab(Screen.Reports) },
-                modifier = Modifier.weight(1f)
-            )
-
-            // 5. Accounts tab
-            BottomNavItem(
-                icon = Icons.Rounded.AccountBalance,
-                label = "Accounts",
-                selected = currentDestination == Screen.Accounts,
-                onClick = { onNavigateToTab(Screen.Accounts) },
-                modifier = Modifier.weight(1f)
-            )
         }
     }
 }
@@ -176,19 +200,19 @@ private fun BottomNavItem(
     modifier: Modifier = Modifier,
 ) {
     val contentColor by animateColorAsState(
-        targetValue = if (selected) Color.White else Color.Gray,
+        targetValue = if (selected) Color.White else Color(0xFF9EA3A8),
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
         label = "BottomNavContentColor"
     )
 
     val pillColor by animateColorAsState(
-        targetValue = if (selected) GradientOrangeCoralStart.copy(alpha = 0.8f) else Color.Transparent,
-        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        targetValue = if (selected) GradientOrangeCoralStart else Color.Transparent,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow),
         label = "BottomNavPillColor"
     )
 
     val iconScale by animateFloatAsState(
-        targetValue = if (selected) 1.15f else 1.0f,
+        targetValue = if (selected) 1.18f else 1.0f,
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow),
         label = "BottomNavIconScale"
     )

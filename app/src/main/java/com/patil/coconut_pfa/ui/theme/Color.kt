@@ -2,7 +2,13 @@ package com.patil.coconut_pfa.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Teal / Emerald primary palette (fresh, modern financial accent)
+// Orange primary palette (vibrant, warm financial accent)
+val Orange80 = Color(0xFFFA7035)
+val OrangePrimaryContainerDark = Color(0xFF7C2D12)
+val Orange40 = Color(0xFFEA580C)
+val OrangePrimaryContainerLight = Color(0xFFFFEDD5)
+
+// Teal / Emerald primary palette
 val Emerald80 = Color(0xFF80E5D9)
 val EmeraldPrimaryContainerDark = Color(0xFF005048)
 val Emerald40 = Color(0xFF0D9488)
@@ -28,7 +34,7 @@ val GradientPurpleEnd = Color(0xFFA855F7)
 val GradientOrangeCoralStart = Color(0xFFEA580C)
 val GradientOrangeCoralEnd = Color(0xFFF97316)
 
-val DarkSlateNavBar = Color(0xFF18181B)
+val DarkSlateNavBar = Color(0xFF121518) // Aligned with Accounts tab Net Worth card background
 val DarkSlateNavBarAlt = Color(0xFF1E1E24)
 
 // Vibrant Pastel Category Badge Tints
