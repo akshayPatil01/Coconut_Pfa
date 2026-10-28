@@ -33,7 +33,8 @@ sealed interface Screen {
     data class AddTransaction(
         val txnId: String? = null,
         val duplicateTxnId: String? = null,
-        val initialDateMillis: Long? = null
+        val initialDateMillis: Long? = null,
+        val billOccurrenceId: String? = null
     ) : Screen {
         override val title: String = if (txnId != null) "Edit Transaction" else "Add Transaction"
     }

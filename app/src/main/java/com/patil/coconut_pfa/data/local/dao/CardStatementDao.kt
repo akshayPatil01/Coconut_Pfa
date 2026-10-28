@@ -17,6 +17,12 @@ interface CardStatementDao {
     @Query("SELECT * FROM card_statements WHERE accountId = :accountId ORDER BY periodEnd DESC")
     fun getStatementsForAccountFlow(accountId: String): Flow<List<CardStatementEntity>>
 
+    @Query("SELECT * FROM card_statements ORDER BY periodEnd DESC")
+    fun getAllStatementsFlow(): Flow<List<CardStatementEntity>>
+
+    @Query("SELECT * FROM card_statements WHERE accountId = :accountId AND periodEnd = :periodEnd LIMIT 1")
+    suspend fun getStatementForPeriod(accountId: String, periodEnd: String): CardStatementEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(statement: CardStatementEntity)
 

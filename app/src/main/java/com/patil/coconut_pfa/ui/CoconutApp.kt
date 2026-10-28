@@ -28,11 +28,14 @@ import com.patil.coconut_pfa.data.local.db.CoconutDatabase
 import com.patil.coconut_pfa.data.local.security.LockManager
 import com.patil.coconut_pfa.data.local.security.PinHasher
 import com.patil.coconut_pfa.data.repository.AccountRepository
+import com.patil.coconut_pfa.data.repository.BillRepository
 import com.patil.coconut_pfa.data.repository.CategoryRepository
 import com.patil.coconut_pfa.data.repository.NetWorthRepository
 import com.patil.coconut_pfa.data.repository.PersonLedgerRepository
 import com.patil.coconut_pfa.data.repository.SettingsRepository
 import com.patil.coconut_pfa.data.repository.TransactionRepository
+import com.patil.coconut_pfa.ui.viewmodel.AddBillViewModel
+import com.patil.coconut_pfa.ui.viewmodel.PaymentsViewModel
 import com.patil.coconut_pfa.navigation.Screen
 import com.patil.coconut_pfa.ui.components.CoconutBottomBar
 import com.patil.coconut_pfa.ui.components.CoconutNavigationDrawer
@@ -90,6 +93,17 @@ fun CoconutApp(
     val categoryRepository = remember { CategoryRepository(database.categoryDao()) }
     val netWorthRepository = remember { NetWorthRepository(database.netWorthSnapshotDao()) }
     val personLedgerRepository = remember { PersonLedgerRepository(database.personDao(), database.ledgerEntryDao()) }
+    val billRepository = remember {
+        BillRepository(
+            billDao = database.billDao(),
+            billOccurrenceDao = database.billOccurrenceDao(),
+            cardStatementDao = database.cardStatementDao(),
+            accountDao = database.accountDao(),
+            cardDetailsDao = database.cardDetailsDao(),
+            loanDetailsDao = database.loanDetailsDao(),
+            txnDao = database.txnDao()
+        )
+    }
 
     val userSettingsDataStore = remember { UserSettingsDataStore(context) }
     val settingsRepository = remember { SettingsRepository(userSettingsDataStore) }
@@ -267,7 +281,22 @@ fun CoconutApp(
                             viewModel = transactionsViewModel
                         )
                     }
-                    Screen.Payments -> PaymentsScreen(onNavigate = navigateTo, modifier = screenModifier)
+                    Screen.Payments -> {
+                        val paymentsViewModel: PaymentsViewModel = viewModel(
+                            factory = PaymentsViewModel.Factory(
+                                billRepository = billRepository,
+                                accountRepository = accountRepository,
+                                categoryRepository = categoryRepository,
+                                transactionRepository = transactionRepository,
+                                personLedgerRepository = personLedgerRepository
+                            )
+                        )
+                        PaymentsScreen(
+                            onNavigate = navigateTo,
+                            modifier = screenModifier,
+                            viewModel = paymentsViewModel
+                        )
+                    }
                     Screen.Accounts -> {
                         val accountsViewModel: AccountsViewModel = viewModel(
                             factory = AccountsViewModel.Factory(
@@ -286,15 +315,17 @@ fun CoconutApp(
                     }
                     is Screen.AddTransaction -> {
                         val addTransactionViewModel: AddTransactionViewModel = viewModel(
-                            key = "add_txn_${dest.txnId ?: dest.duplicateTxnId ?: "new"}",
+                            key = "add_txn_${dest.txnId ?: dest.duplicateTxnId ?: dest.billOccurrenceId ?: "new"}",
                             factory = AddTransactionViewModel.Factory(
                                 txnId = dest.txnId,
                                 duplicateTxnId = dest.duplicateTxnId,
                                 initialDateMillis = dest.initialDateMillis,
+                                billOccurrenceId = dest.billOccurrenceId,
                                 accountRepository = accountRepository,
                                 categoryRepository = categoryRepository,
                                 transactionRepository = transactionRepository,
-                                settingsRepository = settingsRepository
+                                settingsRepository = settingsRepository,
+                                billRepository = billRepository
                             )
                         )
                         AddTransactionScreen(
@@ -349,7 +380,20 @@ fun CoconutApp(
                             viewModel = addAccountViewModel
                         )
                     }
-                    Screen.AddBill -> AddBillScreen(onNavigate = navigateTo, modifier = screenModifier)
+                    Screen.AddBill -> {
+                        val addBillViewModel: AddBillViewModel = viewModel(
+                            factory = AddBillViewModel.Factory(
+                                billRepository = billRepository,
+                                accountRepository = accountRepository,
+                                categoryRepository = categoryRepository
+                            )
+                        )
+                        AddBillScreen(
+                            onNavigate = navigateTo,
+                            modifier = screenModifier,
+                            viewModel = addBillViewModel
+                        )
+                    }
                     Screen.ImportStatement -> ImportStatementScreen(onNavigate = navigateTo, modifier = screenModifier)
                     Screen.ReceiptScan -> ReceiptScanScreen(onNavigate = navigateTo, modifier = screenModifier)
                     Screen.Trash -> {

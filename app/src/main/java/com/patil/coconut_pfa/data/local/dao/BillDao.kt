@@ -17,6 +17,9 @@ interface BillDao {
     @Query("SELECT * FROM bills WHERE active = 1 ORDER BY name ASC")
     fun getActiveBillsFlow(): Flow<List<BillEntity>>
 
+    @Query("SELECT * FROM bills WHERE active = 1 ORDER BY name ASC")
+    suspend fun getActiveBills(): List<BillEntity>
+
     @Query("SELECT * FROM bills ORDER BY name ASC")
     fun getAllBillsFlow(): Flow<List<BillEntity>>
 

@@ -283,10 +283,12 @@ class AddTransactionViewModel(
     private val txnId: String?,
     private val duplicateTxnId: String?,
     private val initialDateMillis: Long?,
+    private val billOccurrenceId: String? = null,
     private val accountRepository: AccountRepository,
     private val categoryRepository: CategoryRepository,
     private val transactionRepository: TransactionRepository,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val billRepository: com.patil.coconut_pfa.data.repository.BillRepository? = null
 ) : ViewModel() {
 
     val uiState: StateFlow<AddTransactionUiState> = combine(
@@ -332,6 +334,22 @@ class AddTransactionViewModel(
         if (type == DbTxnType.TRANSFER && (toAccountId == null || accountId == toAccountId)) return false
         if (type != DbTxnType.TRANSFER && categoryId == null) return false
 
+        if (billOccurrenceId != null && billRepository != null) {
+            val success = billRepository.payBillOccurrence(
+                occurrenceId = billOccurrenceId,
+                payFromAccountId = accountId,
+                amountPaise = amountPaise,
+                occurredAtMillis = occurredAt
+            )
+            if (success) {
+                settingsRepository.setLastUsedAccount(accountId)
+                if (categoryId != null) {
+                    settingsRepository.setLastUsedCategory(categoryId)
+                }
+                return true
+            }
+        }
+
         val txn = TxnEntity(
             id = id,
             type = type,
@@ -357,10 +375,12 @@ class AddTransactionViewModel(
         private val txnId: String?,
         private val duplicateTxnId: String?,
         private val initialDateMillis: Long?,
+        private val billOccurrenceId: String? = null,
         private val accountRepository: AccountRepository,
         private val categoryRepository: CategoryRepository,
         private val transactionRepository: TransactionRepository,
-        private val settingsRepository: SettingsRepository
+        private val settingsRepository: SettingsRepository,
+        private val billRepository: com.patil.coconut_pfa.data.repository.BillRepository? = null
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -368,10 +388,12 @@ class AddTransactionViewModel(
                 txnId,
                 duplicateTxnId,
                 initialDateMillis,
+                billOccurrenceId,
                 accountRepository,
                 categoryRepository,
                 transactionRepository,
-                settingsRepository
+                settingsRepository,
+                billRepository
             ) as T
         }
     }

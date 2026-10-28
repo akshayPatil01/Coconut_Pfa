@@ -29,7 +29,12 @@ data class DueItem(
     val frequency: String = "Monthly",
     val dueDay: Int = 1,
     val payFromAccountId: String? = null,
-    val remindDaysBefore: Int = 3
+    val remindDaysBefore: Int = 3,
+    val occurrenceId: String? = null,
+    val billId: String? = null,
+    val statementId: String? = null,
+    val loanAccountId: String? = null,
+    val canSkip: Boolean = true
 )
 
 data class PaymentHistoryItem(

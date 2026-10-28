@@ -30,14 +30,19 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,39 +50,61 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.patil.coconut_pfa.data.model.BillKind
-import com.patil.coconut_pfa.data.model.DueItem
-import com.patil.coconut_pfa.data.model.DueTimeframe
-import com.patil.coconut_pfa.data.repository.FakeData
+import com.patil.coconut_pfa.data.local.entity.DbBillFrequency
+import com.patil.coconut_pfa.data.local.entity.DbBillKind
 import com.patil.coconut_pfa.navigation.Screen
 import com.patil.coconut_pfa.ui.theme.Coconut_PfaTheme
-import java.util.UUID
+import com.patil.coconut_pfa.ui.viewmodel.AddBillUiState
+import com.patil.coconut_pfa.ui.viewmodel.AddBillViewModel
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun AddBillScreen(
     onNavigate: (Screen) -> Unit,
     modifier: Modifier = Modifier,
+    viewModel: AddBillViewModel? = null
 ) {
+    val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    val uiState by viewModel?.uiState?.collectAsState() ?: remember {
+        mutableStateOf(AddBillUiState(isLoading = false))
+    }
+
     var name by remember { mutableStateOf("") }
-    var selectedKind by remember { mutableStateOf(BillKind.UTILITY) }
+    var selectedKind by remember { mutableStateOf(DbBillKind.UTILITY) }
     var amountText by remember { mutableStateOf("") }
     var amountVaries by remember { mutableStateOf(false) }
-    var frequency by remember { mutableStateOf("Monthly") }
+    var selectedFrequency by remember { mutableStateOf(DbBillFrequency.MONTHLY) }
     var dueDayText by remember { mutableStateOf("5") }
-    var selectedCategory by remember { mutableStateOf("Utilities") }
     var remindDaysBefore by remember { mutableIntStateOf(3) }
 
-    val accountsList = remember { FakeData.accounts }
-    var selectedAccountId by remember { mutableStateOf(accountsList.firstOrNull()?.id ?: "") }
+    var selectedAccountId by remember { mutableStateOf<String?>(null) }
     var accountDropdownExpanded by remember { mutableStateOf(false) }
 
-    val selectedAccountName = accountsList.find { it.id == selectedAccountId }?.name ?: "Select Account"
-    val frequencies = listOf("Monthly", "Quarterly", "Yearly", "One-time")
+    var selectedCategoryId by remember { mutableStateOf<String?>(null) }
+    var categoryDropdownExpanded by remember { mutableStateOf(false) }
+
+    LaunchedEffect(uiState.accounts, uiState.categories) {
+        if (selectedAccountId == null && uiState.accounts.isNotEmpty()) {
+            selectedAccountId = uiState.accounts.firstOrNull()?.id
+        }
+        if (selectedCategoryId == null && uiState.categories.isNotEmpty()) {
+            val defaultCat = uiState.categories.firstOrNull { it.name.contains("Bill", ignoreCase = true) || it.name.contains("Utility", ignoreCase = true) }
+                ?: uiState.categories.firstOrNull()
+            selectedCategoryId = defaultCat?.id
+        }
+    }
+
+    val selectedAccountName = uiState.accounts.find { it.id == selectedAccountId }?.name ?: "Select Pay-From Account"
+    val selectedCategoryName = uiState.categories.find { it.id == selectedCategoryId }?.name ?: "Select Category"
+
     val remindOptions = listOf(1, 3, 5, 7)
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Add Recurring Bill", fontWeight = FontWeight.Bold) },
@@ -118,11 +145,19 @@ fun AddBillScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                BillKind.entries.forEach { kind ->
+                DbBillKind.entries.forEach { kind ->
+                    val displayName = when (kind) {
+                        DbBillKind.RENT -> "Rent"
+                        DbBillKind.UTILITY -> "Utility"
+                        DbBillKind.INSURANCE -> "Insurance"
+                        DbBillKind.SUBSCRIPTION -> "Subscription"
+                        DbBillKind.EMI -> "EMI"
+                        DbBillKind.OTHER -> "Other"
+                    }
                     FilterChip(
                         selected = selectedKind == kind,
                         onClick = { selectedKind = kind },
-                        label = { Text(kind.displayName) },
+                        label = { Text(displayName) },
                         leadingIcon = if (selectedKind == kind) {
                             { Icon(Icons.Rounded.Check, contentDescription = null) }
                         } else null
@@ -167,14 +202,20 @@ fun AddBillScreen(
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold
             )
-            Row(
+            FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                frequencies.forEach { freq ->
+                DbBillFrequency.entries.forEach { freq ->
+                    val freqLabel = when (freq) {
+                        DbBillFrequency.MONTHLY -> "Monthly"
+                        DbBillFrequency.QUARTERLY -> "Quarterly"
+                        DbBillFrequency.YEARLY -> "Yearly"
+                        DbBillFrequency.EVERY_N_DAYS -> "Custom Days"
+                    }
                     FilterChip(
-                        selected = frequency == freq,
-                        onClick = { frequency = freq },
-                        label = { Text(freq) }
+                        selected = selectedFrequency == freq,
+                        onClick = { selectedFrequency = freq },
+                        label = { Text(freqLabel) }
                     )
                 }
             }
@@ -184,7 +225,7 @@ fun AddBillScreen(
                 value = dueDayText,
                 onValueChange = { dueDayText = it.filter { char -> char.isDigit() } },
                 label = { Text("Due Day of Month (1 - 31)") },
-                placeholder = { Text("15") },
+                placeholder = { Text("5") },
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 singleLine = true,
@@ -215,9 +256,9 @@ fun AddBillScreen(
                     expanded = accountDropdownExpanded,
                     onDismissRequest = { accountDropdownExpanded = false }
                 ) {
-                    accountsList.forEach { acc ->
+                    uiState.accounts.forEach { acc ->
                         DropdownMenuItem(
-                            text = { Text(acc.name + (acc.bankName?.let { " ($it)" } ?: "")) },
+                            text = { Text(acc.name) },
                             onClick = {
                                 selectedAccountId = acc.id
                                 accountDropdownExpanded = false
@@ -227,16 +268,41 @@ fun AddBillScreen(
                 }
             }
 
-            // Category Field
-            OutlinedTextField(
-                value = selectedCategory,
-                onValueChange = { selectedCategory = it },
-                label = { Text("Category") },
-                placeholder = { Text("e.g. Utilities, Housing, Subscription") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                shape = RoundedCornerShape(12.dp)
+            // Category Dropdown
+            Text(
+                text = "Category",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold
             )
+            ExposedDropdownMenuBox(
+                expanded = categoryDropdownExpanded,
+                onExpandedChange = { categoryDropdownExpanded = !categoryDropdownExpanded }
+            ) {
+                OutlinedTextField(
+                    value = selectedCategoryName,
+                    onValueChange = {},
+                    readOnly = true,
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = categoryDropdownExpanded) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
+                    shape = RoundedCornerShape(12.dp)
+                )
+                ExposedDropdownMenu(
+                    expanded = categoryDropdownExpanded,
+                    onDismissRequest = { categoryDropdownExpanded = false }
+                ) {
+                    uiState.categories.forEach { cat ->
+                        DropdownMenuItem(
+                            text = { Text(cat.name) },
+                            onClick = {
+                                selectedCategoryId = cat.id
+                                categoryDropdownExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
 
             // Remind N Days Before Selector
             Text(
@@ -261,26 +327,32 @@ fun AddBillScreen(
             // Save Bill Action Button
             Button(
                 onClick = {
+                    if (name.isBlank()) {
+                        scope.launch { snackbarHostState.showSnackbar("Please enter a bill name") }
+                        return@Button
+                    }
                     val amountInPaise = if (amountVaries) 0L else ((amountText.toDoubleOrNull() ?: 0.0) * 100).toLong()
                     val dueDay = dueDayText.toIntOrNull()?.coerceIn(1, 31) ?: 5
-                    val newBill = DueItem(
-                        id = UUID.randomUUID().toString(),
-                        title = name.ifBlank { "New Bill" },
-                        amountInPaise = amountInPaise,
-                        dueDate = "$dueDay Nov 2024",
-                        isOverdue = false,
-                        kind = selectedKind,
-                        timeframe = DueTimeframe.THIS_WEEK,
-                        category = selectedCategory.ifBlank { "Bill" },
-                        accountName = selectedAccountName,
-                        isAmountVaries = amountVaries,
-                        frequency = frequency,
-                        dueDay = dueDay,
-                        payFromAccountId = selectedAccountId,
-                        remindDaysBefore = remindDaysBefore
-                    )
-                    FakeData.addDueItem(newBill)
-                    onNavigate(Screen.Payments)
+
+                    scope.launch {
+                        val success = viewModel?.saveBill(
+                            name = name,
+                            kind = selectedKind,
+                            amountPaise = amountInPaise,
+                            isVariable = amountVaries,
+                            frequency = selectedFrequency,
+                            dueDay = dueDay,
+                            payFromAccountId = selectedAccountId,
+                            categoryId = selectedCategoryId,
+                            remindDaysBefore = remindDaysBefore
+                        ) ?: true
+
+                        if (success) {
+                            onNavigate(Screen.Payments)
+                        } else {
+                            snackbarHostState.showSnackbar("Failed to save bill")
+                        }
+                    }
                 },
                 modifier = Modifier
                     .fillMaxWidth()
