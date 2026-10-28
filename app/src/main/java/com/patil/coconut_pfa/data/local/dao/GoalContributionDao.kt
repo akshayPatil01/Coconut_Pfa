@@ -14,6 +14,9 @@ interface GoalContributionDao {
     @Query("SELECT * FROM goal_contributions WHERE goalId = :goalId ORDER BY date DESC")
     fun getContributionsForGoalFlow(goalId: String): Flow<List<GoalContributionEntity>>
 
+    @Query("SELECT * FROM goal_contributions ORDER BY date DESC")
+    fun getAllContributionsFlow(): Flow<List<GoalContributionEntity>>
+
     @Query("SELECT * FROM goal_contributions")
     suspend fun getAll(): List<GoalContributionEntity>
 

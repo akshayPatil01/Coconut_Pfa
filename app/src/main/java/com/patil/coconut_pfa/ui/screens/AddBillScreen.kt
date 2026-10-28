@@ -62,6 +62,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun AddBillScreen(
     onNavigate: (Screen) -> Unit,
+    initialKind: String? = null,
     modifier: Modifier = Modifier,
     viewModel: AddBillViewModel? = null
 ) {
@@ -73,7 +74,11 @@ fun AddBillScreen(
     }
 
     var name by remember { mutableStateOf("") }
-    var selectedKind by remember { mutableStateOf(DbBillKind.UTILITY) }
+    var selectedKind by remember {
+        mutableStateOf(
+            if (initialKind == "SUBSCRIPTION") DbBillKind.SUBSCRIPTION else DbBillKind.UTILITY
+        )
+    }
     var amountText by remember { mutableStateOf("") }
     var amountVaries by remember { mutableStateOf(false) }
     var selectedFrequency by remember { mutableStateOf(DbBillFrequency.MONTHLY) }
@@ -107,7 +112,7 @@ fun AddBillScreen(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("Add Recurring Bill", fontWeight = FontWeight.Bold) },
+                title = { Text(if (initialKind == "SUBSCRIPTION") "Add Subscription" else "Add Recurring Bill", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = { onNavigate(Screen.Payments) }) {
                         Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")

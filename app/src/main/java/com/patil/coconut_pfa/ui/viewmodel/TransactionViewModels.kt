@@ -273,6 +273,7 @@ data class AddTransactionUiState(
     val initialTxn: TxnEntity? = null,
     val accounts: List<AccountEntity> = emptyList(),
     val categories: List<CategoryEntity> = emptyList(),
+    val persons: List<com.patil.coconut_pfa.data.local.entity.PersonEntity> = emptyList(),
     val distinctPayees: List<String> = emptyList(),
     val lastUsedAccountId: String? = null,
     val lastUsedCategoryId: String? = null,
@@ -288,15 +289,17 @@ class AddTransactionViewModel(
     private val categoryRepository: CategoryRepository,
     private val transactionRepository: TransactionRepository,
     private val settingsRepository: SettingsRepository,
-    private val billRepository: com.patil.coconut_pfa.data.repository.BillRepository? = null
+    private val billRepository: com.patil.coconut_pfa.data.repository.BillRepository? = null,
+    private val personLedgerRepository: com.patil.coconut_pfa.data.repository.PersonLedgerRepository? = null
 ) : ViewModel() {
 
     val uiState: StateFlow<AddTransactionUiState> = combine(
         accountRepository.getActiveAccounts(),
         categoryRepository.getAllCategories(),
         transactionRepository.getDistinctPayees(),
-        settingsRepository.settingsFlow
-    ) { accounts, categories, payees, settings ->
+        settingsRepository.settingsFlow,
+        personLedgerRepository?.getAllPersons() ?: kotlinx.coroutines.flow.flowOf(emptyList())
+    ) { accounts, categories, payees, settings, persons ->
         val existingTxn = when {
             txnId != null -> transactionRepository.getTransactionById(txnId)
             duplicateTxnId != null -> transactionRepository.getTransactionById(duplicateTxnId)
@@ -307,6 +310,7 @@ class AddTransactionViewModel(
             initialTxn = existingTxn,
             accounts = accounts,
             categories = categories,
+            persons = persons,
             distinctPayees = payees,
             lastUsedAccountId = settings.lastUsedAccountId,
             lastUsedCategoryId = settings.lastUsedCategoryId,
@@ -317,6 +321,87 @@ class AddTransactionViewModel(
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = AddTransactionUiState(isLoading = true)
     )
+
+    suspend fun saveSplitTransaction(
+        title: String,
+        totalAmountPaise: Long,
+        mySharePaise: Long,
+        paidByMe: Boolean,
+        personId: String,
+        accountId: String?,
+        categoryId: String?,
+        occurredAt: Long
+    ): Boolean {
+        if (totalAmountPaise <= 0L || personId.isBlank()) return false
+        if (paidByMe && accountId == null) return false
+
+        val txnId = UUID.randomUUID().toString()
+        val dateStr = KolkataDateTimeUtils.epochMillisToLocalDate(occurredAt).format(KolkataDateTimeUtils.DATE_FORMATTER)
+
+        val txn = if (paidByMe) {
+            TxnEntity(
+                id = txnId,
+                type = DbTxnType.EXPENSE,
+                amountPaise = totalAmountPaise,
+                myShareAmountPaise = mySharePaise,
+                accountId = accountId,
+                categoryId = categoryId,
+                payee = title,
+                note = "Split expense",
+                occurredAt = occurredAt,
+                source = DbTxnSource.MANUAL
+            )
+        } else {
+            TxnEntity(
+                id = txnId,
+                type = DbTxnType.EXPENSE,
+                amountPaise = mySharePaise,
+                accountId = null,
+                categoryId = categoryId,
+                payee = title,
+                note = "Split expense (Paid by friend)",
+                occurredAt = occurredAt,
+                source = DbTxnSource.MANUAL,
+                personId = personId
+            )
+        }
+
+        transactionRepository.saveTransaction(txn)
+
+        if (personLedgerRepository != null) {
+            val otherShare = totalAmountPaise - mySharePaise
+            val ledgerEntry = if (paidByMe) {
+                com.patil.coconut_pfa.data.local.entity.LedgerEntryEntity(
+                    id = UUID.randomUUID().toString(),
+                    personId = personId,
+                    amountPaise = otherShare,
+                    kind = com.patil.coconut_pfa.data.local.entity.DbLedgerEntryKind.SPLIT_SHARE,
+                    date = dateStr,
+                    note = title,
+                    txnId = txnId
+                )
+            } else {
+                com.patil.coconut_pfa.data.local.entity.LedgerEntryEntity(
+                    id = UUID.randomUUID().toString(),
+                    personId = personId,
+                    amountPaise = -mySharePaise,
+                    kind = com.patil.coconut_pfa.data.local.entity.DbLedgerEntryKind.SPLIT_SHARE,
+                    date = dateStr,
+                    note = title,
+                    txnId = txnId
+                )
+            }
+            personLedgerRepository.saveLedgerEntry(ledgerEntry)
+        }
+
+        if (accountId != null) {
+            settingsRepository.setLastUsedAccount(accountId)
+        }
+        if (categoryId != null) {
+            settingsRepository.setLastUsedCategory(categoryId)
+        }
+        return true
+    }
 
     suspend fun saveTransaction(
         id: String = txnId ?: UUID.randomUUID().toString(),
@@ -380,7 +465,8 @@ class AddTransactionViewModel(
         private val categoryRepository: CategoryRepository,
         private val transactionRepository: TransactionRepository,
         private val settingsRepository: SettingsRepository,
-        private val billRepository: com.patil.coconut_pfa.data.repository.BillRepository? = null
+        private val billRepository: com.patil.coconut_pfa.data.repository.BillRepository? = null,
+        private val personLedgerRepository: com.patil.coconut_pfa.data.repository.PersonLedgerRepository? = null
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -393,7 +479,8 @@ class AddTransactionViewModel(
                 categoryRepository,
                 transactionRepository,
                 settingsRepository,
-                billRepository
+                billRepository,
+                personLedgerRepository
             ) as T
         }
     }

@@ -25,7 +25,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.History
-import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.PersonAdd
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -50,6 +50,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -62,11 +63,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.patil.coconut_pfa.data.local.entity.AccountEntity
+import com.patil.coconut_pfa.data.local.entity.DbLedgerEntryKind
+import com.patil.coconut_pfa.data.model.LedgerEntry
 import com.patil.coconut_pfa.data.model.PersonIOU
-import com.patil.coconut_pfa.data.repository.FakeData
 import com.patil.coconut_pfa.navigation.Screen
 import com.patil.coconut_pfa.ui.components.AmountText
 import com.patil.coconut_pfa.ui.theme.Coconut_PfaTheme
+import com.patil.coconut_pfa.ui.viewmodel.SplitAndIOUsUiState
+import com.patil.coconut_pfa.ui.viewmodel.SplitAndIOUsViewModel
 import com.patil.coconut_pfa.util.MoneyFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -74,28 +79,68 @@ import com.patil.coconut_pfa.util.MoneyFormatter
 fun SplitAndIOUsScreen(
     onNavigate: (Screen) -> Unit = {},
     modifier: Modifier = Modifier,
+    viewModel: SplitAndIOUsViewModel? = null
 ) {
-    val peopleList = FakeData.personIOUs
+    val uiState by viewModel?.uiState?.collectAsState()
+        ?: remember { mutableStateOf(SplitAndIOUsUiState()) }
+
+    val peopleList = uiState.persons.map { item ->
+        PersonIOU(
+            id = item.person.id,
+            name = item.person.name,
+            netBalanceInPaise = item.netBalancePaise,
+            phone = item.person.note,
+            ledger = item.entries.map { e ->
+                LedgerEntry(
+                    id = e.id,
+                    title = e.note ?: "Shared Expense",
+                    amountInPaise = kotlin.math.abs(e.amountPaise),
+                    date = e.date,
+                    paidByMe = e.kind != DbLedgerEntryKind.BORROWED,
+                    myShareInPaise = 0L,
+                    personShareInPaise = e.amountPaise,
+                    note = e.note
+                )
+            }
+        )
+    }
+
     var selectedPersonForLedger by remember { mutableStateOf<PersonIOU?>(null) }
     var selectedPersonForSettleUp by remember { mutableStateOf<PersonIOU?>(null) }
-    var showAddSplitDialog by remember { mutableStateOf(false) }
+    var showAddPersonDialog by remember { mutableStateOf(false) }
 
-    val totalOwesYou = peopleList.filter { it.netBalanceInPaise > 0 }.sumOf { it.netBalanceInPaise }
-    val totalYouOwe = peopleList.filter { it.netBalanceInPaise < 0 }.sumOf { kotlin.math.abs(it.netBalanceInPaise) }
+    val totalOwesYou = uiState.totalOwesYouPaise
+    val totalYouOwe = uiState.totalYouOwePaise
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showAddSplitDialog = true },
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-                shape = CircleShape
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.Rounded.Add,
-                    contentDescription = "Add Split Expense"
-                )
+                FloatingActionButton(
+                    onClick = { showAddPersonDialog = true },
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    shape = CircleShape
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.PersonAdd,
+                        contentDescription = "Add Person"
+                    )
+                }
+                FloatingActionButton(
+                    onClick = { onNavigate(Screen.AddTransaction()) },
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    shape = CircleShape
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Add,
+                        contentDescription = "Add Split Expense"
+                    )
+                }
             }
         }
     ) { innerPadding ->
@@ -106,7 +151,6 @@ fun SplitAndIOUsScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Balance Overview Card
             item {
                 SplitOverviewCard(totalOwesYou = totalOwesYou, totalYouOwe = totalYouOwe)
             }
@@ -130,7 +174,6 @@ fun SplitAndIOUsScreen(
         }
     }
 
-    // Ledger Bottom Sheet
     selectedPersonForLedger?.let { person ->
         PersonLedgerBottomSheet(
             person = person,
@@ -142,31 +185,24 @@ fun SplitAndIOUsScreen(
         )
     }
 
-    // Settle Up Dialog
     selectedPersonForSettleUp?.let { person ->
         SettleUpDialog(
             person = person,
+            accounts = uiState.accounts,
             onDismiss = { selectedPersonForSettleUp = null },
-            onSettleUp = { amountInPaise ->
-                FakeData.settleUpPerson(person.id, amountInPaise)
+            onSettleUp = { accountId, amountInPaise ->
+                viewModel?.settleUp(person.id, accountId, amountInPaise)
                 selectedPersonForSettleUp = null
             }
         )
     }
 
-    // Add Split Dialog
-    if (showAddSplitDialog) {
-        AddSplitDialog(
-            onDismiss = { showAddSplitDialog = false },
-            onSave = { title, totalPaise, personName, paidByMe, personSharePaise ->
-                FakeData.addSplitTransaction(
-                    title = title,
-                    totalAmountInPaise = totalPaise,
-                    personName = personName,
-                    paidByMe = paidByMe,
-                    personShareInPaise = personSharePaise
-                )
-                showAddSplitDialog = false
+    if (showAddPersonDialog) {
+        AddPersonDialog(
+            onDismiss = { showAddPersonDialog = false },
+            onSave = { name, note ->
+                viewModel?.savePerson(name, note)
+                showAddPersonDialog = false
             }
         )
     }
@@ -221,7 +257,6 @@ private fun SplitOverviewCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // Owes You Card Section (Green)
                 Surface(
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(14.dp),
@@ -246,7 +281,6 @@ private fun SplitOverviewCard(
 
                 Spacer(modifier = Modifier.width(12.dp))
 
-                // You Owe Card Section (Red)
                 Surface(
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(14.dp),
@@ -450,7 +484,6 @@ private fun PersonLedgerBottomSheet(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Net balance badge
             Surface(
                 shape = RoundedCornerShape(16.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -543,12 +576,6 @@ private fun PersonLedgerBottomSheet(
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     Text(
-                                        text = if (entry.paidByMe) "Paid by You • ${person.name}'s share: ${MoneyFormatter.format(entry.personShareInPaise)}"
-                                        else "Paid by ${person.name} • Your share: ${MoneyFormatter.format(entry.myShareInPaise)}",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    Text(
                                         text = entry.date,
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.outline
@@ -564,14 +591,20 @@ private fun PersonLedgerBottomSheet(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SettleUpDialog(
     person: PersonIOU,
+    accounts: List<AccountEntity>,
     onDismiss: () -> Unit,
-    onSettleUp: (amountInPaise: Long) -> Unit,
+    onSettleUp: (accountId: String, amountInPaise: Long) -> Unit,
 ) {
     val suggestedPaise = kotlin.math.abs(person.netBalanceInPaise)
     var amountText by remember { mutableStateOf((suggestedPaise / 100).toString()) }
+
+    var selectedAccountId by remember { mutableStateOf(accounts.firstOrNull()?.id) }
+    var expandedAccountMenu by remember { mutableStateOf(false) }
+    val selectedAccountName = accounts.find { it.id == selectedAccountId }?.name ?: "Select Account"
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -584,6 +617,37 @@ private fun SettleUpDialog(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+
+                ExposedDropdownMenuBox(
+                    expanded = expandedAccountMenu,
+                    onExpandedChange = { expandedAccountMenu = !expandedAccountMenu }
+                ) {
+                    OutlinedTextField(
+                        value = selectedAccountName,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Pay From / To Account") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedAccountMenu) },
+                        modifier = Modifier
+                            .menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                            .fillMaxWidth()
+                    )
+
+                    ExposedDropdownMenu(
+                        expanded = expandedAccountMenu,
+                        onDismissRequest = { expandedAccountMenu = false }
+                    ) {
+                        accounts.forEach { acc ->
+                            DropdownMenuItem(
+                                text = { Text(acc.name) },
+                                onClick = {
+                                    selectedAccountId = acc.id
+                                    expandedAccountMenu = false
+                                }
+                            )
+                        }
+                    }
+                }
 
                 OutlinedTextField(
                     value = amountText,
@@ -599,8 +663,9 @@ private fun SettleUpDialog(
             Button(
                 onClick = {
                     val doubleVal = amountText.toDoubleOrNull() ?: 0.0
-                    if (doubleVal > 0) {
-                        onSettleUp((doubleVal * 100).toLong())
+                    val accId = selectedAccountId
+                    if (doubleVal > 0 && accId != null) {
+                        onSettleUp(accId, (doubleVal * 100).toLong())
                     }
                 }
             ) {
@@ -613,136 +678,44 @@ private fun SettleUpDialog(
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AddSplitDialog(
+private fun AddPersonDialog(
     onDismiss: () -> Unit,
-    onSave: (title: String, totalPaise: Long, personName: String, paidByMe: Boolean, personSharePaise: Long) -> Unit,
+    onSave: (name: String, note: String?) -> Unit,
 ) {
-    var title by remember { mutableStateOf("") }
-    var totalAmountText by remember { mutableStateOf("") }
-    var personName by remember { mutableStateOf("") }
-    var paidByMe by remember { mutableStateOf(true) }
-    var isEqualSplit by remember { mutableStateOf(true) }
-    var customPersonShareText by remember { mutableStateOf("") }
-
-    val peopleNames = FakeData.personIOUs.map { it.name }
-    var expandedPeopleMenu by remember { mutableStateOf(false) }
+    var name by remember { mutableStateOf("") }
+    var note by remember { mutableStateOf("") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add Split Expense", fontWeight = FontWeight.Bold) },
+        title = { Text("Add Person", fontWeight = FontWeight.Bold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(
-                    value = title,
-                    onValueChange = { title = it },
-                    label = { Text("Description (e.g. Dinner, Rent)") },
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Name") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
-
                 OutlinedTextField(
-                    value = totalAmountText,
-                    onValueChange = { totalAmountText = it },
-                    label = { Text("Total Amount (₹)") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    value = note,
+                    onValueChange = { note = it },
+                    label = { Text("Note / Phone (Optional)") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
-
-                // Select or Enter Person
-                ExposedDropdownMenuBox(
-                    expanded = expandedPeopleMenu,
-                    onExpandedChange = { expandedPeopleMenu = !expandedPeopleMenu }
-                ) {
-                    OutlinedTextField(
-                        value = personName,
-                        onValueChange = { personName = it },
-                        label = { Text("Split With (Person Name)") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedPeopleMenu) },
-                        modifier = Modifier
-                            .menuAnchor(MenuAnchorType.PrimaryEditable)
-                            .fillMaxWidth()
-                    )
-
-                    ExposedDropdownMenu(
-                        expanded = expandedPeopleMenu,
-                        onDismissRequest = { expandedPeopleMenu = false }
-                    ) {
-                        peopleNames.forEach { pName ->
-                            DropdownMenuItem(
-                                text = { Text(pName) },
-                                onClick = {
-                                    personName = pName
-                                    expandedPeopleMenu = false
-                                }
-                            )
-                        }
-                    }
-                }
-
-                // Who Paid selector
-                Text(
-                    text = "Who Paid?",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(
-                        selected = paidByMe,
-                        onClick = { paidByMe = true },
-                        label = { Text("I Paid") }
-                    )
-                    FilterChip(
-                        selected = !paidByMe,
-                        onClick = { paidByMe = false },
-                        label = { Text("${if (personName.isBlank()) "They" else personName} Paid") }
-                    )
-                }
-
-                // Split mode (Equal vs Custom)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Equal 50/50 Split", style = MaterialTheme.typography.bodyMedium)
-                    FilterChip(
-                        selected = isEqualSplit,
-                        onClick = { isEqualSplit = !isEqualSplit },
-                        label = { Text(if (isEqualSplit) "50 / 50" else "Custom Shares") }
-                    )
-                }
-
-                if (!isEqualSplit) {
-                    OutlinedTextField(
-                        value = customPersonShareText,
-                        onValueChange = { customPersonShareText = it },
-                        label = { Text("Their Share (₹)") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
             }
         },
         confirmButton = {
             Button(
                 onClick = {
-                    val totalDouble = totalAmountText.toDoubleOrNull() ?: 0.0
-                    val totalPaise = (totalDouble * 100).toLong()
-                    if (title.isNotBlank() && totalPaise > 0 && personName.isNotBlank()) {
-                        val personSharePaise = if (isEqualSplit) {
-                            totalPaise / 2
-                        } else {
-                            ((customPersonShareText.toDoubleOrNull() ?: 0.0) * 100).toLong()
-                        }
-                        onSave(title, totalPaise, personName, paidByMe, personSharePaise)
+                    if (name.isNotBlank()) {
+                        onSave(name, note.ifBlank { null })
                     }
                 }
             ) {
-                Text("Add Split")
+                Text("Add")
             }
         },
         dismissButton = {

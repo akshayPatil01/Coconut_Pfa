@@ -80,8 +80,8 @@ sealed interface Screen {
     }
 
     @Serializable
-    data object AddBill : Screen {
-        override val title: String = "Add Bill"
+    data class AddBill(val initialKind: String? = null) : Screen {
+        override val title: String = if (initialKind == "SUBSCRIPTION") "Add Subscription" else "Add Bill"
     }
 
     @Serializable

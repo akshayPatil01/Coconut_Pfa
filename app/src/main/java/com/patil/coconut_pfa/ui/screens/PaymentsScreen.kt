@@ -100,7 +100,7 @@ fun PaymentsScreen(
         modifier = modifier.fillMaxSize(),
         floatingActionButton = {
             ExtendedFloatingActionButton(
-                onClick = { onNavigate(Screen.AddBill) },
+                onClick = { onNavigate(Screen.AddBill()) },
                 icon = { Icon(Icons.Rounded.Add, contentDescription = "Add Bill") },
                 text = { Text("Add Bill") },
                 containerColor = MaterialTheme.colorScheme.primary,

@@ -35,9 +35,13 @@ import com.patil.coconut_pfa.data.repository.PersonLedgerRepository
 import com.patil.coconut_pfa.data.repository.SettingsRepository
 import com.patil.coconut_pfa.data.repository.SmsRepository
 import com.patil.coconut_pfa.data.repository.TransactionRepository
+import com.patil.coconut_pfa.data.repository.GoalRepository
 import com.patil.coconut_pfa.ui.viewmodel.AddBillViewModel
+import com.patil.coconut_pfa.ui.viewmodel.GoalsViewModel
 import com.patil.coconut_pfa.ui.viewmodel.HomeViewModel
 import com.patil.coconut_pfa.ui.viewmodel.PaymentsViewModel
+import com.patil.coconut_pfa.ui.viewmodel.SplitAndIOUsViewModel
+import com.patil.coconut_pfa.ui.viewmodel.SubscriptionsViewModel
 import com.patil.coconut_pfa.navigation.Screen
 import com.patil.coconut_pfa.ui.components.CoconutBottomBar
 import com.patil.coconut_pfa.ui.components.CoconutNavigationDrawer
@@ -99,6 +103,7 @@ fun CoconutApp(
     val categoryRepository = remember { CategoryRepository(database.categoryDao()) }
     val netWorthRepository = remember { NetWorthRepository(database.netWorthSnapshotDao()) }
     val personLedgerRepository = remember { PersonLedgerRepository(database.personDao(), database.ledgerEntryDao()) }
+    val goalRepository = remember { GoalRepository(database.goalDao(), database.goalContributionDao()) }
     val billRepository = remember {
         BillRepository(
             billDao = database.billDao(),
@@ -391,7 +396,8 @@ fun CoconutApp(
                                 categoryRepository = categoryRepository,
                                 transactionRepository = transactionRepository,
                                 settingsRepository = settingsRepository,
-                                billRepository = billRepository
+                                billRepository = billRepository,
+                                personLedgerRepository = personLedgerRepository
                             )
                         )
                         AddTransactionScreen(
@@ -400,9 +406,32 @@ fun CoconutApp(
                             viewModel = addTransactionViewModel
                         )
                     }
-                    Screen.Goals -> GoalsScreen(onNavigate = navigateTo, modifier = screenModifier)
-                    Screen.Subscriptions -> SubscriptionsScreen(onNavigate = navigateTo, modifier = screenModifier)
-                    Screen.SplitAndIOUs -> SplitAndIOUsScreen(onNavigate = navigateTo, modifier = screenModifier)
+                    Screen.Goals -> {
+                        val goalsViewModel: GoalsViewModel = viewModel(
+                            factory = GoalsViewModel.Factory(
+                                goalRepository = goalRepository,
+                                goalContributionDao = database.goalContributionDao(),
+                                settingsRepository = settingsRepository
+                            )
+                        )
+                        GoalsScreen(onNavigate = navigateTo, modifier = screenModifier, viewModel = goalsViewModel)
+                    }
+                    Screen.Subscriptions -> {
+                        val subscriptionsViewModel: SubscriptionsViewModel = viewModel(
+                            factory = SubscriptionsViewModel.Factory(billRepository = billRepository)
+                        )
+                        SubscriptionsScreen(onNavigate = navigateTo, modifier = screenModifier, viewModel = subscriptionsViewModel)
+                    }
+                    Screen.SplitAndIOUs -> {
+                        val splitAndIOUsViewModel: SplitAndIOUsViewModel = viewModel(
+                            factory = SplitAndIOUsViewModel.Factory(
+                                personLedgerRepository = personLedgerRepository,
+                                accountRepository = accountRepository,
+                                transactionRepository = transactionRepository
+                            )
+                        )
+                        SplitAndIOUsScreen(onNavigate = navigateTo, modifier = screenModifier, viewModel = splitAndIOUsViewModel)
+                    }
                     Screen.Reports -> ReportsScreen(onNavigate = navigateTo, modifier = screenModifier)
                     Screen.Settings -> SettingsScreen(
                         onNavigate = navigateTo,
@@ -460,7 +489,7 @@ fun CoconutApp(
                             viewModel = addAccountViewModel
                         )
                     }
-                    Screen.AddBill -> {
+                    is Screen.AddBill -> {
                         val addBillViewModel: AddBillViewModel = viewModel(
                             factory = AddBillViewModel.Factory(
                                 billRepository = billRepository,
@@ -470,6 +499,7 @@ fun CoconutApp(
                         )
                         AddBillScreen(
                             onNavigate = navigateTo,
+                            initialKind = dest.initialKind,
                             modifier = screenModifier,
                             viewModel = addBillViewModel
                         )

@@ -48,7 +48,13 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.Switch
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
@@ -79,7 +85,7 @@ import com.patil.coconut_pfa.util.KolkataDateTimeUtils
 import kotlinx.coroutines.launch
 import java.time.format.DateTimeFormatter
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun AddTransactionScreen(
     onNavigate: (Screen) -> Unit,
@@ -102,6 +108,10 @@ fun AddTransactionScreen(
     var payee by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }
     var isSplitEnabled by remember { mutableStateOf(false) }
+    var paidByMe by remember { mutableStateOf(true) }
+    var selectedPersonId by remember { mutableStateOf<String?>(null) }
+    var personDropdownExpanded by remember { mutableStateOf(false) }
+    var myShareInput by remember { mutableStateOf("") }
     var selectedCategoryId by remember { mutableStateOf<String?>(null) }
     var selectedCategoryName by remember { mutableStateOf("Groceries") }
     var selectedOccurredAt by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -602,7 +612,7 @@ fun AddTransactionScreen(
                     }
                 }
 
-                // "Split with friends" Switch (Placeholder feature)
+                // "Split with friends" Switch
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -647,6 +657,91 @@ fun AddTransactionScreen(
                     )
                 }
 
+                if (isSplitEnabled && selectedTabItem == 0) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                shape = RoundedCornerShape(16.dp)
+                            )
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            text = "Split Details",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        val selectedPersonName = uiState.persons.find { it.id == selectedPersonId }?.name ?: "Select Person"
+                        ExposedDropdownMenuBox(
+                            expanded = personDropdownExpanded,
+                            onExpandedChange = { personDropdownExpanded = !personDropdownExpanded }
+                        ) {
+                            OutlinedTextField(
+                                value = selectedPersonName,
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text("Split With Person") },
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = personDropdownExpanded) },
+                                modifier = Modifier
+                                    .menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                                    .fillMaxWidth()
+                            )
+                            ExposedDropdownMenu(
+                                expanded = personDropdownExpanded,
+                                onDismissRequest = { personDropdownExpanded = false }
+                            ) {
+                                if (uiState.persons.isEmpty()) {
+                                    DropdownMenuItem(
+                                        text = { Text("No persons found. Add in Split & IOUs tab.") },
+                                        onClick = { personDropdownExpanded = false }
+                                    )
+                                } else {
+                                    uiState.persons.forEach { person ->
+                                        DropdownMenuItem(
+                                            text = { Text(person.name) },
+                                            onClick = {
+                                                selectedPersonId = person.id
+                                                personDropdownExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Text(
+                            text = "Who Paid?",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilterChip(
+                                selected = paidByMe,
+                                onClick = { paidByMe = true },
+                                label = { Text("I Paid") }
+                            )
+                            FilterChip(
+                                selected = !paidByMe,
+                                onClick = { paidByMe = false },
+                                label = { Text("Friend Paid") }
+                            )
+                        }
+
+                        OutlinedTextField(
+                            value = myShareInput,
+                            onValueChange = { myShareInput = it },
+                            label = { Text("My Share Amount (₹)") },
+                            placeholder = { Text("e.g. 500 (Leave blank for 50/50)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+
                 // "Save" Button with validation & DB call
                 Button(
                     onClick = {
@@ -657,40 +752,66 @@ fun AddTransactionScreen(
                             scope.launch { snackbarHostState.showSnackbar("Please enter a valid amount greater than 0") }
                             return@Button
                         }
-                        if (fromAccount == null) {
+                        if (fromAccount == null && !(isSplitEnabled && selectedTabItem == 0 && !paidByMe)) {
                             scope.launch { snackbarHostState.showSnackbar("Please select an account") }
                             return@Button
                         }
-                        val dbType = when (selectedTabItem) {
-                            0 -> DbTxnType.EXPENSE
-                            1 -> DbTxnType.INCOME
-                            2 -> DbTxnType.TRANSFER
-                            3 -> DbTxnType.REFUND
-                            else -> DbTxnType.EXPENSE
-                        }
-                        if (dbType == DbTxnType.TRANSFER) {
-                            if (toAccount == null || fromAccount?.id == toAccount?.id) {
-                                scope.launch { snackbarHostState.showSnackbar("From and To accounts must be different") }
-                                return@Button
-                            }
-                        } else {
-                            if (selectedCategoryId == null && selectedCategoryName.isBlank()) {
-                                scope.launch { snackbarHostState.showSnackbar("Please select a category") }
-                                return@Button
-                            }
-                        }
 
                         scope.launch {
-                            val success = viewModel?.saveTransaction(
-                                type = dbType,
-                                amountPaise = amountPaise,
-                                accountId = fromAccount?.id,
-                                toAccountId = toAccount?.id,
-                                categoryId = selectedCategoryId ?: selectedCategoryName,
-                                payee = payee,
-                                note = note,
-                                occurredAt = selectedOccurredAt
-                            ) ?: true
+                            val success = if (isSplitEnabled && selectedTabItem == 0) {
+                                val pId = selectedPersonId
+                                if (pId.isNullOrBlank()) {
+                                    snackbarHostState.showSnackbar("Please select a person to split with")
+                                    return@launch
+                                }
+                                val myShareDouble = myShareInput.toDoubleOrNull()
+                                val mySharePaise = if (myShareDouble != null && myShareDouble > 0) {
+                                    (myShareDouble * 100).toLong()
+                                } else {
+                                    amountPaise / 2
+                                }
+
+                                viewModel?.saveSplitTransaction(
+                                    title = payee.ifBlank { "Split Expense" },
+                                    totalAmountPaise = amountPaise,
+                                    mySharePaise = mySharePaise,
+                                    paidByMe = paidByMe,
+                                    personId = pId,
+                                    accountId = fromAccount?.id,
+                                    categoryId = selectedCategoryId ?: selectedCategoryName,
+                                    occurredAt = selectedOccurredAt
+                                ) ?: true
+                            } else {
+                                val dbType = when (selectedTabItem) {
+                                    0 -> DbTxnType.EXPENSE
+                                    1 -> DbTxnType.INCOME
+                                    2 -> DbTxnType.TRANSFER
+                                    3 -> DbTxnType.REFUND
+                                    else -> DbTxnType.EXPENSE
+                                }
+                                if (dbType == DbTxnType.TRANSFER) {
+                                    if (toAccount == null || fromAccount?.id == toAccount?.id) {
+                                        snackbarHostState.showSnackbar("From and To accounts must be different")
+                                        return@launch
+                                    }
+                                } else {
+                                    if (selectedCategoryId == null && selectedCategoryName.isBlank()) {
+                                        snackbarHostState.showSnackbar("Please select a category")
+                                        return@launch
+                                    }
+                                }
+
+                                viewModel?.saveTransaction(
+                                    type = dbType,
+                                    amountPaise = amountPaise,
+                                    accountId = fromAccount?.id,
+                                    toAccountId = toAccount?.id,
+                                    categoryId = selectedCategoryId ?: selectedCategoryName,
+                                    payee = payee,
+                                    note = note,
+                                    occurredAt = selectedOccurredAt
+                                ) ?: true
+                            }
 
                             if (success) {
                                 snackbarHostState.showSnackbar("Transaction saved successfully!")

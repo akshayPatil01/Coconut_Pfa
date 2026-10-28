@@ -50,6 +50,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -67,6 +68,8 @@ import com.patil.coconut_pfa.data.repository.FakeData
 import com.patil.coconut_pfa.navigation.Screen
 import com.patil.coconut_pfa.ui.components.AmountText
 import com.patil.coconut_pfa.ui.theme.Coconut_PfaTheme
+import com.patil.coconut_pfa.ui.viewmodel.GoalsUiState
+import com.patil.coconut_pfa.ui.viewmodel.GoalsViewModel
 import com.patil.coconut_pfa.util.MoneyFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -74,8 +77,32 @@ import com.patil.coconut_pfa.util.MoneyFormatter
 fun GoalsScreen(
     onNavigate: (Screen) -> Unit = {},
     modifier: Modifier = Modifier,
+    viewModel: GoalsViewModel? = null
 ) {
-    val goalsList = FakeData.goals
+    val uiState by viewModel?.uiState?.collectAsState()
+        ?: remember { mutableStateOf(GoalsUiState()) }
+
+    val goalsList = uiState.goals.map { item ->
+        Goal(
+            id = item.goal.id,
+            title = item.goal.name,
+            targetAmountInPaise = item.goal.targetPaise,
+            currentAmountInPaise = item.currentAmountPaise,
+            targetDate = item.goal.targetDate,
+            perCycleNeededInPaise = item.perCycleNeededPaise,
+            category = item.goal.icon,
+            contributions = item.contributions.map { c ->
+                GoalContribution(
+                    id = c.id,
+                    amountInPaise = c.amountPaise,
+                    date = c.date,
+                    sourceAccountName = c.note ?: "Contribution",
+                    note = c.note
+                )
+            }
+        )
+    }
+
     var selectedGoalForDetail by remember { mutableStateOf<Goal?>(null) }
     var selectedGoalForContribution by remember { mutableStateOf<Goal?>(null) }
     var showAddGoalDialog by remember { mutableStateOf(false) }
@@ -110,7 +137,7 @@ fun GoalsScreen(
 
             item {
                 Text(
-                    text = "Active Financial Goals",
+                    text = "Active Financial Goals (${goalsList.size})",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
@@ -144,18 +171,12 @@ fun GoalsScreen(
         AddContributionDialog(
             goal = goal,
             onDismiss = { selectedGoalForContribution = null },
-            onSaveContribution = { amountInPaise, sourceAccount, note ->
-                FakeData.addContributionToGoal(
+            onSaveContribution = { amountInPaise, _, note ->
+                viewModel?.addContribution(
                     goalId = goal.id,
-                    contribution = GoalContribution(
-                        id = "c_${System.currentTimeMillis()}",
-                        amountInPaise = amountInPaise,
-                        date = "Today",
-                        sourceAccountName = sourceAccount,
-                        note = note
-                    )
+                    amountPaise = amountInPaise,
+                    note = note
                 )
-                selectedGoalContributionDone()
                 selectedGoalForContribution = null
             }
         )
@@ -165,17 +186,12 @@ fun GoalsScreen(
     if (showAddGoalDialog) {
         AddGoalDialog(
             onDismiss = { showAddGoalDialog = false },
-            onSaveGoal = { title, targetPaise, targetDate, perCyclePaise, category ->
-                FakeData.addGoal(
-                    Goal(
-                        id = "goal_${System.currentTimeMillis()}",
-                        title = title,
-                        targetAmountInPaise = targetPaise,
-                        currentAmountInPaise = 0L,
-                        targetDate = targetDate,
-                        perCycleNeededInPaise = perCyclePaise,
-                        category = category
-                    )
+            onSaveGoal = { title, targetPaise, targetDate, _, category ->
+                viewModel?.saveGoal(
+                    name = title,
+                    targetPaise = targetPaise,
+                    targetDate = targetDate,
+                    icon = category
                 )
                 showAddGoalDialog = false
             }
