@@ -23,4 +23,5 @@ class SettingsRepository(
     suspend fun setOnboardingDone(done: Boolean) = userSettingsDataStore.updateOnboardingDone(done)
     suspend fun setLastUsedAccount(accountId: String?) = userSettingsDataStore.updateLastUsedAccount(accountId)
     suspend fun setLastUsedCategory(categoryId: String?) = userSettingsDataStore.updateLastUsedCategory(categoryId)
+    suspend fun setShowAmountOnWidget(enabled: Boolean) = userSettingsDataStore.updateShowAmountOnWidget(enabled)
 }

@@ -77,6 +77,7 @@ import com.patil.coconut_pfa.ui.viewmodel.ReviewInboxViewModel
 import com.patil.coconut_pfa.util.PrivacyManager
 import com.patil.coconut_pfa.worker.BillReminderWorker
 import com.patil.coconut_pfa.worker.PurgeTrashWorker
+import com.patil.coconut_pfa.worker.WidgetUpdateWorker
 import kotlinx.coroutines.launch
 
 /**
@@ -85,8 +86,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun CoconutApp(
     modifier: Modifier = Modifier,
-    navigateToPaymentsSignal: Boolean = false,
-    onHandledNavigateToPayments: () -> Unit = {},
+    navigateToScreenSignal: String? = null,
+    onHandledNavigateToScreen: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val database = remember { CoconutDatabase.getInstance(context) }
@@ -100,7 +101,7 @@ fun CoconutApp(
             valuationDao = database.valuationDao()
         )
     }
-    val transactionRepository = remember { TransactionRepository(database.txnDao()) }
+    val transactionRepository = remember { TransactionRepository(database.txnDao(), context) }
     val categoryRepository = remember { CategoryRepository(database.categoryDao()) }
     val netWorthRepository = remember { NetWorthRepository(database.netWorthSnapshotDao()) }
     val personLedgerRepository = remember { PersonLedgerRepository(database.personDao(), database.ledgerEntryDao()) }
@@ -136,6 +137,7 @@ fun CoconutApp(
     // Schedule WorkManager job for purging old trash & bill reminders
     LaunchedEffect(Unit) {
         PurgeTrashWorker.schedule(context)
+        WidgetUpdateWorker.schedule(context)
     }
 
     LaunchedEffect(userSettings.reminderHour) {
@@ -210,10 +212,13 @@ fun CoconutApp(
         }
     }
 
-    LaunchedEffect(navigateToPaymentsSignal, isLocked, userSettings.onboardingDone) {
-        if (navigateToPaymentsSignal && !isLocked && userSettings.onboardingDone) {
-            navigateTo(Screen.Payments)
-            onHandledNavigateToPayments()
+    LaunchedEffect(navigateToScreenSignal, isLocked, userSettings.onboardingDone) {
+        if (!navigateToScreenSignal.isNullOrBlank() && !isLocked && userSettings.onboardingDone) {
+            when (navigateToScreenSignal) {
+                "payments" -> navigateTo(Screen.Payments)
+                "add_transaction" -> navigateTo(Screen.AddTransaction())
+            }
+            onHandledNavigateToScreen()
         }
     }
 
@@ -464,6 +469,7 @@ fun CoconutApp(
                         onUpdatePrivacyByDefault = { enabled -> scope.launch { settingsRepository.setPrivacyModeDefault(enabled) } },
                         onUpdateSalaryStartDay = { day -> scope.launch { settingsRepository.setSalaryCycleStartDay(day) } },
                         onUpdateSmsEnabled = { enabled -> scope.launch { settingsRepository.setSmsEnabled(enabled) } },
+                        onUpdateShowAmountOnWidget = { enabled -> scope.launch { settingsRepository.setShowAmountOnWidget(enabled) } },
                         modifier = screenModifier
                     )
                     Screen.ReviewInbox -> {

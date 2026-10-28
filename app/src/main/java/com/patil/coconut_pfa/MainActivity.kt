@@ -14,7 +14,7 @@ import android.content.Intent
 import androidx.compose.runtime.mutableStateOf
 
 class MainActivity : FragmentActivity() {
-    private val navigateToPayments = mutableStateOf(false)
+    private val navigateToScreen = mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -27,8 +27,8 @@ class MainActivity : FragmentActivity() {
         setContent {
             Coconut_PfaTheme {
                 CoconutApp(
-                    navigateToPaymentsSignal = navigateToPayments.value,
-                    onHandledNavigateToPayments = { navigateToPayments.value = false }
+                    navigateToScreenSignal = navigateToScreen.value,
+                    onHandledNavigateToScreen = { navigateToScreen.value = null }
                 )
             }
         }
@@ -41,8 +41,9 @@ class MainActivity : FragmentActivity() {
     }
 
     private fun checkIntentForNavigation(intent: Intent?) {
-        if (intent?.getStringExtra("navigate_to") == "payments") {
-            navigateToPayments.value = true
+        val nav = intent?.getStringExtra("navigate_to")
+        if (nav != null) {
+            navigateToScreen.value = nav
         }
     }
 }

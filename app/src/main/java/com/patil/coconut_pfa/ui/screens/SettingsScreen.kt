@@ -104,6 +104,7 @@ fun SettingsScreen(
     onUpdateSmsEnabled: (Boolean) -> Unit = {},
     onUpdateReminderHour: (Int) -> Unit = {},
     onUpdateDefaultReminderDays: (Int) -> Unit = {},
+    onUpdateShowAmountOnWidget: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -356,7 +357,24 @@ fun SettingsScreen(
                 }
             }
 
-            // SECTION 3: CATEGORIES
+            // SECTION 3: WIDGET
+            item {
+                SettingsCategoryCard(title = "Widget", icon = Icons.Rounded.Info) {
+                    SettingsSwitchRow(
+                        title = "Show amount on widget",
+                        subtitle = "Warning: This amount will be visible on your home screen without unlocking the app.",
+                        checked = userSettings.showAmountOnWidget,
+                        onCheckedChange = { checked ->
+                            onUpdateShowAmountOnWidget(checked)
+                            scope.launch {
+                                com.patil.coconut_pfa.widget.CoconutWidget.updateAll(context)
+                            }
+                        }
+                    )
+                }
+            }
+
+            // SECTION 4: CATEGORIES
             item {
                 SettingsCategoryCard(title = "Categories & Sub-Categories", icon = Icons.Rounded.Category) {
                     SettingsNavigationRow(
@@ -534,7 +552,7 @@ fun SettingsScreen(
                             color = if (hasBackupPwd) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
                         )
                         Text(
-                            text = "Last backup: ${if (userSettings.lastBackupAt != null) java.text.SimpleDateFormat("dd MMM yyyy, hh:mm a", java.util.Locale.getDefault()).format(java.util.Date(userSettings.lastBackupAt)) else "Never"}",
+                            text = "Last backup: ${if (userSettings.lastBackupAt != null) java.text.SimpleDateFormat("dd MMM yyyy, hh:mm a", java.util.Locale.US).format(java.util.Date(userSettings.lastBackupAt)) else "Never"}",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.outline
                         )

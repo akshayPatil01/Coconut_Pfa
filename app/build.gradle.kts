@@ -92,6 +92,8 @@ dependencies {
     implementation(libs.play.services.location)
     implementation(libs.mlkit.text.recognition)
     implementation(libs.retrofit)
+    implementation(libs.androidx.glance.appwidget)
+    implementation(libs.androidx.glance.material3)
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(platform(libs.androidx.compose.bom))

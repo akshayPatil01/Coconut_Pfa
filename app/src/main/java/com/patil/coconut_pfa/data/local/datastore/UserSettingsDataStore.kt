@@ -32,7 +32,8 @@ data class UserSettings(
     val lastUsedCategoryId: String? = null,
     val lastSmsCatchupTimestamp: Long = 0L,
     val googleAccountEmail: String? = null,
-    val lastBackupStatus: String? = null
+    val lastBackupStatus: String? = null,
+    val showAmountOnWidget: Boolean = false
 )
 
 class UserSettingsDataStore(private val context: Context) {
@@ -56,6 +57,7 @@ class UserSettingsDataStore(private val context: Context) {
         val LAST_SMS_CATCHUP_TIMESTAMP = longPreferencesKey("last_sms_catchup_timestamp")
         val GOOGLE_ACCOUNT_EMAIL = stringPreferencesKey("google_account_email")
         val LAST_BACKUP_STATUS = stringPreferencesKey("last_backup_status")
+        val SHOW_AMOUNT_ON_WIDGET = booleanPreferencesKey("show_amount_on_widget")
     }
 
     val settingsFlow: Flow<UserSettings> = context.settingsDataStore.data.map { prefs ->
@@ -77,7 +79,8 @@ class UserSettingsDataStore(private val context: Context) {
             lastUsedCategoryId = prefs[Keys.LAST_USED_CATEGORY_ID],
             lastSmsCatchupTimestamp = prefs[Keys.LAST_SMS_CATCHUP_TIMESTAMP] ?: 0L,
             googleAccountEmail = prefs[Keys.GOOGLE_ACCOUNT_EMAIL],
-            lastBackupStatus = prefs[Keys.LAST_BACKUP_STATUS]
+            lastBackupStatus = prefs[Keys.LAST_BACKUP_STATUS],
+            showAmountOnWidget = prefs[Keys.SHOW_AMOUNT_ON_WIDGET] ?: false
         )
     }
 
@@ -160,5 +163,9 @@ class UserSettingsDataStore(private val context: Context) {
         context.settingsDataStore.edit { prefs ->
             if (status != null) prefs[Keys.LAST_BACKUP_STATUS] = status else prefs.remove(Keys.LAST_BACKUP_STATUS)
         }
+    }
+
+    suspend fun updateShowAmountOnWidget(enabled: Boolean) {
+        context.settingsDataStore.edit { it[Keys.SHOW_AMOUNT_ON_WIDGET] = enabled }
     }
 }
