@@ -1,6 +1,7 @@
 package com.patil.coconut_pfa.ui.screens
 
 import android.Manifest
+import android.net.Uri
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -20,6 +21,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Alarm
@@ -72,13 +76,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.patil.coconut_pfa.data.local.datastore.UserSettings
+import com.patil.coconut_pfa.data.local.datastore.UserSettingsDataStore
+import com.patil.coconut_pfa.data.local.security.BackupPassphraseManager
+import com.patil.coconut_pfa.data.local.security.PinHasher
+import com.patil.coconut_pfa.data.repository.BackupManager
+import com.patil.coconut_pfa.data.repository.BackupSummary
 import com.patil.coconut_pfa.navigation.Screen
 import com.patil.coconut_pfa.ui.theme.Coconut_PfaTheme
 import com.patil.coconut_pfa.util.PrivacyManager
+import com.google.android.gms.common.AccountPicker
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -99,6 +110,66 @@ fun SettingsScreen(
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     val isPrivacyEnabled by PrivacyManager.isPrivacyEnabled.collectAsState()
+
+    var hasBackupPwd by remember { mutableStateOf(BackupPassphraseManager.hasBackupPassword(context)) }
+    var showSetPasswordDialog by remember { mutableStateOf(false) }
+    var newBackupPasswordInput by remember { mutableStateOf("") }
+    var confirmBackupPasswordInput by remember { mutableStateOf("") }
+
+    val settingsDataStore = remember { UserSettingsDataStore(context) }
+    val accountPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            val email = result.data?.getStringExtra(android.accounts.AccountManager.KEY_ACCOUNT_NAME)
+            if (email != null) {
+                scope.launch {
+                    settingsDataStore.updateGoogleAccountEmail(email)
+                    snackbarHostState.showSnackbar("Connected to Google account: $email")
+                }
+            }
+        }
+    }
+
+    var showDriveBackupsDialog by remember { mutableStateOf(false) }
+    var driveBackupsList by remember { mutableStateOf<List<com.patil.coconut_pfa.data.repository.DriveBackupSummary>?>(null) }
+    var selectedDriveFileId by remember { mutableStateOf<String?>(null) }
+    var showDisconnectGoogleDialog by remember { mutableStateOf(false) }
+    var isUploadingDrive by remember { mutableStateOf(false) }
+    var isLoadingDriveList by remember { mutableStateOf(false) }
+
+    var showRestorePasswordDialog by remember { mutableStateOf(false) }
+    var selectedRestoreUri by remember { mutableStateOf<android.net.Uri?>(null) }
+    var restorePasswordInput by remember { mutableStateOf("") }
+    var restoreSummary by remember { mutableStateOf<BackupSummary?>(null) }
+    var showRestoreConfirmDialog by remember { mutableStateOf(false) }
+    var showNewPinDialog by remember { mutableStateOf(false) }
+    var newPinInput by remember { mutableStateOf("") }
+
+    val exportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/octet-stream")
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                try {
+                    BackupManager.exportBackup(context, uri)
+                    snackbarHostState.showSnackbar("Encrypted backup exported successfully!")
+                } catch (e: Exception) {
+                    snackbarHostState.showSnackbar("Backup failed: ${e.localizedMessage}")
+                }
+            }
+        }
+    }
+
+    val restoreLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            selectedRestoreUri = uri
+            restorePasswordInput = ""
+            showRestorePasswordDialog = true
+        }
+    }
 
     fun secondsToTimeoutLabel(seconds: Int): String = when (seconds) {
         0 -> "Immediately"
@@ -161,6 +232,14 @@ fun SettingsScreen(
         )
     }
 
+    var hasSmsPermissions by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.RECEIVE_SMS) == PackageManager.PERMISSION_GRANTED &&
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED
+        )
+    }
+    var showRestrictedSettingsDialog by remember { mutableStateOf(false) }
+
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
@@ -169,6 +248,22 @@ fun SettingsScreen(
             scope.launch { snackbarHostState.showSnackbar("Notification permission granted! Bill reminders enabled.") }
         } else {
             scope.launch { snackbarHostState.showSnackbar("Notification permission is required to post bill reminders.") }
+        }
+    }
+
+    val smsPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        val granted = results.values.all { it }
+        hasSmsPermissions = granted
+        if (granted) {
+            smsAutoDetectEnabled = true
+            onUpdateSmsEnabled(true)
+            scope.launch { snackbarHostState.showSnackbar("SMS permissions granted! Auto-detection enabled.") }
+        } else {
+            smsAutoDetectEnabled = false
+            onUpdateSmsEnabled(false)
+            showRestrictedSettingsDialog = true
         }
     }
 
@@ -280,8 +375,37 @@ fun SettingsScreen(
                         subtitle = "Read bank & card SMS alerts automatically",
                         checked = smsAutoDetectEnabled,
                         onCheckedChange = { checked ->
-                            smsAutoDetectEnabled = checked
-                            onUpdateSmsEnabled(checked)
+                            if (checked) {
+                                smsPermissionLauncher.launch(
+                                    arrayOf(
+                                        Manifest.permission.RECEIVE_SMS,
+                                        Manifest.permission.READ_SMS
+                                    )
+                                )
+                            } else {
+                                smsAutoDetectEnabled = false
+                                onUpdateSmsEnabled(false)
+                            }
+                        }
+                    )
+                    SettingsNavigationRow(
+                        title = "Scan Last 30 Days Inbox",
+                        subtitle = "One-time scan of past SMS transactions",
+                        onClick = {
+                            if (hasSmsPermissions) {
+                                scope.launch {
+                                    snackbarHostState.showSnackbar("Scanning last 30 days of SMS inbox...")
+                                    com.patil.coconut_pfa.worker.SmsCatchupWorker.scanInbox(context)
+                                    snackbarHostState.showSnackbar("Scan complete! Check SMS Review Inbox.")
+                                }
+                            } else {
+                                smsPermissionLauncher.launch(
+                                    arrayOf(
+                                        Manifest.permission.RECEIVE_SMS,
+                                        Manifest.permission.READ_SMS
+                                    )
+                                )
+                            }
                         }
                     )
                     SettingsNavigationRow(
@@ -366,33 +490,152 @@ fun SettingsScreen(
             item {
                 SettingsCategoryCard(title = "Backup & Recovery", icon = Icons.Rounded.CloudSync) {
                     Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = if (userSettings.googleAccountEmail != null) "Google Account Connected" else "Google Account",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = userSettings.googleAccountEmail ?: "Not connected (Required for Drive backup)",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (userSettings.googleAccountEmail != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                                )
+                            }
+                            Button(
+                                onClick = {
+                                    if (userSettings.googleAccountEmail != null) {
+                                        showDisconnectGoogleDialog = true
+                                    } else {
+                                        val intent = AccountPicker.newChooseAccountIntent(
+                                            null, null, arrayOf("com.google"), false, null, null, null, null
+                                        )
+                                        accountPickerLauncher.launch(intent)
+                                    }
+                                },
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text(if (userSettings.googleAccountEmail != null) "Disconnect" else "Connect")
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+                        HorizontalDivider()
+                        Spacer(modifier = Modifier.height(12.dp))
+
                         Text(
-                            text = "Google Account: connected as demo.user@gmail.com",
+                            text = if (hasBackupPwd) "Backup Password: Set & Secured in Keystore" else "Backup Password: Not set (required for encrypted backups)",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = if (hasBackupPwd) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
                         )
                         Text(
-                            text = "Last backup: Today at 10:15 AM",
+                            text = "Last backup: ${if (userSettings.lastBackupAt != null) java.text.SimpleDateFormat("dd MMM yyyy, hh:mm a", java.util.Locale.getDefault()).format(java.util.Date(userSettings.lastBackupAt)) else "Never"}",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.outline
                         )
+                        if (!userSettings.lastBackupStatus.isNullOrBlank()) {
+                            Text(
+                                text = "Status: ${userSettings.lastBackupStatus}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (userSettings.lastBackupStatus == "Success") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                            )
+                        }
+
                         Spacer(modifier = Modifier.height(12.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Button(
-                                onClick = {
-                                    scope.launch { snackbarHostState.showSnackbar("Encrypted backup created successfully!") }
-                                },
-                                shape = RoundedCornerShape(10.dp)
-                            ) {
-                                Text("Backup Now")
-                            }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                             OutlinedButton(
                                 onClick = {
-                                    scope.launch { snackbarHostState.showSnackbar("Data restored from backup!") }
+                                    newBackupPasswordInput = ""
+                                    confirmBackupPasswordInput = ""
+                                    showSetPasswordDialog = true
                                 },
-                                shape = RoundedCornerShape(10.dp)
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.weight(1f)
                             ) {
-                                Text("Restore")
+                                Text(if (hasBackupPwd) "Change Password" else "Set Password")
+                            }
+                            Button(
+                                onClick = {
+                                    if (userSettings.googleAccountEmail.isNullOrBlank()) {
+                                        scope.launch { snackbarHostState.showSnackbar("Please connect your Google account first.") }
+                                    } else if (!hasBackupPwd) {
+                                        showSetPasswordDialog = true
+                                    } else {
+                                        scope.launch {
+                                            isUploadingDrive = true
+                                            try {
+                                                com.patil.coconut_pfa.data.repository.DriveBackupManager.uploadBackupToDrive(context)
+                                                snackbarHostState.showSnackbar("Backup uploaded to Google Drive successfully!")
+                                            } catch (e: Exception) {
+                                                snackbarHostState.showSnackbar("Backup failed: ${e.localizedMessage}")
+                                            } finally {
+                                                isUploadingDrive = false
+                                            }
+                                        }
+                                    }
+                                },
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.weight(1f),
+                                enabled = !isUploadingDrive
+                            ) {
+                                Text(if (isUploadingDrive) "Backing up..." else "Backup Now")
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedButton(
+                            onClick = {
+                                if (userSettings.googleAccountEmail.isNullOrBlank()) {
+                                    scope.launch { snackbarHostState.showSnackbar("Please connect your Google account first.") }
+                                } else if (!hasBackupPwd) {
+                                    showSetPasswordDialog = true
+                                } else {
+                                    scope.launch {
+                                        isLoadingDriveList = true
+                                        try {
+                                            val list = com.patil.coconut_pfa.data.repository.DriveBackupManager.listDriveBackups(context)
+                                            driveBackupsList = list
+                                            selectedDriveFileId = null
+                                            selectedRestoreUri = null
+                                            showDriveBackupsDialog = true
+                                        } catch (e: Exception) {
+                                            snackbarHostState.showSnackbar("Failed to list Drive backups: ${e.localizedMessage}")
+                                        } finally {
+                                            isLoadingDriveList = false
+                                        }
+                                    }
+                                }
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = !isLoadingDriveList
+                        ) {
+                            Text(if (isLoadingDriveList) "Loading Drive Backups..." else "Restore from Google Drive")
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                            OutlinedButton(
+                                onClick = {
+                                    val fileName = "coconut-${java.text.SimpleDateFormat("yyyyMMdd-HHmm", java.util.Locale.getDefault()).format(java.util.Date())}.cbk"
+                                    exportLauncher.launch(fileName)
+                                },
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Export File")
+                            }
+                            OutlinedButton(
+                                onClick = { restoreLauncher.launch(arrayOf("*/*")) },
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Restore File")
                             }
                         }
                     }
@@ -536,9 +779,346 @@ fun SettingsScreen(
         )
     }
 
+    // Restricted Settings Dialog
+    if (showRestrictedSettingsDialog) {
+        AlertDialog(
+            onDismissRequest = { showRestrictedSettingsDialog = false },
+            title = { Text("Allow Restricted Settings", fontWeight = FontWeight.Bold) },
+            text = {
+                Text(
+                    "Android has restricted SMS permissions for this app.\n\n" +
+                    "To enable SMS auto-detection:\n" +
+                    "1. Open device App Info (Settings → Apps → Coconut PFA).\n" +
+                    "2. Tap the three dots (⋮) in the top-right corner.\n" +
+                    "3. Select 'Allow restricted settings'.\n" +
+                    "4. Return here and enable SMS Auto-Detection."
+                )
+            },
+            confirmButton = {
+                Button(onClick = { showRestrictedSettingsDialog = false }) {
+                    Text("Got It")
+                }
+            }
+        )
+    }
+
     // Categories Dialog
     if (showCategoriesDialog) {
         CategoriesDialog(onDismiss = { showCategoriesDialog = false })
+    }
+
+    // Disconnect Google Account Dialog
+    if (showDisconnectGoogleDialog) {
+        AlertDialog(
+            onDismissRequest = { showDisconnectGoogleDialog = false },
+            title = { Text("Disconnect Google Account") },
+            text = { Text("Are you sure you want to disconnect your Google account? Automatic daily backups to Drive will stop.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        scope.launch {
+                            settingsDataStore.updateGoogleAccountEmail(null)
+                            showDisconnectGoogleDialog = false
+                            snackbarHostState.showSnackbar("Google account disconnected.")
+                        }
+                    },
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Disconnect")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDisconnectGoogleDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Google Drive Backups List Dialog
+    if (showDriveBackupsDialog && driveBackupsList != null) {
+        AlertDialog(
+            onDismissRequest = { showDriveBackupsDialog = false },
+            title = { Text("Google Drive Backups") },
+            text = {
+                Column {
+                    if (driveBackupsList!!.isEmpty()) {
+                        Text("No backups found in Google Drive app folder.", style = MaterialTheme.typography.bodySmall)
+                    } else {
+                        Text("Select a backup to restore:", style = MaterialTheme.typography.bodySmall)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        LazyColumn(modifier = Modifier.height(220.dp)) {
+                            items(driveBackupsList!!.size) { index ->
+                                val backup = driveBackupsList!![index]
+                                val sizeKb = backup.size / 1024
+                                val dateStr = try {
+                                    val parser = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.getDefault())
+                                    parser.timeZone = java.util.TimeZone.getTimeZone("UTC")
+                                    val date = parser.parse(backup.createdTime) ?: java.util.Date(backup.createdTime.toLongOrNull() ?: System.currentTimeMillis())
+                                    java.text.SimpleDateFormat("dd MMM yyyy, hh:mm a", java.util.Locale.getDefault()).format(date)
+                                } catch (_: Exception) {
+                                    backup.name
+                                }
+
+                                Surface(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp)
+                                        .clickable {
+                                            selectedDriveFileId = backup.id
+                                            selectedRestoreUri = null
+                                            showDriveBackupsDialog = false
+                                            restorePasswordInput = ""
+                                            showRestorePasswordDialog = true
+                                        },
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant
+                                ) {
+                                    Column(modifier = Modifier.padding(12.dp)) {
+                                        Text(text = dateStr, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                                        Text(text = "Size: $sizeKb KB • File: ${backup.name}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showDriveBackupsDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Set Backup Password Dialog
+    if (showSetPasswordDialog) {
+        AlertDialog(
+            onDismissRequest = { showSetPasswordDialog = false },
+            title = { Text(if (hasBackupPwd) "Change Backup Password" else "Set Backup Password") },
+            text = {
+                Column {
+                    Text("Enter a strong password to encrypt/decrypt your local backups.", style = MaterialTheme.typography.bodySmall)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = newBackupPasswordInput,
+                        onValueChange = { newBackupPasswordInput = it },
+                        label = { Text("Backup Password") },
+                        singleLine = true,
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = confirmBackupPasswordInput,
+                        onValueChange = { confirmBackupPasswordInput = it },
+                        label = { Text("Confirm Password") },
+                        singleLine = true,
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (newBackupPasswordInput.isNotEmpty() && newBackupPasswordInput == confirmBackupPasswordInput) {
+                            BackupPassphraseManager.setBackupPassword(context, newBackupPasswordInput)
+                            hasBackupPwd = true
+                            showSetPasswordDialog = false
+                            scope.launch { snackbarHostState.showSnackbar("Backup password saved successfully!") }
+                        } else {
+                            scope.launch { snackbarHostState.showSnackbar("Passwords do not match or are empty.") }
+                        }
+                    }
+                ) {
+                    Text("Save")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSetPasswordDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Restore Password Dialog
+    if (showRestorePasswordDialog && (selectedRestoreUri != null || selectedDriveFileId != null)) {
+        AlertDialog(
+            onDismissRequest = { showRestorePasswordDialog = false },
+            title = { Text("Enter Backup Password") },
+            text = {
+                Column {
+                    Text("Enter the password used when creating this backup file.", style = MaterialTheme.typography.bodySmall)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = restorePasswordInput,
+                        onValueChange = { restorePasswordInput = it },
+                        label = { Text("Backup Password") },
+                        singleLine = true,
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        scope.launch {
+                            try {
+                                if (selectedDriveFileId != null) {
+                                    val tempFile = java.io.File.createTempFile("coconut-inspect", ".cbk", context.cacheDir)
+                                    try {
+                                        val email = userSettings.googleAccountEmail!!
+                                        val token = com.patil.coconut_pfa.data.repository.DriveBackupManager.getAccessToken(context, email)
+                                        val client = okhttp3.OkHttpClient()
+                                        val request = okhttp3.Request.Builder()
+                                            .url("https://www.googleapis.com/drive/v3/files/$selectedDriveFileId?alt=media")
+                                            .header("Authorization", "Bearer $token")
+                                            .build()
+                                        client.newCall(request).execute().use { response ->
+                                            if (!response.isSuccessful) throw RuntimeException("Download failed (${response.code})")
+                                            response.body.byteStream().use { input ->
+                                                java.io.FileOutputStream(tempFile).use { output ->
+                                                    input.copyTo(output)
+                                                }
+                                            }
+                                        }
+                                        val uri = Uri.fromFile(tempFile)
+                                        val summary = BackupManager.inspectBackup(context, uri, restorePasswordInput)
+                                        restoreSummary = summary
+                                        showRestorePasswordDialog = false
+                                        showRestoreConfirmDialog = true
+                                    } finally {
+                                        if (tempFile.exists()) tempFile.delete()
+                                    }
+                                } else if (selectedRestoreUri != null) {
+                                    val summary = BackupManager.inspectBackup(context, selectedRestoreUri!!, restorePasswordInput)
+                                    restoreSummary = summary
+                                    showRestorePasswordDialog = false
+                                    showRestoreConfirmDialog = true
+                                }
+                            } catch (e: Exception) {
+                                val msg = e.localizedMessage ?: "Unknown error"
+                                snackbarHostState.showSnackbar("Incorrect password or invalid backup: $msg")
+                            }
+                        }
+                    }
+                ) {
+                    Text("Continue")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRestorePasswordDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Restore Confirmation Dialog
+    if (showRestoreConfirmDialog && restoreSummary != null) {
+        val s = restoreSummary!!
+        AlertDialog(
+            onDismissRequest = { showRestoreConfirmDialog = false },
+            title = { Text("Confirm Data Restore") },
+            text = {
+                Column {
+                    Text("Backup created on: ${java.text.SimpleDateFormat("dd MMM yyyy, hh:mm a", java.util.Locale.getDefault()).format(java.util.Date(s.createdAt))}", fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("• Accounts: ${s.accountCount}")
+                    Text("• Transactions: ${s.transactionCount}")
+                    Text("• Categories: ${s.categoryCount}")
+                    Text("• Bills: ${s.billCount}")
+                    Text("• Goals: ${s.goalCount}")
+                    Text("• Persons/IOUs: ${s.personCount}")
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text("WARNING: Restoring will replace all current data in your app.", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        scope.launch {
+                            try {
+                                if (selectedDriveFileId != null) {
+                                    com.patil.coconut_pfa.data.repository.DriveBackupManager.downloadAndRestoreBackup(context, selectedDriveFileId!!, restorePasswordInput)
+                                } else if (selectedRestoreUri != null) {
+                                    BackupManager.restoreBackup(context, selectedRestoreUri!!, restorePasswordInput)
+                                }
+                                showRestoreConfirmDialog = false
+                                selectedDriveFileId = null
+                                selectedRestoreUri = null
+                                snackbarHostState.showSnackbar("Data restored successfully!")
+                                showNewPinDialog = true
+                            } catch (e: Exception) {
+                                snackbarHostState.showSnackbar("Restore failed: ${e.localizedMessage}")
+                            }
+                        }
+                    },
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Replace All Data")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRestoreConfirmDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Set New PIN Dialog after restore
+    if (showNewPinDialog) {
+        AlertDialog(
+            onDismissRequest = {},
+            title = { Text("Set New Security PIN") },
+            text = {
+                Column {
+                    Text("PINs are not included in backups for security. Please set a new 4-digit PIN.", style = MaterialTheme.typography.bodySmall)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = newPinInput,
+                        onValueChange = { input ->
+                            val filtered = input.filter { it.isDigit() }
+                            if (filtered.length <= 4) newPinInput = filtered
+                        },
+                        label = { Text("4-Digit PIN") },
+                        singleLine = true,
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (newPinInput.length == 4) {
+                            scope.launch {
+                                val salt = PinHasher.generateSalt()
+                                val hash = PinHasher.hashPin(newPinInput, salt)
+                                val saltB64 = PinHasher.saltToBase64(salt)
+                                UserSettingsDataStore(context).updatePin(hash, saltB64)
+                                showNewPinDialog = false
+                                snackbarHostState.showSnackbar("New PIN set successfully!")
+                            }
+                        } else {
+                            scope.launch { snackbarHostState.showSnackbar("Please enter a valid 4-digit PIN.") }
+                        }
+                    },
+                    enabled = newPinInput.length == 4
+                ) {
+                    Text("Save PIN")
+                }
+            }
+        )
     }
 }
 

@@ -15,6 +15,9 @@ interface BillOccurrenceDao {
     @Query("SELECT * FROM bill_occurrences WHERE id = :id")
     suspend fun getById(id: String): BillOccurrenceEntity?
 
+    @Query("SELECT * FROM bill_occurrences")
+    suspend fun getAll(): List<BillOccurrenceEntity>
+
     @Query("SELECT * FROM bill_occurrences ORDER BY dueDate ASC")
     fun getAllOccurrencesFlow(): Flow<List<BillOccurrenceEntity>>
 

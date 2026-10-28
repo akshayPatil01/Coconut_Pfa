@@ -33,28 +33,25 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.patil.coconut_pfa.navigation.Screen
 import com.patil.coconut_pfa.ui.components.AmountText
-import com.patil.coconut_pfa.ui.theme.Coconut_PfaTheme
+import com.patil.coconut_pfa.domain.sms.SmsParser
+import com.patil.coconut_pfa.domain.sms.ParsedSmsType
+import com.patil.coconut_pfa.util.MoneyFormatter
 
 @Composable
 fun ParserTestScreen(
     onNavigate: (Screen) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var rawSender by remember { mutableStateOf("AD-HDFCBK") }
     var rawSmsText by remember {
-        mutableStateOf("Rs. 1,450.00 spent on Demo Card A at Coffee Shop 1 on 12 Nov. Avail Bal: Rs. 2,45,000.00")
+        mutableStateOf("Rs 1,450.00 spent on HDFC Bank Card ending 1234 at Coffee Shop on 12-Nov-24. Avail Bal: Rs 2,45,000.00. Ref: 123456789")
     }
 
-    // Dummy parser logic
-    val isDebit = !rawSmsText.contains("credited", ignoreCase = true)
-    val parsedAmountPaise = remember(rawSmsText) {
-        val match = Regex("""(Rs\.?|INR)\s*([\d,]+(\.\d{1,2})?)""").find(rawSmsText)
-        val numStr = match?.groupValues?.get(2)?.replace(",", "")
-        val doubleVal = numStr?.toDoubleOrNull() ?: 1450.0
-        (doubleVal * 100).toLong()
+    val parsed = remember(rawSender, rawSmsText) {
+        SmsParser.parse(rawSender, rawSmsText, System.currentTimeMillis())
     }
 
     Scaffold(
@@ -79,7 +76,7 @@ fun ParserTestScreen(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Test SMS regex matching & entity extraction",
+                        text = "Test live bank SMS parser (nothing is saved)",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -87,32 +84,42 @@ fun ParserTestScreen(
             }
 
             // Presets
-            Text("Sample Preset Test Cases:", style = MaterialTheme.typography.labelMedium)
+            Text("Sample Presets:", style = MaterialTheme.typography.labelMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(
                     selected = false,
                     onClick = {
+                        rawSender = "AX-HDFCBK"
                         rawSmsText = "Rs. 2,499.00 debited from a/c XX4321 for Electronics Store on 10 Nov."
                     },
-                    label = { Text("Card Debit") }
+                    label = { Text("Debit Card") }
                 )
                 FilterChip(
                     selected = false,
                     onClick = {
-                        rawSmsText = "Rs 12500.00 credited to a/c XX4321 towards Salary adjustment."
+                        rawSender = "VM-ICICIB"
+                        rawSmsText = "Rs 12,500.00 credited to a/c XX9876 towards Salary."
                     },
                     label = { Text("Salary Credit") }
                 )
             }
 
-            // Raw Text Area
+            OutlinedTextField(
+                value = rawSender,
+                onValueChange = { rawSender = it },
+                label = { Text("Sender ID (e.g. AD-HDFCBK)") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            )
+
             OutlinedTextField(
                 value = rawSmsText,
                 onValueChange = { rawSmsText = it },
                 label = { Text("Paste Raw SMS Text") },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(130.dp),
+                    .height(120.dp),
                 shape = RoundedCornerShape(16.dp)
             )
 
@@ -137,15 +144,26 @@ fun ParserTestScreen(
                             Text("Live Parser Output", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         }
 
+                        val isIgnored = parsed?.type == ParsedSmsType.IGNORE
+                        val isIncome = parsed?.type == ParsedSmsType.CREDIT
+
                         Surface(
                             shape = RoundedCornerShape(8.dp),
-                            color = if (isDebit) Color(0xFFFFEBEE) else Color(0xFFE8F5E9)
+                            color = when {
+                                isIgnored -> Color(0xFFEEEEEE)
+                                isIncome -> Color(0xFFE8F5E9)
+                                else -> Color(0xFFFFEBEE)
+                            }
                         ) {
                             Text(
-                                text = if (isDebit) "EXPENSE / DEBIT" else "INCOME / CREDIT",
+                                text = parsed?.type?.name ?: "UNPARSED",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
-                                color = if (isDebit) Color(0xFFC62828) else Color(0xFF2E7D32),
+                                color = when {
+                                    isIgnored -> Color.Gray
+                                    isIncome -> Color(0xFF2E7D32)
+                                    else -> Color(0xFFC62828)
+                                },
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                             )
                         }
@@ -155,18 +173,23 @@ fun ParserTestScreen(
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    ParserResultRow(label = "Extracted Amount", value = {
-                        AmountText(
-                            amountInPaise = parsedAmountPaise,
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                    ParserResultRow(label = "Institution", valueStr = parsed?.institution ?: "Unknown Bank")
+                    ParserResultRow(label = "Amount", value = {
+                        if (parsed?.amountPaise != null) {
+                            AmountText(
+                                amountInPaise = parsed.amountPaise,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        } else {
+                            Text("None", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
+                        }
                     })
-
-                    ParserResultRow(label = "Detected Account", valueStr = "Demo Bank Salary ••4321")
-                    ParserResultRow(label = "Suggested Category", valueStr = if (isDebit) "Dining / Shopping" else "Income")
-                    ParserResultRow(label = "Confidence Score", valueStr = "96% High Confidence")
+                    ParserResultRow(label = "Account Last 4", valueStr = parsed?.last4 ?: "Not found")
+                    ParserResultRow(label = "Merchant / Payee", valueStr = parsed?.merchant ?: "Not found")
+                    ParserResultRow(label = "Available Balance", valueStr = parsed?.availableBalancePaise?.let { MoneyFormatter.format(it) } ?: "Not found")
+                    ParserResultRow(label = "Reference No", valueStr = parsed?.refNo ?: "Not found")
                 }
             }
         }
@@ -190,13 +213,5 @@ private fun ParserResultRow(
         if (valueStr != null) {
             Text(text = valueStr, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
         } else value?.invoke()
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-private fun ParserTestScreenPreview() {
-    Coconut_PfaTheme {
-        ParserTestScreen(onNavigate = {})
     }
 }

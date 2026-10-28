@@ -14,6 +14,9 @@ interface CardStatementDao {
     @Query("SELECT * FROM card_statements WHERE id = :id")
     suspend fun getById(id: String): CardStatementEntity?
 
+    @Query("SELECT * FROM card_statements")
+    suspend fun getAll(): List<CardStatementEntity>
+
     @Query("SELECT * FROM card_statements WHERE accountId = :accountId ORDER BY periodEnd DESC")
     fun getStatementsForAccountFlow(accountId: String): Flow<List<CardStatementEntity>>
 

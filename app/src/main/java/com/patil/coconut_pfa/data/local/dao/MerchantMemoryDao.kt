@@ -14,6 +14,9 @@ interface MerchantMemoryDao {
     @Query("SELECT * FROM merchant_memories WHERE merchantKey = :merchantKey")
     suspend fun getByMerchantKey(merchantKey: String): MerchantMemoryEntity?
 
+    @Query("SELECT * FROM merchant_memories")
+    suspend fun getAll(): List<MerchantMemoryEntity>
+
     @Query("SELECT * FROM merchant_memories ORDER BY lastUsedAt DESC")
     fun getAllMerchantMemoriesFlow(): Flow<List<MerchantMemoryEntity>>
 

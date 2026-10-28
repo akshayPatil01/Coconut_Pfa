@@ -112,7 +112,6 @@ abstract class CoconutDatabase : RoomDatabase() {
                 "coconut.db"
             )
                 .openHelperFactory(factory)
-                .fallbackToDestructiveMigration(dropAllTables = true)
                 .addCallback(object : Callback() {
                     override fun onCreate(db: SupportSQLiteDatabase) {
                         super.onCreate(db)

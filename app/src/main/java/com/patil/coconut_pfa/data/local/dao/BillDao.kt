@@ -14,6 +14,9 @@ interface BillDao {
     @Query("SELECT * FROM bills WHERE id = :id")
     suspend fun getBillById(id: String): BillEntity?
 
+    @Query("SELECT * FROM bills")
+    suspend fun getAll(): List<BillEntity>
+
     @Query("SELECT * FROM bills WHERE active = 1 ORDER BY name ASC")
     fun getActiveBillsFlow(): Flow<List<BillEntity>>
 

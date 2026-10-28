@@ -68,6 +68,7 @@ import com.patil.coconut_pfa.ui.viewmodel.AddAccountViewModel
 import com.patil.coconut_pfa.ui.viewmodel.AddTransactionViewModel
 import com.patil.coconut_pfa.ui.viewmodel.TransactionsViewModel
 import com.patil.coconut_pfa.ui.viewmodel.TrashViewModel
+import com.patil.coconut_pfa.ui.viewmodel.ReviewInboxViewModel
 import com.patil.coconut_pfa.util.PrivacyManager
 import com.patil.coconut_pfa.worker.BillReminderWorker
 import com.patil.coconut_pfa.worker.PurgeTrashWorker
@@ -133,6 +134,22 @@ fun CoconutApp(
 
     LaunchedEffect(userSettings.reminderHour) {
         BillReminderWorker.schedule(context, userSettings.reminderHour)
+    }
+
+    LaunchedEffect(userSettings.googleAccountEmail) {
+        if (!userSettings.googleAccountEmail.isNullOrBlank()) {
+            val constraints = androidx.work.Constraints.Builder()
+                .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
+                .build()
+            val dailyWorkRequest = androidx.work.PeriodicWorkRequestBuilder<com.patil.coconut_pfa.worker.DriveBackupWorker>(1, java.util.concurrent.TimeUnit.DAYS)
+                .setConstraints(constraints)
+                .build()
+            androidx.work.WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+                "DriveBackupWork",
+                androidx.work.ExistingPeriodicWorkPolicy.KEEP,
+                dailyWorkRequest
+            )
+        }
     }
 
     // Sync PrivacyMode default state & perform cold start lock once settings are loaded
@@ -397,7 +414,21 @@ fun CoconutApp(
                         onUpdateSmsEnabled = { enabled -> scope.launch { settingsRepository.setSmsEnabled(enabled) } },
                         modifier = screenModifier
                     )
-                    Screen.ReviewInbox -> ReviewInboxScreen(onNavigate = navigateTo, modifier = screenModifier)
+                    Screen.ReviewInbox -> {
+                        val reviewInboxViewModel: ReviewInboxViewModel = viewModel(
+                            factory = ReviewInboxViewModel.Factory(
+                                smsRepository = smsRepository,
+                                accountRepository = accountRepository,
+                                categoryRepository = categoryRepository,
+                                transactionRepository = transactionRepository
+                            )
+                        )
+                        ReviewInboxScreen(
+                            onNavigate = navigateTo,
+                            viewModel = reviewInboxViewModel,
+                            modifier = screenModifier
+                        )
+                    }
                     is Screen.AccountDetail -> {
                         val accountDetailViewModel: AccountDetailViewModel = viewModel(
                             key = "account_detail_${dest.accountId}",

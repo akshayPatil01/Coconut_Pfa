@@ -14,6 +14,9 @@ interface NetWorthSnapshotDao {
     @Query("SELECT * FROM net_worth_snapshots ORDER BY cycleStart DESC")
     fun getAllSnapshotsFlow(): Flow<List<NetWorthSnapshotEntity>>
 
+    @Query("SELECT * FROM net_worth_snapshots")
+    suspend fun getAll(): List<NetWorthSnapshotEntity>
+
     @Query("SELECT * FROM net_worth_snapshots WHERE cycleStart = :cycleStart")
     suspend fun getByCycleStart(cycleStart: String): NetWorthSnapshotEntity?
 

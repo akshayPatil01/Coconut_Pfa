@@ -29,7 +29,10 @@ data class UserSettings(
     val backupKeep: Int = 7,
     val onboardingDone: Boolean = false,
     val lastUsedAccountId: String? = null,
-    val lastUsedCategoryId: String? = null
+    val lastUsedCategoryId: String? = null,
+    val lastSmsCatchupTimestamp: Long = 0L,
+    val googleAccountEmail: String? = null,
+    val lastBackupStatus: String? = null
 )
 
 class UserSettingsDataStore(private val context: Context) {
@@ -50,6 +53,9 @@ class UserSettingsDataStore(private val context: Context) {
         val ONBOARDING_DONE = booleanPreferencesKey("onboarding_done")
         val LAST_USED_ACCOUNT_ID = stringPreferencesKey("last_used_account_id")
         val LAST_USED_CATEGORY_ID = stringPreferencesKey("last_used_category_id")
+        val LAST_SMS_CATCHUP_TIMESTAMP = longPreferencesKey("last_sms_catchup_timestamp")
+        val GOOGLE_ACCOUNT_EMAIL = stringPreferencesKey("google_account_email")
+        val LAST_BACKUP_STATUS = stringPreferencesKey("last_backup_status")
     }
 
     val settingsFlow: Flow<UserSettings> = context.settingsDataStore.data.map { prefs ->
@@ -68,7 +74,10 @@ class UserSettingsDataStore(private val context: Context) {
             backupKeep = prefs[Keys.BACKUP_KEEP] ?: 7,
             onboardingDone = prefs[Keys.ONBOARDING_DONE] ?: false,
             lastUsedAccountId = prefs[Keys.LAST_USED_ACCOUNT_ID],
-            lastUsedCategoryId = prefs[Keys.LAST_USED_CATEGORY_ID]
+            lastUsedCategoryId = prefs[Keys.LAST_USED_CATEGORY_ID],
+            lastSmsCatchupTimestamp = prefs[Keys.LAST_SMS_CATCHUP_TIMESTAMP] ?: 0L,
+            googleAccountEmail = prefs[Keys.GOOGLE_ACCOUNT_EMAIL],
+            lastBackupStatus = prefs[Keys.LAST_BACKUP_STATUS]
         )
     }
 
@@ -134,6 +143,22 @@ class UserSettingsDataStore(private val context: Context) {
     suspend fun updateLastUsedCategory(categoryId: String?) {
         context.settingsDataStore.edit { prefs ->
             if (categoryId != null) prefs[Keys.LAST_USED_CATEGORY_ID] = categoryId else prefs.remove(Keys.LAST_USED_CATEGORY_ID)
+        }
+    }
+
+    suspend fun updateLastSmsCatchupTimestamp(timestamp: Long) {
+        context.settingsDataStore.edit { it[Keys.LAST_SMS_CATCHUP_TIMESTAMP] = timestamp }
+    }
+
+    suspend fun updateGoogleAccountEmail(email: String?) {
+        context.settingsDataStore.edit { prefs ->
+            if (email != null) prefs[Keys.GOOGLE_ACCOUNT_EMAIL] = email else prefs.remove(Keys.GOOGLE_ACCOUNT_EMAIL)
+        }
+    }
+
+    suspend fun updateLastBackupStatus(status: String?) {
+        context.settingsDataStore.edit { prefs ->
+            if (status != null) prefs[Keys.LAST_BACKUP_STATUS] = status else prefs.remove(Keys.LAST_BACKUP_STATUS)
         }
     }
 }

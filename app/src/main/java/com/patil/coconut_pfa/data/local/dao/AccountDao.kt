@@ -20,6 +20,9 @@ interface AccountDao {
     @Query("SELECT * FROM accounts ORDER BY createdAt ASC")
     fun getAllAccountsFlow(): Flow<List<AccountEntity>>
 
+    @Query("SELECT * FROM accounts ORDER BY createdAt ASC")
+    suspend fun getAllAccountsList(): List<AccountEntity>
+
     @Query("SELECT * FROM accounts WHERE archived = 0 ORDER BY createdAt ASC")
     fun getActiveAccountsFlow(): Flow<List<AccountEntity>>
 

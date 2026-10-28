@@ -14,6 +14,9 @@ interface TxnDao {
     @Query("SELECT * FROM transactions WHERE id = :id")
     suspend fun getTxnById(id: String): TxnEntity?
 
+    @Query("SELECT * FROM transactions")
+    suspend fun getAll(): List<TxnEntity>
+
     @Query("SELECT * FROM transactions WHERE deletedAt IS NULL ORDER BY occurredAt DESC")
     fun getAllActiveTxnsFlow(): Flow<List<TxnEntity>>
 

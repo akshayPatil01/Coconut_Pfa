@@ -14,6 +14,9 @@ interface FdDetailsDao {
     @Query("SELECT * FROM fd_details WHERE accountId = :accountId")
     suspend fun getByAccountId(accountId: String): FdDetailsEntity?
 
+    @Query("SELECT * FROM fd_details")
+    suspend fun getAll(): List<FdDetailsEntity>
+
     @Query("SELECT * FROM fd_details WHERE accountId = :accountId")
     fun getByAccountIdFlow(accountId: String): Flow<FdDetailsEntity?>
 

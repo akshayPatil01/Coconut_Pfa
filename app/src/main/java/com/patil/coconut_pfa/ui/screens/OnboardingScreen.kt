@@ -1,5 +1,7 @@
 package com.patil.coconut_pfa.ui.screens
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -22,20 +24,25 @@ import androidx.compose.material.icons.rounded.AccountBalance
 import androidx.compose.material.icons.rounded.Category
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.CloudSync
 import androidx.compose.material.icons.rounded.Fingerprint
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.Sms
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -44,18 +51,25 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.patil.coconut_pfa.data.local.datastore.UserSettingsDataStore
+import com.patil.coconut_pfa.data.local.security.PinHasher
+import com.patil.coconut_pfa.data.repository.BackupManager
+import com.patil.coconut_pfa.data.repository.BackupSummary
 import com.patil.coconut_pfa.navigation.Screen
 import com.patil.coconut_pfa.ui.theme.Coconut_PfaTheme
+import kotlinx.coroutines.launch
 
 @Composable
 fun OnboardingScreen(
@@ -72,6 +86,10 @@ fun OnboardingScreen(
     ) -> Unit = { _, _, _, _, _, _, _, _ -> },
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+
     var step by remember { mutableIntStateOf(1) } // Steps 1 to 8
 
     // Onboarding Form States
@@ -88,8 +106,28 @@ fun OnboardingScreen(
     var smsPermissionGranted by remember { mutableStateOf(true) }
     var notifPermissionGranted by remember { mutableStateOf(true) }
 
+    // Restore Dialog States
+    var showRestorePasswordDialog by remember { mutableStateOf(false) }
+    var selectedRestoreUri by remember { mutableStateOf<android.net.Uri?>(null) }
+    var restorePasswordInput by remember { mutableStateOf("") }
+    var restoreSummary by remember { mutableStateOf<BackupSummary?>(null) }
+    var showRestoreConfirmDialog by remember { mutableStateOf(false) }
+    var showNewPinDialog by remember { mutableStateOf(false) }
+    var newPinInput by remember { mutableStateOf("") }
+
+    val restoreLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            selectedRestoreUri = uri
+            restorePasswordInput = ""
+            showRestorePasswordDialog = true
+        }
+    }
+
     Scaffold(
-        modifier = modifier.fillMaxSize()
+        modifier = modifier.fillMaxSize(),
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -141,7 +179,7 @@ fun OnboardingScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     when (targetStep) {
-                        1 -> OnboardingWelcomeStep()
+                        1 -> OnboardingWelcomeStep(onRestoreClick = { restoreLauncher.launch(arrayOf("*/*")) })
                         2 -> OnboardingSetPinStep(pin = pin, onPinChange = { pin = it })
                         3 -> OnboardingFingerprintStep(enabled = enableBiometric, onToggle = { enableBiometric = it })
                         4 -> OnboardingSalaryDayStep(day = salaryDay, onDayChange = { salaryDay = it })
@@ -199,10 +237,150 @@ fun OnboardingScreen(
             }
         }
     }
+
+    // Restore Password Dialog
+    if (showRestorePasswordDialog && selectedRestoreUri != null) {
+        AlertDialog(
+            onDismissRequest = { showRestorePasswordDialog = false },
+            title = { Text("Enter Backup Password") },
+            text = {
+                Column {
+                    Text("Enter the password used when creating this backup file.", style = MaterialTheme.typography.bodySmall)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = restorePasswordInput,
+                        onValueChange = { restorePasswordInput = it },
+                        label = { Text("Backup Password") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        scope.launch {
+                            try {
+                                val summary = BackupManager.inspectBackup(context, selectedRestoreUri!!, restorePasswordInput)
+                                restoreSummary = summary
+                                showRestorePasswordDialog = false
+                                showRestoreConfirmDialog = true
+                            } catch (e: Exception) {
+                                snackbarHostState.showSnackbar("Incorrect password or invalid backup: ${e.localizedMessage}")
+                            }
+                        }
+                    }
+                ) {
+                    Text("Continue")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRestorePasswordDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Restore Confirmation Dialog
+    if (showRestoreConfirmDialog && restoreSummary != null) {
+        val s = restoreSummary!!
+        AlertDialog(
+            onDismissRequest = { showRestoreConfirmDialog = false },
+            title = { Text("Confirm Data Restore") },
+            text = {
+                Column {
+                    Text("Backup created on: ${java.text.SimpleDateFormat("dd MMM yyyy, hh:mm a", java.util.Locale.getDefault()).format(java.util.Date(s.createdAt))}", fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("• Accounts: ${s.accountCount}")
+                    Text("• Transactions: ${s.transactionCount}")
+                    Text("• Categories: ${s.categoryCount}")
+                    Text("• Bills: ${s.billCount}")
+                    Text("• Goals: ${s.goalCount}")
+                    Text("• Persons/IOUs: ${s.personCount}")
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text("WARNING: Restoring will replace all current data in your app.", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        scope.launch {
+                            try {
+                                BackupManager.restoreBackup(context, selectedRestoreUri!!, restorePasswordInput)
+                                showRestoreConfirmDialog = false
+                                snackbarHostState.showSnackbar("Data restored successfully!")
+                                showNewPinDialog = true
+                            } catch (e: Exception) {
+                                snackbarHostState.showSnackbar("Restore failed: ${e.localizedMessage}")
+                            }
+                        }
+                    },
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Replace All Data")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRestoreConfirmDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Set New PIN Dialog after restore
+    if (showNewPinDialog) {
+        AlertDialog(
+            onDismissRequest = {},
+            title = { Text("Set New Security PIN") },
+            text = {
+                Column {
+                    Text("PINs are not included in backups for security. Please set a new 4-digit PIN.", style = MaterialTheme.typography.bodySmall)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = newPinInput,
+                        onValueChange = { input ->
+                            val filtered = input.filter { it.isDigit() }
+                            if (filtered.length <= 4) newPinInput = filtered
+                        },
+                        label = { Text("4-Digit PIN") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (newPinInput.length == 4) {
+                            scope.launch {
+                                val salt = PinHasher.generateSalt()
+                                val hash = PinHasher.hashPin(newPinInput, salt)
+                                val saltB64 = PinHasher.saltToBase64(salt)
+                                UserSettingsDataStore(context).updatePin(hash, saltB64)
+                                showNewPinDialog = false
+                                onNavigate(Screen.Home)
+                            }
+                        } else {
+                            scope.launch { snackbarHostState.showSnackbar("Please enter a valid 4-digit PIN.") }
+                        }
+                    },
+                    enabled = newPinInput.length == 4
+                ) {
+                    Text("Save PIN & Open")
+                }
+            }
+        )
+    }
 }
 
 @Composable
-private fun OnboardingWelcomeStep() {
+private fun OnboardingWelcomeStep(onRestoreClick: () -> Unit) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             modifier = Modifier
@@ -223,6 +401,15 @@ private fun OnboardingWelcomeStep() {
             modifier = Modifier.padding(horizontal = 16.dp),
             textAlign = androidx.compose.ui.text.style.TextAlign.Center
         )
+        Spacer(modifier = Modifier.height(24.dp))
+        OutlinedButton(
+            onClick = onRestoreClick,
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Icon(imageVector = Icons.Rounded.CloudSync, contentDescription = null)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Restore from backup")
+        }
     }
 }
 

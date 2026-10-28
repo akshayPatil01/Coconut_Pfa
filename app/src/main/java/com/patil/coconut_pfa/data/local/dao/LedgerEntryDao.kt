@@ -17,6 +17,9 @@ interface LedgerEntryDao {
     @Query("SELECT * FROM ledger_entries ORDER BY date DESC")
     fun getAllEntriesFlow(): Flow<List<LedgerEntryEntity>>
 
+    @Query("SELECT * FROM ledger_entries")
+    suspend fun getAll(): List<LedgerEntryEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(entry: LedgerEntryEntity)
 
