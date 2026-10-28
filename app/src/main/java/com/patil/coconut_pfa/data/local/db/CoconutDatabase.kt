@@ -41,9 +41,6 @@ import com.patil.coconut_pfa.data.local.entity.SmsItemEntity
 import com.patil.coconut_pfa.data.local.entity.TxnEntity
 import com.patil.coconut_pfa.data.local.entity.ValuationEntity
 import com.patil.coconut_pfa.data.local.security.PassphraseManager
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 
 @Database(
@@ -101,6 +98,11 @@ abstract class CoconutDatabase : RoomDatabase() {
         }
 
         private fun buildDatabase(context: Context): CoconutDatabase {
+            try {
+                System.loadLibrary("sqlcipher")
+            } catch (e: Throwable) {
+                e.printStackTrace()
+            }
             val passphraseBytes = PassphraseManager.getOrCreatePassphrase(context)
             val factory = SupportOpenHelperFactory(passphraseBytes)
 
@@ -114,8 +116,29 @@ abstract class CoconutDatabase : RoomDatabase() {
                 .addCallback(object : Callback() {
                     override fun onCreate(db: SupportSQLiteDatabase) {
                         super.onCreate(db)
-                        CoroutineScope(Dispatchers.IO).launch {
-                            getInstance(context).categoryDao().insertAll(CategoryPresets.presets)
+                        db.beginTransaction()
+                        try {
+                            val stmt = db.compileStatement(
+                                "INSERT INTO categories (id, name, parentId, kind, icon, colour, isPreset, archived, sortOrder) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                            )
+                            for (category in CategoryPresets.presets) {
+                                stmt.clearBindings()
+                                stmt.bindString(1, category.id)
+                                stmt.bindString(2, category.name)
+                                if (category.parentId != null) stmt.bindString(3, category.parentId) else stmt.bindNull(3)
+                                stmt.bindString(4, category.kind.name)
+                                stmt.bindString(5, category.icon)
+                                stmt.bindLong(6, category.colour)
+                                stmt.bindLong(7, if (category.isPreset) 1L else 0L)
+                                stmt.bindLong(8, if (category.archived) 1L else 0L)
+                                stmt.bindLong(9, category.sortOrder.toLong())
+                                stmt.executeInsert()
+                            }
+                            db.setTransactionSuccessful()
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        } finally {
+                            db.endTransaction()
                         }
                     }
                 })

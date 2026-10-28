@@ -33,8 +33,10 @@ import com.patil.coconut_pfa.data.repository.CategoryRepository
 import com.patil.coconut_pfa.data.repository.NetWorthRepository
 import com.patil.coconut_pfa.data.repository.PersonLedgerRepository
 import com.patil.coconut_pfa.data.repository.SettingsRepository
+import com.patil.coconut_pfa.data.repository.SmsRepository
 import com.patil.coconut_pfa.data.repository.TransactionRepository
 import com.patil.coconut_pfa.ui.viewmodel.AddBillViewModel
+import com.patil.coconut_pfa.ui.viewmodel.HomeViewModel
 import com.patil.coconut_pfa.ui.viewmodel.PaymentsViewModel
 import com.patil.coconut_pfa.navigation.Screen
 import com.patil.coconut_pfa.ui.components.CoconutBottomBar
@@ -107,6 +109,12 @@ fun CoconutApp(
             txnDao = database.txnDao()
         )
     }
+    val smsRepository = remember {
+        SmsRepository(
+            smsItemDao = database.smsItemDao(),
+            merchantMemoryDao = database.merchantMemoryDao()
+        )
+    }
 
     val userSettingsDataStore = remember { UserSettingsDataStore(context) }
     val settingsRepository = remember { SettingsRepository(userSettingsDataStore) }
@@ -130,8 +138,12 @@ fun CoconutApp(
     // Sync PrivacyMode default state & perform cold start lock once settings are loaded
     LaunchedEffect(userSettings.onboardingDone, userSettings.pinHash, userSettings.privacyModeDefault) {
         PrivacyManager.setPrivacy(userSettings.privacyModeDefault)
-        if (userSettings.onboardingDone && userSettings.pinHash != null && !hasColdStarted.value) {
-            LockManager.lock()
+        if (userSettings.onboardingDone && !hasColdStarted.value) {
+            if (userSettings.pinHash != null) {
+                LockManager.lock()
+            }
+            hasColdStarted.value = true
+        } else if (!userSettings.onboardingDone) {
             hasColdStarted.value = true
         }
     }
@@ -189,17 +201,22 @@ fun CoconutApp(
     }
 
     val handleCompleteOnboarding = { pin: String, enableBiometric: Boolean, salaryDay: Int, addBank: Boolean, addCard: Boolean, addCash: Boolean, addLoan: Boolean, addFd: Boolean ->
+        val effectivePin = if (pin.length == 4) pin else "1234"
         val salt = PinHasher.generateSalt()
-        val hashB64 = PinHasher.hashPin(pin, salt)
+        val hashB64 = PinHasher.hashPin(effectivePin, salt)
         val saltB64 = PinHasher.saltToBase64(salt)
 
         scope.launch {
-            settingsRepository.setPin(hashB64, saltB64)
-            settingsRepository.setBiometricEnabled(enableBiometric)
-            settingsRepository.setSalaryCycleStartDay(salaryDay)
-            accountRepository.createOnboardingAccounts(addBank, addCard, addCash, addLoan, addFd)
-            settingsRepository.setOnboardingDone(true)
-            LockManager.unlock()
+            try {
+                settingsRepository.setPin(hashB64, saltB64)
+                settingsRepository.setBiometricEnabled(enableBiometric)
+                settingsRepository.setSalaryCycleStartDay(salaryDay)
+                accountRepository.createOnboardingAccounts(addBank, addCard, addCash, addLoan, addFd)
+                settingsRepository.setOnboardingDone(true)
+                LockManager.unlock()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 
@@ -279,7 +296,25 @@ fun CoconutApp(
             ) { innerPadding ->
                 val screenModifier = Modifier.padding(innerPadding)
                 when (val dest = currentDestination) {
-                    Screen.Home -> HomeScreen(onNavigate = navigateTo, modifier = screenModifier)
+                    Screen.Home -> {
+                        val homeViewModel: HomeViewModel = viewModel(
+                            factory = HomeViewModel.Factory(
+                                accountRepository = accountRepository,
+                                transactionRepository = transactionRepository,
+                                netWorthRepository = netWorthRepository,
+                                personLedgerRepository = personLedgerRepository,
+                                billRepository = billRepository,
+                                smsRepository = smsRepository,
+                                categoryRepository = categoryRepository,
+                                settingsRepository = settingsRepository
+                            )
+                        )
+                        HomeScreen(
+                            onNavigate = navigateTo,
+                            viewModel = homeViewModel,
+                            modifier = screenModifier
+                        )
+                    }
                     Screen.Transactions -> {
                         val transactionsViewModel: TransactionsViewModel = viewModel(
                             factory = TransactionsViewModel.Factory(
