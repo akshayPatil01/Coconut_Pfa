@@ -506,6 +506,7 @@ fun CoconutApp(
                                 onUpdateSmsEnabled = { enabled -> scope.launch { settingsRepository.setSmsEnabled(enabled) } },
                                 onUpdateShowAmountOnWidget = { enabled -> scope.launch { settingsRepository.setShowAmountOnWidget(enabled) } },
                                 onUpdateThemeMode = { themeMode -> scope.launch { settingsRepository.setThemeMode(themeMode) } },
+                                onUpdateToastStyle = { toastStyle -> scope.launch { settingsRepository.setToastStyle(toastStyle) } },
                                 onGenerateFakeTransactions = {
                                     scope.launch {
                                         val txns = (1..10000).map { i ->

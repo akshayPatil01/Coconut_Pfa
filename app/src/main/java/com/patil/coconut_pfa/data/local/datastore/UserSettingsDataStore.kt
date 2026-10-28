@@ -20,6 +20,14 @@ enum class ThemeMode {
     DARK
 }
 
+enum class ToastStyle(val displayName: String, val description: String) {
+    ORANGE_ADAPTIVE("Orange Adaptive", "Dark Slate in Light Mode / Soft Warm Tint in Dark Mode"),
+    DARK_SLATE_ORANGE("Dark Slate Orange", "High-contrast Charcoal Dark card with vibrant Orange accents"),
+    SOFT_ORANGE_TINT("Soft Warm Orange", "Soft warm light card with deep Orange accents"),
+    DEEP_ROYAL("Deep Royal", "Vibrant royal indigo card with vivid accents"),
+    CRISP_BORDERED("Crisp Bordered", "Pure white card with prominent dark outline & shadow")
+}
+
 data class UserSettings(
     val salaryCycleStartDay: Int = 1,
     val pinHash: String? = null,
@@ -40,7 +48,8 @@ data class UserSettings(
     val googleAccountEmail: String? = null,
     val lastBackupStatus: String? = null,
     val showAmountOnWidget: Boolean = false,
-    val themeMode: ThemeMode = ThemeMode.SYSTEM
+    val themeMode: ThemeMode = ThemeMode.SYSTEM,
+    val toastStyle: ToastStyle = ToastStyle.ORANGE_ADAPTIVE
 )
 
 class UserSettingsDataStore(private val context: Context) {
@@ -66,6 +75,7 @@ class UserSettingsDataStore(private val context: Context) {
         val LAST_BACKUP_STATUS = stringPreferencesKey("last_backup_status")
         val SHOW_AMOUNT_ON_WIDGET = booleanPreferencesKey("show_amount_on_widget")
         val THEME_MODE = stringPreferencesKey("theme_mode")
+        val TOAST_STYLE = stringPreferencesKey("toast_style")
     }
 
     val settingsFlow: Flow<UserSettings> = context.settingsDataStore.data.map { prefs ->
@@ -91,7 +101,10 @@ class UserSettingsDataStore(private val context: Context) {
             showAmountOnWidget = prefs[Keys.SHOW_AMOUNT_ON_WIDGET] ?: false,
             themeMode = prefs[Keys.THEME_MODE]?.let { mode ->
                 runCatching { ThemeMode.valueOf(mode) }.getOrNull()
-            } ?: ThemeMode.SYSTEM
+            } ?: ThemeMode.SYSTEM,
+            toastStyle = prefs[Keys.TOAST_STYLE]?.let { style ->
+                runCatching { ToastStyle.valueOf(style) }.getOrNull()
+            } ?: ToastStyle.ORANGE_ADAPTIVE
         )
     }
 
@@ -182,5 +195,9 @@ class UserSettingsDataStore(private val context: Context) {
 
     suspend fun updateThemeMode(themeMode: ThemeMode) {
         context.settingsDataStore.edit { it[Keys.THEME_MODE] = themeMode.name }
+    }
+
+    suspend fun updateToastStyle(style: ToastStyle) {
+        context.settingsDataStore.edit { it[Keys.TOAST_STYLE] = style.name }
     }
 }

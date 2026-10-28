@@ -29,6 +29,7 @@ import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import com.patil.coconut_pfa.navigation.Screen
 import com.patil.coconut_pfa.ui.components.AmountText
+import com.patil.coconut_pfa.ui.components.CoconutSnackbarHost
 import com.patil.coconut_pfa.ui.theme.Coconut_PfaTheme
 import com.patil.coconut_pfa.util.KolkataDateTimeUtils
 import kotlinx.coroutines.launch
@@ -109,7 +110,7 @@ fun ReceiptScanScreen(
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
+        snackbarHost = { CoconutSnackbarHost(hostState = snackbarHostState) }
     ) { innerPadding ->
         Column(
             modifier = Modifier

@@ -34,6 +34,7 @@ import com.patil.coconut_pfa.data.local.entity.SmsItemEntity
 import com.patil.coconut_pfa.navigation.Screen
 import com.patil.coconut_pfa.ui.components.AmountText
 import com.patil.coconut_pfa.ui.components.CoconutExposedDropdownMenu
+import com.patil.coconut_pfa.ui.components.CoconutSnackbarHost
 import com.patil.coconut_pfa.ui.theme.Coconut_PfaTheme
 import com.patil.coconut_pfa.domain.sms.SmsProcessingEngine
 import com.squareup.moshi.JsonClass
@@ -223,7 +224,7 @@ fun ImportStatementScreen(
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
+        snackbarHost = { CoconutSnackbarHost(hostState = snackbarHostState) }
     ) { innerPadding ->
         Column(
             modifier = Modifier

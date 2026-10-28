@@ -35,7 +35,7 @@ object SbiSmsParser {
         }
 
         // 3. Debit
-        if (lower.contains("debited by") || lower.contains("debited")) {
+        if (lower.contains("debited") || lower.contains("debit") || lower.contains("paid") || lower.contains("sent")) {
             val amount = SmsParserUtils.extractAmount(body)
             val last4 = SmsParserUtils.extractLast4(body)
             val merchant = SmsParserUtils.extractMerchant(body)
@@ -53,7 +53,7 @@ object SbiSmsParser {
         }
 
         // 4. Credit
-        if (lower.contains("credited by") || lower.contains("credited")) {
+        if (lower.contains("credited") || lower.contains("credit") || lower.contains("received") || lower.contains("deposited")) {
             val amount = SmsParserUtils.extractAmount(body)
             val last4 = SmsParserUtils.extractLast4(body)
             val merchant = SmsParserUtils.extractMerchant(body)

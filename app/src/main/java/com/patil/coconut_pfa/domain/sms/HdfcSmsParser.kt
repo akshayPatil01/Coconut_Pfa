@@ -21,7 +21,7 @@ object HdfcSmsParser {
         }
 
         // 2. Card Spend
-        if (lower.contains("spent") || lower.contains("used on") || lower.contains("transaction on card")) {
+        if (lower.contains("spent") || lower.contains("used on") || lower.contains("transaction on card") || lower.contains("swiped")) {
             val amount = SmsParserUtils.extractAmount(body)
             val last4 = SmsParserUtils.extractLast4(body)
             val merchant = SmsParserUtils.extractMerchant(body)
@@ -35,7 +35,7 @@ object HdfcSmsParser {
         }
 
         // 3. Debit
-        if (lower.contains("debited") || lower.contains("debit")) {
+        if (lower.contains("debited") || lower.contains("debit") || lower.contains("paid") || lower.contains("sent")) {
             val amount = SmsParserUtils.extractAmount(body)
             val last4 = SmsParserUtils.extractLast4(body)
             val merchant = SmsParserUtils.extractMerchant(body)
@@ -53,7 +53,7 @@ object HdfcSmsParser {
         }
 
         // 4. Credit
-        if (lower.contains("credited") || lower.contains("credit")) {
+        if (lower.contains("credited") || lower.contains("credit") || lower.contains("received") || lower.contains("deposited")) {
             val amount = SmsParserUtils.extractAmount(body)
             val last4 = SmsParserUtils.extractLast4(body)
             val merchant = SmsParserUtils.extractMerchant(body)

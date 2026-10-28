@@ -21,7 +21,7 @@ object GenericSmsParser {
         }
 
         // 2. Card Spend
-        if (lower.contains("spent") || lower.contains("used at") || lower.contains("transaction on card")) {
+        if (lower.contains("spent") || lower.contains("used at") || lower.contains("used on") || lower.contains("transaction on card") || lower.contains("swiped")) {
             val amount = SmsParserUtils.extractAmount(body)
             val last4 = SmsParserUtils.extractLast4(body)
             val merchant = SmsParserUtils.extractMerchant(body)
@@ -35,7 +35,7 @@ object GenericSmsParser {
         }
 
         // 3. Debit
-        if (lower.contains("debited") || lower.contains("debit") || lower.contains("paid to") || lower.contains("withdrawn") || lower.contains("sent to")) {
+        if (lower.contains("debited") || lower.contains("debit") || lower.contains("paid") || lower.contains("sent") || lower.contains("withdrawn") || lower.contains("transfer") || lower.contains("txn of") || lower.contains("purchase of")) {
             val amount = SmsParserUtils.extractAmount(body)
             val last4 = SmsParserUtils.extractLast4(body)
             val merchant = SmsParserUtils.extractMerchant(body)
@@ -53,7 +53,7 @@ object GenericSmsParser {
         }
 
         // 4. Credit
-        if (lower.contains("credited") || lower.contains("credit") || lower.contains("received from") || lower.contains("deposited")) {
+        if (lower.contains("credited") || lower.contains("credit") || lower.contains("received") || lower.contains("deposited") || lower.contains("refund")) {
             val amount = SmsParserUtils.extractAmount(body)
             val last4 = SmsParserUtils.extractLast4(body)
             val merchant = SmsParserUtils.extractMerchant(body)

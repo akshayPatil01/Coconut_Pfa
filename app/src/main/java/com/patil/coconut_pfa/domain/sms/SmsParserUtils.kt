@@ -26,62 +26,87 @@ object SmsParserUtils {
         val upperSender = sender.uppercase().trim()
         val upperBody = body.uppercase()
 
-        val senderHeader = if (upperSender.contains("-")) {
-            upperSender.substringAfterLast("-")
-        } else {
-            upperSender
-        }
-
-        return when {
-            senderHeader.contains("HDFC") -> "HDFC Bank"
-            senderHeader.contains("ICICI") -> "ICICI Bank"
-            senderHeader.contains("SBI") -> "SBI"
-            senderHeader.contains("AXIS") -> "Axis Bank"
-            senderHeader.contains("KOTAK") -> "Kotak Mahindra Bank"
-            senderHeader.contains("PNB") -> "Punjab National Bank"
-            senderHeader.contains("BOB") -> "Bank of Baroda"
-            senderHeader.contains("IDFC") -> "IDFC FIRST Bank"
-            senderHeader.contains("YESBN") || senderHeader.contains("YESBK") -> "Yes Bank"
-            senderHeader.contains("INDUS") -> "IndusInd Bank"
-            senderHeader.contains("CANBK") || senderHeader.contains("CANBNK") -> "Canara Bank"
-            senderHeader.contains("UNIONB") -> "Union Bank of India"
-            senderHeader.contains("BOI") -> "Bank of India"
-            senderHeader.contains("FEDBK") || senderHeader.contains("FEDERAL") -> "Federal Bank"
-            senderHeader.contains("RBL") -> "RBL Bank"
-            senderHeader.contains("AUBNK") -> "AU Small Finance Bank"
-            senderHeader.contains("CITI") -> "Citi Bank"
-            senderHeader.contains("SCB") -> "Standard Chartered Bank"
-            senderHeader.contains("DBS") -> "DBS Bank"
-            senderHeader.contains("HSBC") -> "HSBC Bank"
-
-            // Fallback: Check if sender matches standard 6-char header and body explicitly names a bank
-            isStandardBankSenderFormat(upperSender) -> {
-                when {
-                    upperBody.contains("HDFC BANK") -> "HDFC Bank"
-                    upperBody.contains("ICICI BANK") -> "ICICI Bank"
-                    upperBody.contains("STATE BANK OF INDIA") || upperBody.contains("SBI") -> "SBI"
-                    upperBody.contains("AXIS BANK") -> "Axis Bank"
-                    upperBody.contains("KOTAK BANK") || upperBody.contains("KOTAK MAHINDRA") -> "Kotak Mahindra Bank"
-                    upperBody.contains("BANK OF BARODA") -> "Bank of Baroda"
-                    upperBody.contains("PUNJAB NATIONAL BANK") || upperBody.contains("PNB") -> "Punjab National Bank"
-                    upperBody.contains("IDFC FIRST BANK") || upperBody.contains("IDFC BANK") -> "IDFC FIRST Bank"
-                    upperBody.contains("YES BANK") -> "Yes Bank"
-                    upperBody.contains("INDUSIND BANK") -> "IndusInd Bank"
-                    upperBody.contains("CANARA BANK") -> "Canara Bank"
-                    upperBody.contains("UNION BANK") -> "Union Bank of India"
-                    else -> null
-                }
-            }
-
+        // Direct header keyword matching (handles TRAI suffixes like AX-HDFCBK-S, AD-ICICIB-A, JM-SBIINB-T)
+        val institutionFromSender = when {
+            upperSender.contains("HDFC") -> "HDFC Bank"
+            upperSender.contains("ICICI") -> "ICICI Bank"
+            upperSender.contains("SBI") -> "SBI"
+            upperSender.contains("AXIS") -> "Axis Bank"
+            upperSender.contains("KOTAK") -> "Kotak Mahindra Bank"
+            upperSender.contains("PNB") -> "Punjab National Bank"
+            upperSender.contains("BOB") -> "Bank of Baroda"
+            upperSender.contains("IDFC") -> "IDFC FIRST Bank"
+            upperSender.contains("YESBN") || upperSender.contains("YESBK") -> "Yes Bank"
+            upperSender.contains("INDUS") -> "IndusInd Bank"
+            upperSender.contains("CANBK") || upperSender.contains("CANBNK") -> "Canara Bank"
+            upperSender.contains("UNIONB") || upperSender.contains("UBIOIN") -> "Union Bank of India"
+            upperSender.contains("BOI") -> "Bank of India"
+            upperSender.contains("FEDBK") || upperSender.contains("FEDERAL") -> "Federal Bank"
+            upperSender.contains("RBL") -> "RBL Bank"
+            upperSender.contains("AUBNK") || upperSender.contains("AUBANK") -> "AU Small Finance Bank"
+            upperSender.contains("CITI") -> "Citi Bank"
+            upperSender.contains("SCB") -> "Standard Chartered Bank"
+            upperSender.contains("DBS") -> "DBS Bank"
+            upperSender.contains("HSBC") -> "HSBC Bank"
+            upperSender.contains("PAYTM") -> "Paytm"
+            upperSender.contains("IPPB") -> "India Post Payments Bank"
+            upperSender.contains("BNDHAN") || upperSender.contains("BANDHN") -> "Bandhan Bank"
+            upperSender.contains("CENTRAL") || upperSender.contains("CBIN") -> "Central Bank of India"
+            upperSender.contains("INDBNK") || upperSender.contains("INDIANB") -> "Indian Bank"
+            upperSender.contains("UCOBNK") -> "UCO Bank"
+            upperSender.contains("IOB") -> "Indian Overseas Bank"
+            upperSender.contains("AMEX") -> "American Express"
+            upperSender.contains("ONECRD") -> "OneCard"
+            upperSender.contains("SLICE") -> "Slice"
+            upperSender.contains("JUPITR") -> "Jupiter"
+            upperSender.contains("FIMONY") || upperSender.contains("FIBANK") -> "Fi Money"
+            upperSender.contains("CRED") -> "CRED"
+            upperSender.contains("PHNPE") || upperSender.contains("PHONEPE") -> "PhonePe"
+            upperSender.contains("GPAY") -> "Google Pay"
             else -> null
         }
-    }
 
-    private fun isStandardBankSenderFormat(sender: String): Boolean {
-        // e.g. "AX-BANKTX", "VM-INFOSM", "123456"
-        val clean = sender.removePrefix("").trim()
-        val regex = Regex("""^([A-Z]{2}-[A-Z0-9]{6}|[A-Z0-9]{6})$""")
-        return regex.matches(clean)
+        if (institutionFromSender != null) {
+            return institutionFromSender
+        }
+
+        // Fallback 1: Check if body explicitly names a bank or financial entity
+        val institutionFromBody = when {
+            upperBody.contains("HDFC BANK") -> "HDFC Bank"
+            upperBody.contains("ICICI BANK") -> "ICICI Bank"
+            upperBody.contains("STATE BANK OF INDIA") || upperBody.contains("SBI") -> "SBI"
+            upperBody.contains("AXIS BANK") -> "Axis Bank"
+            upperBody.contains("KOTAK BANK") || upperBody.contains("KOTAK MAHINDRA") -> "Kotak Mahindra Bank"
+            upperBody.contains("BANK OF BARODA") -> "Bank of Baroda"
+            upperBody.contains("PUNJAB NATIONAL BANK") || upperBody.contains("PNB") -> "Punjab National Bank"
+            upperBody.contains("IDFC FIRST BANK") || upperBody.contains("IDFC BANK") -> "IDFC FIRST Bank"
+            upperBody.contains("YES BANK") -> "Yes Bank"
+            upperBody.contains("INDUSIND BANK") -> "IndusInd Bank"
+            upperBody.contains("CANARA BANK") -> "Canara Bank"
+            upperBody.contains("UNION BANK") -> "Union Bank of India"
+            upperBody.contains("BANK OF INDIA") -> "Bank of India"
+            upperBody.contains("PAYTM") -> "Paytm"
+            upperBody.contains("CRED") -> "CRED"
+            upperBody.contains("PHONEPE") -> "PhonePe"
+            else -> null
+        }
+
+        if (institutionFromBody != null) {
+            return institutionFromBody
+        }
+
+        // Fallback 2: Check if message body contains clear financial transaction indicators
+        val hasTransactionVerbs = upperBody.contains("DEBIT") || upperBody.contains("CREDIT") ||
+                upperBody.contains("SPENT") || upperBody.contains("PAID") || upperBody.contains("SENT TO") ||
+                upperBody.contains("RECEIVED") || upperBody.contains("WITHDRAWN") || upperBody.contains("TRANSFERRED") ||
+                upperBody.contains("PURCHASE OF") || upperBody.contains("TXN OF") || upperBody.contains("SWIPED")
+        val hasAmount = upperBody.contains("RS") || upperBody.contains("INR") || upperBody.contains("₹")
+
+        if (hasTransactionVerbs && hasAmount) {
+            return "Bank"
+        }
+
+        return null
     }
 
     fun isIgnoredSms(body: String): Boolean {
@@ -104,10 +129,21 @@ object SmsParserUtils {
     }
 
     fun extractAmount(body: String): Long? {
-        val regex = Regex("""(?i)(?:Rs\.?|INR|₹)\s*([0-9]{1,3}(?:,[0-9]{2,3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)""")
-        val match = regex.find(body) ?: return null
-        val amountStr = match.groupValues[1]
-        return parseAmountToPaise(amountStr)
+        // 1. Leading currency: Rs. 500, INR 1,200.50, ₹ 500
+        val leadingRegex = Regex("""(?i)(?:Rs\.?|INR|₹)\s*([0-9]{1,3}(?:,[0-9]{2,3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)""")
+        val matchLeading = leadingRegex.find(body)
+        if (matchLeading != null) {
+            return parseAmountToPaise(matchLeading.groupValues[1])
+        }
+
+        // 2. Trailing currency: 500 Rs, 1200.00 INR, 500/-
+        val trailingRegex = Regex("""(?i)\b([0-9]{1,3}(?:,[0-9]{2,3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)\s*(?:Rs\.?|INR|₹|/-)""")
+        val matchTrailing = trailingRegex.find(body)
+        if (matchTrailing != null) {
+            return parseAmountToPaise(matchTrailing.groupValues[1])
+        }
+
+        return null
     }
 
     fun extractLast4(body: String): String? {
@@ -115,7 +151,8 @@ object SmsParserUtils {
         val patterns = listOf(
             Regex("""(?i)(?:A/C|ac|account|card|card ending|ending in|ending|XX|\*\*|X+)\s*[:.\-]?\s*([0-9]{4})\b"""),
             Regex("""[X*]{2,12}([0-9]{4})\b"""),
-            Regex("""\bending\s+([0-9]{4})\b""", RegexOption.IGNORE_CASE),
+            Regex("""\bending\s+(?:in\s+|with\s+)?([0-9]{4})\b""", RegexOption.IGNORE_CASE),
+            Regex("""\bno\.?\s*[X*]*([0-9]{4})\b""", RegexOption.IGNORE_CASE)
         )
 
         for (pattern in patterns) {
@@ -154,13 +191,17 @@ object SmsParserUtils {
 
     fun extractMerchant(body: String): String? {
         val patterns = listOf(
+            Regex("""(?i)\bswiped at\s+([A-Za-z0-9\s.&'-]+?)(?=\s+(?:on|for|ref|avail|avl|bal|using|via|vpa|\.|$))"""),
+            Regex("""(?i)\bpaid to\s+([A-Za-z0-9\s.&'-]+?)(?=\s+(?:on|for|ref|avail|avl|bal|using|via|vpa|\.|$))"""),
+            Regex("""(?i)\bsent to\s+([A-Za-z0-9\s.&'-]+?)(?=\s+(?:on|for|ref|avail|avl|bal|using|via|vpa|\.|$))"""),
             Regex("""(?i)\btransfer to\s+([A-Za-z0-9\s.&'-]+?)(?=\s+(?:on|for|ref|avail|avl|bal|a/c|using|via|vpa|\.|$))"""),
             Regex("""(?i)\bat\s+([A-Za-z0-9\s.&'-]+?)(?=\s+(?:on|for|ref|avail|avl|bal|using|via|vpa|\.|$))"""),
             Regex("""(?i)\bto\s+([A-Za-z0-9\s.&'-]+?)(?=\s+(?:on|for|ref|avail|avl|bal|using|via|vpa|\.|$))"""),
             Regex("""(?i)\bInfo:\s*([A-Za-z0-9\s.&'/_-]+?)(?=\s+(?:on|avail|avl|bal|ref|\.|$))"""),
             Regex("""(?i)\bby\s+([A-Za-z0-9\s.&'/_-]+?)(?=\s+(?:on|avail|avl|bal|ref|\.|$))"""),
             Regex("""(?i)\bfor\s+([A-Za-z0-9\s.&'-]+?)(?=\s+(?:on|ref|avail|avl|bal|\.|$))"""),
-            Regex("""(?i)\btowards\s+([A-Za-z0-9\s.&'-]+?)(?=\s+(?:on|ref|avail|avl|bal|\.|$))""")
+            Regex("""(?i)\btowards\s+([A-Za-z0-9\s.&'-]+?)(?=\s+(?:on|ref|avail|avl|bal|\.|$))"""),
+            Regex("""(?i)\bVPA\s+([A-Za-z0-9.&_-]+)""")
         )
 
         for (pattern in patterns) {

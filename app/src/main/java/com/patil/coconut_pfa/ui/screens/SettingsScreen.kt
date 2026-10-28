@@ -1,15 +1,21 @@
 package com.patil.coconut_pfa.ui.screens
 
 import android.Manifest
-import android.net.Uri
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -23,8 +29,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Alarm
@@ -40,6 +44,7 @@ import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Notifications
+import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.QrCodeScanner
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Security
@@ -48,19 +53,17 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
-import com.patil.coconut_pfa.ui.components.CoconutDropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -80,10 +83,13 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.google.android.gms.common.AccountPicker
 import com.patil.coconut_pfa.data.local.datastore.ThemeMode
+import com.patil.coconut_pfa.data.local.datastore.ToastStyle
 import com.patil.coconut_pfa.data.local.datastore.UserSettings
 import com.patil.coconut_pfa.data.local.datastore.UserSettingsDataStore
 import com.patil.coconut_pfa.data.local.security.BackupPassphraseManager
@@ -91,10 +97,71 @@ import com.patil.coconut_pfa.data.local.security.PinHasher
 import com.patil.coconut_pfa.data.repository.BackupManager
 import com.patil.coconut_pfa.data.repository.BackupSummary
 import com.patil.coconut_pfa.navigation.Screen
+import com.patil.coconut_pfa.ui.components.CoconutDropdownMenuItem
+import com.patil.coconut_pfa.ui.components.CoconutSnackbarHost
 import com.patil.coconut_pfa.ui.theme.Coconut_PfaTheme
 import com.patil.coconut_pfa.util.PrivacyManager
-import com.google.android.gms.common.AccountPicker
 import kotlinx.coroutines.launch
+
+/**
+ * Main Settings Sections available in Coconut PFA
+ */
+enum class SettingsSection(
+    val title: String,
+    val subtitle: String,
+    val icon: ImageVector
+) {
+    APPEARANCE(
+        title = "Appearance",
+        subtitle = "Theme mode, toast style & notification preview",
+        icon = Icons.Rounded.LightMode
+    ),
+    SECURITY(
+        title = "Security & Privacy",
+        subtitle = "PIN protection, biometrics, auto-lock & privacy mode",
+        icon = Icons.Rounded.Security
+    ),
+    SALARY_CYCLE(
+        title = "Salary Cycle Settings",
+        subtitle = "Start day of monthly salary cycle",
+        icon = Icons.Rounded.Schedule
+    ),
+    WIDGET(
+        title = "Widget",
+        subtitle = "Home screen widget visibility settings",
+        icon = Icons.Rounded.Info
+    ),
+    CATEGORIES(
+        title = "Categories & Sub-Categories",
+        subtitle = "Manage expense & income categories",
+        icon = Icons.Rounded.Category
+    ),
+    SMS_PARSER(
+        title = "SMS & Bank Parser",
+        subtitle = "Auto-detection, SMS inbox scan & parser test",
+        icon = Icons.Rounded.Sms
+    ),
+    REMINDERS(
+        title = "Bill Reminders",
+        subtitle = "Daily reminder time & notification days",
+        icon = Icons.Rounded.Alarm
+    ),
+    BACKUP(
+        title = "Backup & Recovery",
+        subtitle = "Google Drive sync, passphrase & local files",
+        icon = Icons.Rounded.CloudSync
+    ),
+    TOOLS(
+        title = "Tools & Data Management",
+        subtitle = "Bank statement import, receipt scan & trash",
+        icon = Icons.Rounded.Description
+    ),
+    ABOUT(
+        title = "About & Developer Options",
+        subtitle = "App info, onboarding replay & debug tools",
+        icon = Icons.Rounded.BugReport
+    )
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -110,6 +177,7 @@ fun SettingsScreen(
     onUpdateDefaultReminderDays: (Int) -> Unit = {},
     onUpdateShowAmountOnWidget: (Boolean) -> Unit = {},
     onUpdateThemeMode: (ThemeMode) -> Unit = {},
+    onUpdateToastStyle: (ToastStyle) -> Unit = {},
     onGenerateFakeTransactions: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -117,6 +185,12 @@ fun SettingsScreen(
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     val isPrivacyEnabled by PrivacyManager.isPrivacyEnabled.collectAsState()
+
+    var activeSection by remember { mutableStateOf<SettingsSection?>(null) }
+
+    BackHandler(enabled = activeSection != null) {
+        activeSection = null
+    }
 
     var hasBackupPwd by remember { mutableStateOf(BackupPassphraseManager.hasBackupPassword(context)) }
     var showSetPasswordDialog by remember { mutableStateOf(false) }
@@ -146,7 +220,7 @@ fun SettingsScreen(
     var isLoadingDriveList by remember { mutableStateOf(false) }
 
     var showRestorePasswordDialog by remember { mutableStateOf(false) }
-    var selectedRestoreUri by remember { mutableStateOf<android.net.Uri?>(null) }
+    var selectedRestoreUri by remember { mutableStateOf<Uri?>(null) }
     var restorePasswordInput by remember { mutableStateOf("") }
     var restoreSummary by remember { mutableStateOf<BackupSummary?>(null) }
     var showRestoreConfirmDialog by remember { mutableStateOf(false) }
@@ -200,7 +274,7 @@ fun SettingsScreen(
         18 -> "06:00 PM"
         20 -> "08:00 PM"
         21 -> "09:00 PM"
-        else -> String.format("%02d:00", hour)
+        else -> String.format(java.util.Locale.US, "%02d:00", hour)
     }
 
     fun labelToHour(label: String): Int = when (label) {
@@ -276,545 +350,705 @@ fun SettingsScreen(
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
+        snackbarHost = { CoconutSnackbarHost(hostState = snackbarHostState, toastStyle = userSettings.toastStyle) }
     ) { innerPadding ->
-        LazyColumn(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(innerPadding)
         ) {
-            // Screen Title Row
-            item {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { onNavigate(Screen.Home) }) {
-                        Icon(imageVector = Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
+            // Screen Header Bar
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = {
+                    if (activeSection != null) {
+                        activeSection = null
+                    } else {
+                        onNavigate(Screen.Home)
                     }
-                    Spacer(modifier = Modifier.width(4.dp))
+                }) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                        contentDescription = if (activeSection != null) "Back to Settings" else "Back to Dashboard"
+                    )
+                }
+                Spacer(modifier = Modifier.width(4.dp))
+                Column {
                     Text(
-                        text = "Settings",
+                        text = activeSection?.title ?: "Settings",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )
-                }
-            }
-
-            // SECTION 0: APPEARANCE
-            item {
-                SettingsCategoryCard(title = "App Appearance", icon = Icons.Rounded.LightMode) {
-                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                    if (activeSection == null) {
                         Text(
-                            text = "Theme Mode",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            ThemeOptionChip(
-                                text = "System",
-                                selected = userSettings.themeMode == ThemeMode.SYSTEM,
-                                onClick = { onUpdateThemeMode(ThemeMode.SYSTEM) },
-                                modifier = Modifier.weight(1f)
-                            )
-                            ThemeOptionChip(
-                                text = "Light",
-                                selected = userSettings.themeMode == ThemeMode.LIGHT,
-                                onClick = { onUpdateThemeMode(ThemeMode.LIGHT) },
-                                modifier = Modifier.weight(1f)
-                            )
-                            ThemeOptionChip(
-                                text = "Dark",
-                                selected = userSettings.themeMode == ThemeMode.DARK,
-                                onClick = { onUpdateThemeMode(ThemeMode.DARK) },
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    }
-                }
-            }
-
-            // SECTION 1: SECURITY
-            item {
-                SettingsCategoryCard(title = "Security & Privacy", icon = Icons.Rounded.Security) {
-                    SettingsSwitchRow(
-                        title = "PIN Protection",
-                        subtitle = "Require 4-digit PIN to open app",
-                        checked = pinLockEnabled,
-                        onCheckedChange = { checked ->
-                            pinLockEnabled = checked
-                        }
-                    )
-                    SettingsSwitchRow(
-                        title = "Fingerprint / Biometric",
-                        subtitle = "Use device biometric unlock",
-                        checked = fingerprintEnabled,
-                        onCheckedChange = { checked ->
-                            fingerprintEnabled = checked
-                            onUpdateBiometricEnabled(checked)
-                        }
-                    )
-                    SettingsDropdownRow(
-                        title = "Auto-lock Timeout",
-                        currentValue = autoLockTimeout,
-                        options = listOf("Immediately", "After 1 minute", "After 5 minutes", "After 15 minutes"),
-                        onOptionSelected = { selected ->
-                            autoLockTimeout = selected
-                            onUpdateAutoLockSeconds(timeoutLabelToSeconds(selected))
-                        }
-                    )
-                    SettingsSwitchRow(
-                        title = "Privacy Mode (Mask Balances)",
-                        subtitle = "Hide sensitive numbers on screen",
-                        checked = isPrivacyEnabled,
-                        onCheckedChange = { PrivacyManager.togglePrivacy() }
-                    )
-                    SettingsSwitchRow(
-                        title = "Privacy Mode by Default",
-                        subtitle = "Always launch app in privacy mode",
-                        checked = privacyByDefault,
-                        onCheckedChange = { checked ->
-                            privacyByDefault = checked
-                            onUpdatePrivacyByDefault(checked)
-                        }
-                    )
-                }
-            }
-
-            // SECTION 2: SALARY CYCLE
-            item {
-                SettingsCategoryCard(title = "Salary Cycle Settings", icon = Icons.Rounded.Schedule) {
-                    SettingsDropdownRow(
-                        title = "Salary Cycle Start Day",
-                        currentValue = "Day $salaryStartDay of the month",
-                        options = (1..31).map { "Day $it of the month" },
-                        onOptionSelected = { selected ->
-                            val day = selected.replace("Day ", "").replace(" of the month", "").toIntOrNull() ?: 25
-                            salaryStartDay = day
-                            onUpdateSalaryStartDay(day)
-                        }
-                    )
-                }
-            }
-
-            // SECTION 3: WIDGET
-            item {
-                SettingsCategoryCard(title = "Widget", icon = Icons.Rounded.Info) {
-                    SettingsSwitchRow(
-                        title = "Show amount on widget",
-                        subtitle = "Warning: This amount will be visible on your home screen without unlocking the app.",
-                        checked = userSettings.showAmountOnWidget,
-                        onCheckedChange = { checked ->
-                            onUpdateShowAmountOnWidget(checked)
-                            scope.launch {
-                                com.patil.coconut_pfa.widget.CoconutWidget.updateAll(context)
-                            }
-                        }
-                    )
-                }
-            }
-
-            // SECTION 4: CATEGORIES
-            item {
-                SettingsCategoryCard(title = "Categories & Sub-Categories", icon = Icons.Rounded.Category) {
-                    SettingsNavigationRow(
-                        title = "Manage Categories",
-                        subtitle = "Dining, Housing, Shopping, Utilities, Salary",
-                        onClick = { showCategoriesDialog = true }
-                    )
-                }
-            }
-
-            // SECTION 4: SMS & BANKS
-            item {
-                SettingsCategoryCard(title = "SMS & Bank Parser", icon = Icons.Rounded.Sms) {
-                    SettingsSwitchRow(
-                        title = "Enable SMS Auto-Detection",
-                        subtitle = "Read bank & card SMS alerts automatically",
-                        checked = smsAutoDetectEnabled,
-                        onCheckedChange = { checked ->
-                            if (checked) {
-                                smsPermissionLauncher.launch(
-                                    arrayOf(
-                                        Manifest.permission.RECEIVE_SMS,
-                                        Manifest.permission.READ_SMS
-                                    )
-                                )
-                            } else {
-                                smsAutoDetectEnabled = false
-                                onUpdateSmsEnabled(false)
-                            }
-                        }
-                    )
-                    SettingsNavigationRow(
-                        title = "Scan Last 30 Days Inbox",
-                        subtitle = "One-time scan of past SMS transactions",
-                        onClick = {
-                            if (hasSmsPermissions) {
-                                scope.launch {
-                                    snackbarHostState.showSnackbar("Scanning last 30 days of SMS inbox...")
-                                    com.patil.coconut_pfa.worker.SmsCatchupWorker.scanInbox(context)
-                                    snackbarHostState.showSnackbar("Scan complete! Check SMS Review Inbox.")
-                                }
-                            } else {
-                                smsPermissionLauncher.launch(
-                                    arrayOf(
-                                        Manifest.permission.RECEIVE_SMS,
-                                        Manifest.permission.READ_SMS
-                                    )
-                                )
-                            }
-                        }
-                    )
-                    SettingsNavigationRow(
-                        title = "SMS Parser Test Screen",
-                        subtitle = "Paste raw SMS text to test live parsing logic",
-                        onClick = { onNavigate(Screen.ParserTest) }
-                    )
-                }
-            }
-
-            // SECTION 5: REMINDERS
-            item {
-                SettingsCategoryCard(title = "Bill Reminders", icon = Icons.Rounded.Alarm) {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotificationPermission) {
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f)),
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp)
-                        ) {
-                            Column(modifier = Modifier.padding(12.dp)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.Notifications,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.error,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "Notification Permission Needed",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.error
-                                    )
-                                }
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = "Coconut PFA requires notification permission to alert you about bills due in N days, due today, and overdue payments.\n\nPrivacy Note: Payment amounts are NEVER included in notifications.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onErrorContainer
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Button(
-                                    onClick = { showPermissionRationaleDialog = true },
-                                    shape = RoundedCornerShape(8.dp)
-                                ) {
-                                    Text("Grant Notification Permission")
-                                }
-                            }
-                        }
-                    }
-
-                    SettingsDropdownRow(
-                        title = "Daily Reminder Time",
-                        currentValue = reminderTimeLabel,
-                        options = listOf("08:00 AM", "09:00 AM", "10:00 AM", "12:00 PM", "06:00 PM", "08:00 PM", "09:00 PM"),
-                        onOptionSelected = { selected ->
-                            reminderTimeLabel = selected
-                            val hour = labelToHour(selected)
-                            onUpdateReminderHour(hour)
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotificationPermission) {
-                                showPermissionRationaleDialog = true
-                            }
-                        }
-                    )
-                    SettingsDropdownRow(
-                        title = "Default Days Before Due",
-                        currentValue = "$reminderDaysBefore days before",
-                        options = listOf("1 day before", "2 days before", "3 days before", "7 days before", "14 days before"),
-                        onOptionSelected = { selected ->
-                            val days = selected.split(" ").firstOrNull()?.toIntOrNull() ?: 3
-                            reminderDaysBefore = days
-                            onUpdateDefaultReminderDays(days)
-                        }
-                    )
-                }
-            }
-
-            // SECTION 6: BACKUP & SYNC
-            item {
-                SettingsCategoryCard(title = "Backup & Recovery", icon = Icons.Rounded.CloudSync) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = if (userSettings.googleAccountEmail != null) "Google Account Connected" else "Google Account",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = userSettings.googleAccountEmail ?: "Not connected (Required for Drive backup)",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = if (userSettings.googleAccountEmail != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
-                                )
-                            }
-                            Button(
-                                onClick = {
-                                    if (userSettings.googleAccountEmail != null) {
-                                        showDisconnectGoogleDialog = true
-                                    } else {
-                                        val intent = AccountPicker.newChooseAccountIntent(
-                                            null, null, arrayOf("com.google"), false, null, null, null, null
-                                        )
-                                        accountPickerLauncher.launch(intent)
-                                    }
-                                },
-                                shape = RoundedCornerShape(8.dp)
-                            ) {
-                                Text(if (userSettings.googleAccountEmail != null) "Disconnect" else "Connect")
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(12.dp))
-                        HorizontalDivider()
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        Text(
-                            text = if (hasBackupPwd) "Backup Password: Set & Secured in Keystore" else "Backup Password: Not set (required for encrypted backups)",
+                            text = "Preferences, security & app options",
                             style = MaterialTheme.typography.bodySmall,
-                            color = if (hasBackupPwd) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Text(
-                            text = "Last backup: ${if (userSettings.lastBackupAt != null) java.text.SimpleDateFormat("dd MMM yyyy, hh:mm a", java.util.Locale.US).format(java.util.Date(userSettings.lastBackupAt)) else "Never"}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.outline
-                        )
-                        if (!userSettings.lastBackupStatus.isNullOrBlank()) {
-                            Text(
-                                text = "Status: ${userSettings.lastBackupStatus}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = if (userSettings.lastBackupStatus == "Success") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                    }
+                }
+            }
+
+            AnimatedContent(
+                targetState = activeSection,
+                transitionSpec = { fadeIn() togetherWith fadeOut() },
+                label = "SettingsSectionTransition"
+            ) { section ->
+                if (section == null) {
+                    // MAIN OPTIONS VIEW (Top-level clean list)
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(SettingsSection.entries.size) { index ->
+                            val s = SettingsSection.entries[index]
+                            val badge = when (s) {
+                                SettingsSection.APPEARANCE -> when (userSettings.themeMode) {
+                                    ThemeMode.SYSTEM -> "System"
+                                    ThemeMode.LIGHT -> "Light"
+                                    ThemeMode.DARK -> "Dark"
+                                }
+                                SettingsSection.SECURITY -> if (pinLockEnabled) "PIN Active" else "Off"
+                                SettingsSection.SALARY_CYCLE -> "Day $salaryStartDay"
+                                SettingsSection.WIDGET -> if (userSettings.showAmountOnWidget) "Show" else "Hidden"
+                                SettingsSection.CATEGORIES -> "Manage"
+                                SettingsSection.SMS_PARSER -> if (smsAutoDetectEnabled) "Auto ON" else "Off"
+                                SettingsSection.REMINDERS -> reminderTimeLabel
+                                SettingsSection.BACKUP -> if (userSettings.googleAccountEmail != null) "Drive Linked" else "Off"
+                                SettingsSection.TOOLS -> "3 Tools"
+                                SettingsSection.ABOUT -> "v1.0.0"
+                            }
+
+                            MainSettingOptionCard(
+                                section = s,
+                                badgeText = badge,
+                                onClick = { activeSection = s }
                             )
                         }
+                    }
+                } else {
+                    // SUB-OPTIONS VIEW for the selected section
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        when (section) {
+                            SettingsSection.APPEARANCE -> {
+                                item {
+                                    SettingsCategoryCard(title = "Appearance & Customization", icon = Icons.Rounded.LightMode) {
+                                        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                                            Text(
+                                                text = "Theme Mode",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                ThemeOptionChip(
+                                                    text = "System",
+                                                    selected = userSettings.themeMode == ThemeMode.SYSTEM,
+                                                    onClick = { onUpdateThemeMode(ThemeMode.SYSTEM) },
+                                                    modifier = Modifier.weight(1f)
+                                                )
+                                                ThemeOptionChip(
+                                                    text = "Light",
+                                                    selected = userSettings.themeMode == ThemeMode.LIGHT,
+                                                    onClick = { onUpdateThemeMode(ThemeMode.LIGHT) },
+                                                    modifier = Modifier.weight(1f)
+                                                )
+                                                ThemeOptionChip(
+                                                    text = "Dark",
+                                                    selected = userSettings.themeMode == ThemeMode.DARK,
+                                                    onClick = { onUpdateThemeMode(ThemeMode.DARK) },
+                                                    modifier = Modifier.weight(1f)
+                                                )
+                                            }
 
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                            OutlinedButton(
-                                onClick = {
-                                    newBackupPasswordInput = ""
-                                    confirmBackupPasswordInput = ""
-                                    showSetPasswordDialog = true
-                                },
-                                shape = RoundedCornerShape(10.dp),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text(if (hasBackupPwd) "Change Password" else "Set Password")
-                            }
-                            Button(
-                                onClick = {
-                                    if (userSettings.googleAccountEmail.isNullOrBlank()) {
-                                        scope.launch { snackbarHostState.showSnackbar("Please connect your Google account first.") }
-                                    } else if (!hasBackupPwd) {
-                                        showSetPasswordDialog = true
-                                    } else {
-                                        scope.launch {
-                                            isUploadingDrive = true
-                                            try {
-                                                com.patil.coconut_pfa.data.repository.DriveBackupManager.uploadBackupToDrive(context)
-                                                snackbarHostState.showSnackbar("Backup uploaded to Google Drive successfully!")
-                                            } catch (e: Exception) {
-                                                snackbarHostState.showSnackbar("Backup failed: ${e.localizedMessage}")
-                                            } finally {
-                                                isUploadingDrive = false
+                                            Spacer(modifier = Modifier.height(16.dp))
+                                            Text(
+                                                text = "In-App Toast Style",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Text(
+                                                text = userSettings.toastStyle.description,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Spacer(modifier = Modifier.height(10.dp))
+                                            Column(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                ThemeOptionChip(
+                                                    text = "🍊 Orange Adaptive (Recommended)",
+                                                    selected = userSettings.toastStyle == ToastStyle.ORANGE_ADAPTIVE,
+                                                    onClick = { onUpdateToastStyle(ToastStyle.ORANGE_ADAPTIVE) },
+                                                    modifier = Modifier.fillMaxWidth()
+                                                )
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                ) {
+                                                    ThemeOptionChip(
+                                                        text = "🌑 Dark Slate",
+                                                        selected = userSettings.toastStyle == ToastStyle.DARK_SLATE_ORANGE,
+                                                        onClick = { onUpdateToastStyle(ToastStyle.DARK_SLATE_ORANGE) },
+                                                        modifier = Modifier.weight(1f)
+                                                    )
+                                                    ThemeOptionChip(
+                                                        text = "📙 Soft Orange",
+                                                        selected = userSettings.toastStyle == ToastStyle.SOFT_ORANGE_TINT,
+                                                        onClick = { onUpdateToastStyle(ToastStyle.SOFT_ORANGE_TINT) },
+                                                        modifier = Modifier.weight(1f)
+                                                    )
+                                                }
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                ) {
+                                                    ThemeOptionChip(
+                                                        text = "👑 Deep Royal",
+                                                        selected = userSettings.toastStyle == ToastStyle.DEEP_ROYAL,
+                                                        onClick = { onUpdateToastStyle(ToastStyle.DEEP_ROYAL) },
+                                                        modifier = Modifier.weight(1f)
+                                                    )
+                                                    ThemeOptionChip(
+                                                        text = "◽ Crisp Bordered",
+                                                        selected = userSettings.toastStyle == ToastStyle.CRISP_BORDERED,
+                                                        onClick = { onUpdateToastStyle(ToastStyle.CRISP_BORDERED) },
+                                                        modifier = Modifier.weight(1f)
+                                                    )
+                                                }
+                                            }
+
+                                            Spacer(modifier = Modifier.height(16.dp))
+                                            OutlinedButton(
+                                                onClick = {
+                                                    scope.launch {
+                                                        snackbarHostState.showSnackbar(
+                                                            message = "Export Complete\noctober-report.pdf · 2.4 MB",
+                                                            actionLabel = "Open"
+                                                        )
+                                                    }
+                                                },
+                                                modifier = Modifier.fillMaxWidth(),
+                                                shape = RoundedCornerShape(12.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Rounded.NotificationsActive,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(
+                                                    text = "Generate Test Notification",
+                                                    fontWeight = FontWeight.Bold
+                                                )
                                             }
                                         }
                                     }
-                                },
-                                shape = RoundedCornerShape(10.dp),
-                                modifier = Modifier.weight(1f),
-                                enabled = !isUploadingDrive
-                            ) {
-                                Text(if (isUploadingDrive) "Backing up..." else "Backup Now")
+                                }
                             }
-                        }
 
-                        Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedButton(
-                            onClick = {
-                                if (userSettings.googleAccountEmail.isNullOrBlank()) {
-                                    scope.launch { snackbarHostState.showSnackbar("Please connect your Google account first.") }
-                                } else if (!hasBackupPwd) {
-                                    showSetPasswordDialog = true
-                                } else {
-                                    scope.launch {
-                                        isLoadingDriveList = true
-                                        try {
-                                            val list = com.patil.coconut_pfa.data.repository.DriveBackupManager.listDriveBackups(context)
-                                            driveBackupsList = list
-                                            selectedDriveFileId = null
-                                            selectedRestoreUri = null
-                                            showDriveBackupsDialog = true
-                                        } catch (e: Exception) {
-                                            snackbarHostState.showSnackbar("Failed to list Drive backups: ${e.localizedMessage}")
-                                        } finally {
-                                            isLoadingDriveList = false
+                            SettingsSection.SECURITY -> {
+                                item {
+                                    SettingsCategoryCard(title = "Security & Privacy", icon = Icons.Rounded.Security) {
+                                        SettingsSwitchRow(
+                                            title = "PIN Protection",
+                                            subtitle = "Require 4-digit PIN to open app",
+                                            checked = pinLockEnabled,
+                                            onCheckedChange = { checked -> pinLockEnabled = checked }
+                                        )
+                                        SettingsSwitchRow(
+                                            title = "Fingerprint / Biometric",
+                                            subtitle = "Use device biometric unlock",
+                                            checked = fingerprintEnabled,
+                                            onCheckedChange = { checked ->
+                                                fingerprintEnabled = checked
+                                                onUpdateBiometricEnabled(checked)
+                                            }
+                                        )
+                                        SettingsDropdownRow(
+                                            title = "Auto-lock Timeout",
+                                            currentValue = autoLockTimeout,
+                                            options = listOf("Immediately", "After 1 minute", "After 5 minutes", "After 15 minutes"),
+                                            onOptionSelected = { selected ->
+                                                autoLockTimeout = selected
+                                                onUpdateAutoLockSeconds(timeoutLabelToSeconds(selected))
+                                            }
+                                        )
+                                        SettingsSwitchRow(
+                                            title = "Privacy Mode (Mask Balances)",
+                                            subtitle = "Hide sensitive numbers on screen",
+                                            checked = isPrivacyEnabled,
+                                            onCheckedChange = { PrivacyManager.togglePrivacy() }
+                                        )
+                                        SettingsSwitchRow(
+                                            title = "Privacy Mode by Default",
+                                            subtitle = "Always launch app in privacy mode",
+                                            checked = privacyByDefault,
+                                            onCheckedChange = { checked ->
+                                                privacyByDefault = checked
+                                                onUpdatePrivacyByDefault(checked)
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+
+                            SettingsSection.SALARY_CYCLE -> {
+                                item {
+                                    SettingsCategoryCard(title = "Salary Cycle Settings", icon = Icons.Rounded.Schedule) {
+                                        SettingsDropdownRow(
+                                            title = "Salary Cycle Start Day",
+                                            currentValue = "Day $salaryStartDay of the month",
+                                            options = (1..31).map { "Day $it of the month" },
+                                            onOptionSelected = { selected ->
+                                                val day = selected.replace("Day ", "").replace(" of the month", "").toIntOrNull() ?: 25
+                                                salaryStartDay = day
+                                                onUpdateSalaryStartDay(day)
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+
+                            SettingsSection.WIDGET -> {
+                                item {
+                                    SettingsCategoryCard(title = "Widget Settings", icon = Icons.Rounded.Info) {
+                                        SettingsSwitchRow(
+                                            title = "Show amount on widget",
+                                            subtitle = "Warning: This amount will be visible on your home screen without unlocking the app.",
+                                            checked = userSettings.showAmountOnWidget,
+                                            onCheckedChange = { checked ->
+                                                onUpdateShowAmountOnWidget(checked)
+                                                scope.launch {
+                                                    com.patil.coconut_pfa.widget.CoconutWidget.updateAll(context)
+                                                }
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+
+                            SettingsSection.CATEGORIES -> {
+                                item {
+                                    SettingsCategoryCard(title = "Categories & Sub-Categories", icon = Icons.Rounded.Category) {
+                                        SettingsNavigationRow(
+                                            title = "Manage Categories",
+                                            subtitle = "Dining, Housing, Shopping, Utilities, Salary",
+                                            onClick = { showCategoriesDialog = true }
+                                        )
+                                    }
+                                }
+                            }
+
+                            SettingsSection.SMS_PARSER -> {
+                                item {
+                                    SettingsCategoryCard(title = "SMS & Bank Parser", icon = Icons.Rounded.Sms) {
+                                        SettingsSwitchRow(
+                                            title = "Enable SMS Auto-Detection",
+                                            subtitle = "Read bank & card SMS alerts automatically",
+                                            checked = smsAutoDetectEnabled,
+                                            onCheckedChange = { checked ->
+                                                if (checked) {
+                                                    smsPermissionLauncher.launch(
+                                                        arrayOf(
+                                                            Manifest.permission.RECEIVE_SMS,
+                                                            Manifest.permission.READ_SMS
+                                                        )
+                                                    )
+                                                } else {
+                                                    smsAutoDetectEnabled = false
+                                                    onUpdateSmsEnabled(false)
+                                                }
+                                            }
+                                        )
+                                        SettingsNavigationRow(
+                                            title = "Scan Last 30 Days Inbox",
+                                            subtitle = "One-time scan of past SMS transactions",
+                                            onClick = {
+                                                if (hasSmsPermissions) {
+                                                    scope.launch {
+                                                        snackbarHostState.showSnackbar("Scanning last 30 days of SMS inbox...")
+                                                        com.patil.coconut_pfa.worker.SmsCatchupWorker.scanInbox(context, force30Days = true)
+                                                        snackbarHostState.showSnackbar("Scan complete! Check SMS Review Inbox.")
+                                                    }
+                                                } else {
+                                                    smsPermissionLauncher.launch(
+                                                        arrayOf(
+                                                            Manifest.permission.RECEIVE_SMS,
+                                                            Manifest.permission.READ_SMS
+                                                        )
+                                                    )
+                                                }
+                                            }
+                                        )
+                                        SettingsNavigationRow(
+                                            title = "SMS Parser Test Screen",
+                                            subtitle = "Paste raw SMS text to test live parsing logic",
+                                            onClick = { onNavigate(Screen.ParserTest) }
+                                        )
+                                    }
+                                }
+                            }
+
+                            SettingsSection.REMINDERS -> {
+                                item {
+                                    SettingsCategoryCard(title = "Bill Reminders", icon = Icons.Rounded.Alarm) {
+                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotificationPermission) {
+                                            Card(
+                                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f)),
+                                                shape = RoundedCornerShape(12.dp),
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(12.dp)
+                                            ) {
+                                                Column(modifier = Modifier.padding(12.dp)) {
+                                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                                        Icon(
+                                                            imageVector = Icons.Rounded.Notifications,
+                                                            contentDescription = null,
+                                                            tint = MaterialTheme.colorScheme.error,
+                                                            modifier = Modifier.size(20.dp)
+                                                        )
+                                                        Spacer(modifier = Modifier.width(8.dp))
+                                                        Text(
+                                                            text = "Notification Permission Needed",
+                                                            style = MaterialTheme.typography.titleSmall,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = MaterialTheme.colorScheme.error
+                                                        )
+                                                    }
+                                                    Spacer(modifier = Modifier.height(4.dp))
+                                                    Text(
+                                                        text = "Coconut PFA requires notification permission to alert you about bills due in N days, due today, and overdue payments.\n\nPrivacy Note: Payment amounts are NEVER included in notifications.",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onErrorContainer
+                                                    )
+                                                    Spacer(modifier = Modifier.height(8.dp))
+                                                    Button(
+                                                        onClick = { showPermissionRationaleDialog = true },
+                                                        shape = RoundedCornerShape(8.dp)
+                                                    ) {
+                                                        Text("Grant Notification Permission")
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        SettingsDropdownRow(
+                                            title = "Daily Reminder Time",
+                                            currentValue = reminderTimeLabel,
+                                            options = listOf("08:00 AM", "09:00 AM", "10:00 AM", "12:00 PM", "06:00 PM", "08:00 PM", "09:00 PM"),
+                                            onOptionSelected = { selected ->
+                                                reminderTimeLabel = selected
+                                                val hour = labelToHour(selected)
+                                                onUpdateReminderHour(hour)
+                                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotificationPermission) {
+                                                    showPermissionRationaleDialog = true
+                                                }
+                                            }
+                                        )
+                                        SettingsDropdownRow(
+                                            title = "Default Days Before Due",
+                                            currentValue = "$reminderDaysBefore days before",
+                                            options = listOf("1 day before", "2 days before", "3 days before", "7 days before", "14 days before"),
+                                            onOptionSelected = { selected ->
+                                                val days = selected.split(" ").firstOrNull()?.toIntOrNull() ?: 3
+                                                reminderDaysBefore = days
+                                                onUpdateDefaultReminderDays(days)
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+
+                            SettingsSection.BACKUP -> {
+                                item {
+                                    SettingsCategoryCard(title = "Backup & Recovery", icon = Icons.Rounded.CloudSync) {
+                                        Column(modifier = Modifier.padding(16.dp)) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(
+                                                        text = if (userSettings.googleAccountEmail != null) "Google Account Connected" else "Google Account",
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                    Text(
+                                                        text = userSettings.googleAccountEmail ?: "Not connected (Required for Drive backup)",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = if (userSettings.googleAccountEmail != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                                                    )
+                                                }
+                                                Button(
+                                                    onClick = {
+                                                        if (userSettings.googleAccountEmail != null) {
+                                                            showDisconnectGoogleDialog = true
+                                                        } else {
+                                                            val intent = AccountPicker.newChooseAccountIntent(
+                                                                null, null, arrayOf("com.google"), false, null, null, null, null
+                                                            )
+                                                            accountPickerLauncher.launch(intent)
+                                                        }
+                                                    },
+                                                    shape = RoundedCornerShape(8.dp)
+                                                ) {
+                                                    Text(if (userSettings.googleAccountEmail != null) "Disconnect" else "Connect")
+                                                }
+                                            }
+
+                                            Spacer(modifier = Modifier.height(12.dp))
+                                            HorizontalDivider()
+                                            Spacer(modifier = Modifier.height(12.dp))
+
+                                            Text(
+                                                text = if (hasBackupPwd) "Backup Password: Set & Secured in Keystore" else "Backup Password: Not set (required for encrypted backups)",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = if (hasBackupPwd) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                                            )
+                                            Text(
+                                                text = "Last backup: ${if (userSettings.lastBackupAt != null) java.text.SimpleDateFormat("dd MMM yyyy, hh:mm a", java.util.Locale.US).format(java.util.Date(userSettings.lastBackupAt)) else "Never"}",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.outline
+                                            )
+                                            if (!userSettings.lastBackupStatus.isNullOrBlank()) {
+                                                Text(
+                                                    text = "Status: ${userSettings.lastBackupStatus}",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = if (userSettings.lastBackupStatus == "Success") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                                                )
+                                            }
+
+                                            Spacer(modifier = Modifier.height(12.dp))
+                                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                                                OutlinedButton(
+                                                    onClick = {
+                                                        newBackupPasswordInput = ""
+                                                        confirmBackupPasswordInput = ""
+                                                        showSetPasswordDialog = true
+                                                    },
+                                                    shape = RoundedCornerShape(10.dp),
+                                                    modifier = Modifier.weight(1f)
+                                                ) {
+                                                    Text(if (hasBackupPwd) "Change Password" else "Set Password")
+                                                }
+                                                Button(
+                                                    onClick = {
+                                                        if (userSettings.googleAccountEmail.isNullOrBlank()) {
+                                                            scope.launch { snackbarHostState.showSnackbar("Please connect your Google account first.") }
+                                                        } else if (!hasBackupPwd) {
+                                                            showSetPasswordDialog = true
+                                                        } else {
+                                                            scope.launch {
+                                                                isUploadingDrive = true
+                                                                try {
+                                                                    com.patil.coconut_pfa.data.repository.DriveBackupManager.uploadBackupToDrive(context)
+                                                                    snackbarHostState.showSnackbar("Backup uploaded to Google Drive successfully!")
+                                                                } catch (e: Exception) {
+                                                                    snackbarHostState.showSnackbar("Backup failed: ${e.localizedMessage}")
+                                                                } finally {
+                                                                    isUploadingDrive = false
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    shape = RoundedCornerShape(10.dp),
+                                                    modifier = Modifier.weight(1f),
+                                                    enabled = !isUploadingDrive
+                                                ) {
+                                                    Text(if (isUploadingDrive) "Backing up..." else "Backup Now")
+                                                }
+                                            }
+
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            OutlinedButton(
+                                                onClick = {
+                                                    if (userSettings.googleAccountEmail.isNullOrBlank()) {
+                                                        scope.launch { snackbarHostState.showSnackbar("Please connect your Google account first.") }
+                                                    } else if (!hasBackupPwd) {
+                                                        showSetPasswordDialog = true
+                                                    } else {
+                                                        scope.launch {
+                                                            isLoadingDriveList = true
+                                                            try {
+                                                                val list = com.patil.coconut_pfa.data.repository.DriveBackupManager.listDriveBackups(context)
+                                                                driveBackupsList = list
+                                                                selectedDriveFileId = null
+                                                                selectedRestoreUri = null
+                                                                showDriveBackupsDialog = true
+                                                            } catch (e: Exception) {
+                                                                snackbarHostState.showSnackbar("Failed to list Drive backups: ${e.localizedMessage}")
+                                                            } finally {
+                                                                isLoadingDriveList = false
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                shape = RoundedCornerShape(10.dp),
+                                                modifier = Modifier.fillMaxWidth(),
+                                                enabled = !isLoadingDriveList
+                                            ) {
+                                                Text(if (isLoadingDriveList) "Loading Drive Backups..." else "Restore from Google Drive")
+                                            }
+
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                                                OutlinedButton(
+                                                    onClick = {
+                                                        val fileName = "coconut-${java.text.SimpleDateFormat("yyyyMMdd-HHmm", java.util.Locale.getDefault()).format(java.util.Date())}.cbk"
+                                                        exportLauncher.launch(fileName)
+                                                    },
+                                                    shape = RoundedCornerShape(10.dp),
+                                                    modifier = Modifier.weight(1f)
+                                                ) {
+                                                    Text("Export File")
+                                                }
+                                                OutlinedButton(
+                                                    onClick = { restoreLauncher.launch(arrayOf("*/*")) },
+                                                    shape = RoundedCornerShape(10.dp),
+                                                    modifier = Modifier.weight(1f)
+                                                ) {
+                                                    Text("Restore File")
+                                                }
+                                            }
                                         }
                                     }
                                 }
-                            },
-                            shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = !isLoadingDriveList
-                        ) {
-                            Text(if (isLoadingDriveList) "Loading Drive Backups..." else "Restore from Google Drive")
-                        }
-
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                            OutlinedButton(
-                                onClick = {
-                                    val fileName = "coconut-${java.text.SimpleDateFormat("yyyyMMdd-HHmm", java.util.Locale.getDefault()).format(java.util.Date())}.cbk"
-                                    exportLauncher.launch(fileName)
-                                },
-                                shape = RoundedCornerShape(10.dp),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text("Export File")
-                            }
-                            OutlinedButton(
-                                onClick = { restoreLauncher.launch(arrayOf("*/*")) },
-                                shape = RoundedCornerShape(10.dp),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text("Restore File")
-                            }
-                        }
-                    }
-                }
-            }
-
-            // SECTION 7: TOOLS & UTILITIES (Import Statement, Receipt Scan, Trash)
-            item {
-                SettingsCategoryCard(title = "Tools & Data Management", icon = Icons.Rounded.Description) {
-                    SettingsNavigationRow(
-                        title = "Import Bank Statement",
-                        subtitle = "CSV/Excel column mapping & row review",
-                        icon = Icons.Rounded.Description,
-                        onClick = { onNavigate(Screen.ImportStatement) }
-                    )
-                    SettingsNavigationRow(
-                        title = "Receipt Scan",
-                        subtitle = "Extract amount & merchant from receipt photos",
-                        icon = Icons.Rounded.QrCodeScanner,
-                        onClick = { onNavigate(Screen.ReceiptScan) }
-                    )
-                    SettingsNavigationRow(
-                        title = "Trash & Data Recovery",
-                        subtitle = "Recover deleted transactions & bills",
-                        icon = Icons.Rounded.DeleteSweep,
-                        onClick = { onNavigate(Screen.Trash) }
-                    )
-                }
-            }
-
-            // SECTION 8: ABOUT & DEBUG MENU
-            item {
-                SettingsCategoryCard(title = "About Coconut PFA", icon = Icons.Rounded.Info) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            text = "Coconut PFA v1.0.0",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "100% Offline & Private Personal Finance Assistant.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-
-                        Spacer(modifier = Modifier.height(16.dp))
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        // Debug Menu Toggle
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { showDebugMenu = !showDebugMenu },
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Rounded.BugReport,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.tertiary,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "Developer & Debug Menu",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.tertiary
-                                )
                             }
 
-                            Icon(
-                                imageVector = if (showDebugMenu) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.tertiary
-                            )
-                        }
-
-                        AnimatedVisibility(visible = showDebugMenu) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 12.dp),
-                                verticalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                OutlinedButton(
-                                    onClick = { onNavigate(Screen.Onboarding) },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Text("Replay Onboarding Flow")
+                            SettingsSection.TOOLS -> {
+                                item {
+                                    SettingsCategoryCard(title = "Tools & Data Management", icon = Icons.Rounded.Description) {
+                                        SettingsNavigationRow(
+                                            title = "Import Bank Statement",
+                                            subtitle = "CSV/Excel column mapping & row review",
+                                            icon = Icons.Rounded.Description,
+                                            onClick = { onNavigate(Screen.ImportStatement) }
+                                        )
+                                        SettingsNavigationRow(
+                                            title = "Receipt Scan",
+                                            subtitle = "Extract amount & merchant from receipt photos",
+                                            icon = Icons.Rounded.QrCodeScanner,
+                                            onClick = { onNavigate(Screen.ReceiptScan) }
+                                        )
+                                        SettingsNavigationRow(
+                                            title = "Trash & Data Recovery",
+                                            subtitle = "Recover deleted transactions & bills",
+                                            icon = Icons.Rounded.DeleteSweep,
+                                            onClick = { onNavigate(Screen.Trash) }
+                                        )
+                                    }
                                 }
+                            }
 
-                                Button(
-                                    onClick = { onNavigate(Screen.LockScreen) },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Icon(imageVector = Icons.Rounded.Lock, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Show Lock Screen Overlay")
-                                }
+                            SettingsSection.ABOUT -> {
+                                item {
+                                    SettingsCategoryCard(title = "About Coconut PFA", icon = Icons.Rounded.Info) {
+                                        Column(modifier = Modifier.padding(16.dp)) {
+                                            Text(
+                                                text = "Coconut PFA v1.0.0",
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Text(
+                                                text = "100% Offline & Private Personal Finance Assistant.",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
 
-                                Button(
-                                    onClick = {
-                                        onGenerateFakeTransactions()
-                                        scope.launch {
-                                            snackbarHostState.showSnackbar("Generated 10,000 fake transactions successfully!")
+                                            Spacer(modifier = Modifier.height(16.dp))
+                                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                            Spacer(modifier = Modifier.height(12.dp))
+
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable { showDebugMenu = !showDebugMenu },
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Icon(
+                                                        imageVector = Icons.Rounded.BugReport,
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.tertiary,
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                    Text(
+                                                        text = "Developer & Debug Menu",
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = MaterialTheme.colorScheme.tertiary
+                                                    )
+                                                }
+
+                                                Icon(
+                                                    imageVector = if (showDebugMenu) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.tertiary
+                                                )
+                                            }
+
+                                            AnimatedVisibility(visible = showDebugMenu) {
+                                                Column(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .padding(top = 12.dp),
+                                                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                                                ) {
+                                                    OutlinedButton(
+                                                        onClick = { onNavigate(Screen.Onboarding) },
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        shape = RoundedCornerShape(12.dp)
+                                                    ) {
+                                                        Text("Replay Onboarding Flow")
+                                                    }
+
+                                                    Button(
+                                                        onClick = { onNavigate(Screen.LockScreen) },
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        shape = RoundedCornerShape(12.dp)
+                                                    ) {
+                                                        Icon(imageVector = Icons.Rounded.Lock, contentDescription = null, modifier = Modifier.size(16.dp))
+                                                        Spacer(modifier = Modifier.width(6.dp))
+                                                        Text("Show Lock Screen Overlay")
+                                                    }
+
+                                                    Button(
+                                                        onClick = {
+                                                            onGenerateFakeTransactions()
+                                                            scope.launch {
+                                                                snackbarHostState.showSnackbar("Generated 10,000 fake transactions successfully!")
+                                                            }
+                                                        },
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        shape = RoundedCornerShape(12.dp)
+                                                    ) {
+                                                        Icon(imageVector = Icons.Rounded.BugReport, contentDescription = null, modifier = Modifier.size(16.dp))
+                                                        Spacer(modifier = Modifier.width(6.dp))
+                                                        Text("Generate 10,000 Fake Transactions")
+                                                    }
+                                                }
+                                            }
                                         }
-                                    },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Icon(imageVector = Icons.Rounded.BugReport, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Generate 10,000 Fake Transactions")
+                                    }
                                 }
                             }
                         }
@@ -824,7 +1058,7 @@ fun SettingsScreen(
         }
     }
 
-    // Permission Rationale Dialog (explains WHY before requesting POST_NOTIFICATIONS)
+    // Permission Rationale Dialog
     if (showPermissionRationaleDialog) {
         AlertDialog(
             onDismissRequest = { showPermissionRationaleDialog = false },
@@ -832,7 +1066,7 @@ fun SettingsScreen(
             text = {
                 Text(
                     "Coconut PFA uses daily notifications at your set reminder time to alert you about upcoming bills, due today items, and overdue payments.\n\n" +
-                    "Privacy Guarantee: For your complete privacy, notification text only displays the bill name and due date — NEVER the amount."
+                            "Privacy Guarantee: For your complete privacy, notification text only displays the bill name and due date — NEVER the amount."
                 )
             },
             confirmButton = {
@@ -863,11 +1097,11 @@ fun SettingsScreen(
             text = {
                 Text(
                     "Android has restricted SMS permissions for this app.\n\n" +
-                    "To enable SMS auto-detection:\n" +
-                    "1. Open device App Info (Settings → Apps → Coconut PFA).\n" +
-                    "2. Tap the three dots (⋮) in the top-right corner.\n" +
-                    "3. Select 'Allow restricted settings'.\n" +
-                    "4. Return here and enable SMS Auto-Detection."
+                            "To enable SMS auto-detection:\n" +
+                            "1. Open device App Info (Settings → Apps → Coconut PFA).\n" +
+                            "2. Tap the three dots (⋮) in the top-right corner.\n" +
+                            "3. Select 'Allow restricted settings'.\n" +
+                            "4. Return here and enable SMS Auto-Detection."
                 )
             },
             confirmButton = {
@@ -982,7 +1216,7 @@ fun SettingsScreen(
                         onValueChange = { newBackupPasswordInput = it },
                         label = { Text("Backup Password") },
                         singleLine = true,
-                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -992,7 +1226,7 @@ fun SettingsScreen(
                         onValueChange = { confirmBackupPasswordInput = it },
                         label = { Text("Confirm Password") },
                         singleLine = true,
-                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -1036,7 +1270,7 @@ fun SettingsScreen(
                         onValueChange = { restorePasswordInput = it },
                         label = { Text("Backup Password") },
                         singleLine = true,
-                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -1167,7 +1401,7 @@ fun SettingsScreen(
                         },
                         label = { Text("4-Digit PIN") },
                         singleLine = true,
-                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -1195,6 +1429,86 @@ fun SettingsScreen(
                 }
             }
         )
+    }
+}
+
+@Composable
+private fun MainSettingOptionCard(
+    section: SettingsSection,
+    badgeText: String? = null,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f),
+                    modifier = Modifier.size(42.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = section.icon,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.width(14.dp))
+                Column {
+                    Text(
+                        text = section.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = section.subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (!badgeText.isNullOrBlank()) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f),
+                        modifier = Modifier.padding(end = 8.dp)
+                    ) {
+                        Text(
+                            text = badgeText,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+                }
+                Icon(
+                    imageVector = Icons.Rounded.ChevronRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.outline
+                )
+            }
+        }
     }
 }
 
@@ -1376,10 +1690,10 @@ private fun ThemeOptionChip(
         onClick = onClick,
         shape = RoundedCornerShape(12.dp),
         color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-        border = if (selected) androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
+        border = if (selected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
         modifier = modifier
     ) {
-        androidx.compose.foundation.layout.Box(
+        Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier.padding(vertical = 10.dp)
         ) {

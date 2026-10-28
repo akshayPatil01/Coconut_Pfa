@@ -48,6 +48,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import com.patil.coconut_pfa.ui.components.CoconutSnackbarHost
+import com.patil.coconut_pfa.util.MoneyFormatter
 import androidx.compose.material3.Surface
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.Switch
@@ -238,7 +240,7 @@ fun AddTransactionScreen(
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
+        snackbarHost = { CoconutSnackbarHost(hostState = snackbarHostState) }
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -815,7 +817,9 @@ fun AddTransactionScreen(
                             }
 
                             if (success) {
-                                snackbarHostState.showSnackbar("Transaction saved successfully!")
+                                val accName = fromAccount?.name ?: "Account"
+                                val formattedAmt = MoneyFormatter.format(amountPaise)
+                                snackbarHostState.showSnackbar("Transaction Saved\n$accName · $formattedAmt")
                                 onNavigate(Screen.Transactions())
                             } else {
                                 snackbarHostState.showSnackbar("Failed to save transaction. Check inputs.")

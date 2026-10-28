@@ -14,13 +14,13 @@ class SmsParserTest {
     // ----------------------------------------------------
 
     @Test
-    fun `non bank senders return null`() {
-        val nonBankSenders = listOf("AMAZON", "SWIGGY", "ZOMATO", "9876543210", "INFO-SMS", "FLIPKT")
-        val sampleBody = "Rs. 1,200.00 debited from A/C XX1234 at Swiggy."
+    fun `non bank non transaction senders return null`() {
+        val nonBankSenders = listOf("AMAZON", "SWIGGY", "ZOMATO", "INFO-SMS", "FLIPKT")
+        val sampleBody = "Your order has been shipped."
 
         for (sender in nonBankSenders) {
             val result = SmsParser.parse(sender, sampleBody, now)
-            assertNull("Expected null for non-bank sender: $sender", result)
+            assertNull("Expected null for non-bank non-txn sender: $sender", result)
         }
     }
 
@@ -29,6 +29,31 @@ class SmsParserTest {
         val result = SmsParser.parse("AX-HDFCBK", "Rs. 500.00 debited from A/C XX4321 at Coffee Shop on 10-Nov. Avl Bal: Rs. 10,000.00", now)
         assertNotNull(result)
         assertEquals("HDFC Bank", result?.institution)
+    }
+
+    @Test
+    fun `trai circle suffix senders parse correctly`() {
+        val hdfcSuffixResult = SmsParser.parse("AX-HDFCBK-S", "Rs. 500.00 debited from A/C XX4321 at Coffee Shop. Avl Bal: Rs. 10,000.00", now)
+        assertNotNull(hdfcSuffixResult)
+        assertEquals("HDFC Bank", hdfcSuffixResult?.institution)
+
+        val iciciSuffixResult = SmsParser.parse("AD-ICICIB-A", "INR 850.00 spent on ICICI Bank Card XX4321 at ZOMATO.", now)
+        assertNotNull(iciciSuffixResult)
+        assertEquals("ICICI Bank", iciciSuffixResult?.institution)
+
+        val sbiSuffixResult = SmsParser.parse("JM-SBIINB-T", "Your A/C XXXXX123456 debited by Rs 1,200.00. A/c Bal: Rs 8,500.00.", now)
+        assertNotNull(sbiSuffixResult)
+        assertEquals("SBI", sbiSuffixResult?.institution)
+    }
+
+    @Test
+    fun `fallback to bank institution for generic transaction sender`() {
+        val result = SmsParser.parse("VK-NOTIFY", "Rs. 2,500.00 debited from A/C XX3344 at BookMyShow. Avl Bal: Rs 18,000.00.", now)
+        assertNotNull(result)
+        assertEquals(ParsedSmsType.DEBIT, result?.type)
+        assertEquals(250000L, result?.amountPaise)
+        assertEquals("3344", result?.last4)
+        assertEquals("BookMyShow", result?.merchant)
     }
 
     // ----------------------------------------------------
@@ -338,5 +363,12 @@ class SmsParserTest {
         assertEquals(25000L, SmsParserUtils.parseAmountToPaise("250"))
         assertEquals(50L, SmsParserUtils.parseAmountToPaise("0.50"))
         assertEquals(120050L, SmsParserUtils.parseAmountToPaise("1,200.5"))
+    }
+
+    @Test
+    fun `extract amount supports leading and trailing currency`() {
+        assertEquals(50000L, SmsParserUtils.extractAmount("Rs. 500 debited"))
+        assertEquals(120000L, SmsParserUtils.extractAmount("1,200.00 INR debited"))
+        assertEquals(35000L, SmsParserUtils.extractAmount("350 Rs paid to Merchant"))
     }
 }

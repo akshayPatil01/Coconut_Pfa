@@ -1,6 +1,7 @@
 package com.patil.coconut_pfa.data.repository
 
 import com.patil.coconut_pfa.data.local.datastore.ThemeMode
+import com.patil.coconut_pfa.data.local.datastore.ToastStyle
 import com.patil.coconut_pfa.data.local.datastore.UserSettings
 import com.patil.coconut_pfa.data.local.datastore.UserSettingsDataStore
 import kotlinx.coroutines.flow.Flow
@@ -26,4 +27,5 @@ class SettingsRepository(
     suspend fun setLastUsedCategory(categoryId: String?) = userSettingsDataStore.updateLastUsedCategory(categoryId)
     suspend fun setShowAmountOnWidget(enabled: Boolean) = userSettingsDataStore.updateShowAmountOnWidget(enabled)
     suspend fun setThemeMode(themeMode: ThemeMode) = userSettingsDataStore.updateThemeMode(themeMode)
+    suspend fun setToastStyle(toastStyle: ToastStyle) = userSettingsDataStore.updateToastStyle(toastStyle)
 }

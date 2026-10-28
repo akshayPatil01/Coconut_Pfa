@@ -41,13 +41,14 @@ class SmsCatchupWorker(
             )
         }
 
-        suspend fun scanInbox(context: Context, sinceTimestamp: Long? = null) {
+        suspend fun scanInbox(context: Context, sinceTimestamp: Long? = null, force30Days: Boolean = false) {
             val appCtx = context.applicationContext
             val dataStore = UserSettingsDataStore(appCtx)
             val settings = dataStore.settingsFlow.first()
 
-            val lastProcessed = sinceTimestamp ?: settings.lastSmsCatchupTimestamp
-            val cutoffTime = if (lastProcessed > 0L) lastProcessed else System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000L)
+            val thirtyDaysAgo = System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000L)
+            val lastProcessed = if (force30Days) 0L else (sinceTimestamp ?: settings.lastSmsCatchupTimestamp)
+            val cutoffTime = if (lastProcessed > 0L) lastProcessed else thirtyDaysAgo
 
             val db = CoconutDatabase.getInstance(appCtx)
             val smsDao = db.smsItemDao()
