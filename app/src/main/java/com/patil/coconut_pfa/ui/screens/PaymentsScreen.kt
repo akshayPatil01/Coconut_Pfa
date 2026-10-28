@@ -40,6 +40,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import com.patil.coconut_pfa.ui.components.CoconutDropdownMenu
+import com.patil.coconut_pfa.ui.components.CoconutDropdownMenuItem
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -509,20 +511,20 @@ private fun DueItemRow(
                             )
                         }
 
-                        DropdownMenu(
+                        CoconutDropdownMenu(
                             expanded = menuExpanded,
                             onDismissRequest = { menuExpanded = false }
                         ) {
-                            DropdownMenuItem(
-                                text = { Text("Skip occurrence") },
+                            CoconutDropdownMenuItem(
+                                text = "Skip occurrence",
                                 onClick = {
                                     menuExpanded = false
                                     onSkipClick()
                                 }
                             )
                             if (item.billId != null) {
-                                DropdownMenuItem(
-                                    text = { Text("Deactivate Bill") },
+                                CoconutDropdownMenuItem(
+                                    text = "Deactivate Bill",
                                     onClick = {
                                         menuExpanded = false
                                         onDeactivateClick()

@@ -78,6 +78,9 @@ import com.patil.coconut_pfa.data.local.entity.CategoryEntity
 import com.patil.coconut_pfa.data.local.entity.DbTxnType
 import com.patil.coconut_pfa.data.model.TransactionType
 import com.patil.coconut_pfa.navigation.Screen
+import com.patil.coconut_pfa.ui.components.CoconutDropdownMenu
+import com.patil.coconut_pfa.ui.components.CoconutDropdownMenuItem
+import com.patil.coconut_pfa.ui.components.CoconutExposedDropdownMenu
 import com.patil.coconut_pfa.ui.theme.Coconut_PfaTheme
 import com.patil.coconut_pfa.ui.viewmodel.AddTransactionUiState
 import com.patil.coconut_pfa.ui.viewmodel.AddTransactionViewModel
@@ -114,7 +117,6 @@ fun AddTransactionScreen(
     var isSplitEnabled by remember { mutableStateOf(false) }
     var paidByMe by remember { mutableStateOf(true) }
     var selectedPersonId by remember { mutableStateOf<String?>(null) }
-    var personDropdownExpanded by remember { mutableStateOf(false) }
     var myShareInput by remember { mutableStateOf("") }
     var selectedCategoryId by remember { mutableStateOf<String?>(null) }
     var selectedCategoryName by remember { mutableStateOf("Groceries") }
@@ -407,13 +409,14 @@ fun AddTransactionScreen(
                                 accountName = fromAccount?.name ?: "Select Account",
                                 onClick = { fromAccountExpanded = true }
                             )
-                            DropdownMenu(
+                            CoconutDropdownMenu(
                                 expanded = fromAccountExpanded,
                                 onDismissRequest = { fromAccountExpanded = false }
                             ) {
                                 uiState.accounts.forEach { acc ->
-                                    DropdownMenuItem(
-                                        text = { Text(acc.name) },
+                                    CoconutDropdownMenuItem(
+                                        text = acc.name,
+                                        isSelected = fromAccount?.id == acc.id,
                                         onClick = {
                                             fromAccount = acc
                                             fromAccountExpanded = false
@@ -430,13 +433,14 @@ fun AddTransactionScreen(
                                 accountName = toAccount?.name ?: "Select Account",
                                 onClick = { toAccountExpanded = true }
                             )
-                            DropdownMenu(
+                            CoconutDropdownMenu(
                                 expanded = toAccountExpanded,
                                 onDismissRequest = { toAccountExpanded = false }
                             ) {
                                 uiState.accounts.forEach { acc ->
-                                    DropdownMenuItem(
-                                        text = { Text(acc.name) },
+                                    CoconutDropdownMenuItem(
+                                        text = acc.name,
+                                        isSelected = toAccount?.id == acc.id,
                                         onClick = {
                                             toAccount = acc
                                             toAccountExpanded = false
@@ -454,13 +458,14 @@ fun AddTransactionScreen(
                             accountName = fromAccount?.name ?: "Select Account",
                             onClick = { fromAccountExpanded = true }
                         )
-                        DropdownMenu(
+                        CoconutDropdownMenu(
                             expanded = fromAccountExpanded,
                             onDismissRequest = { fromAccountExpanded = false }
                         ) {
                             uiState.accounts.forEach { acc ->
-                                DropdownMenuItem(
-                                    text = { Text(acc.name) },
+                                CoconutDropdownMenuItem(
+                                    text = acc.name,
+                                    isSelected = fromAccount?.id == acc.id,
                                     onClick = {
                                         fromAccount = acc
                                         fromAccountExpanded = false
@@ -490,13 +495,14 @@ fun AddTransactionScreen(
                                 color = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.clickable { categoryDropdownExpanded = true }
                             )
-                            DropdownMenu(
+                            CoconutDropdownMenu(
                                 expanded = categoryDropdownExpanded,
                                 onDismissRequest = { categoryDropdownExpanded = false }
                             ) {
                                 availableCategories.forEach { cat ->
-                                    DropdownMenuItem(
-                                        text = { Text(cat.name) },
+                                    CoconutDropdownMenuItem(
+                                        text = cat.name,
+                                        isSelected = selectedCategoryId == cat.id || selectedCategoryName == cat.name,
                                         onClick = {
                                             selectedCategoryId = cat.id
                                             selectedCategoryName = cat.name
@@ -551,13 +557,14 @@ fun AddTransactionScreen(
                     if (payeeDropdownExpanded && uiState.distinctPayees.isNotEmpty()) {
                         val matchingPayees = uiState.distinctPayees.filter { it.contains(payee, ignoreCase = true) }.take(5)
                         if (matchingPayees.isNotEmpty()) {
-                            DropdownMenu(
+                            CoconutDropdownMenu(
                                 expanded = payeeDropdownExpanded,
                                 onDismissRequest = { payeeDropdownExpanded = false }
                             ) {
                                 matchingPayees.forEach { suggestion ->
-                                    DropdownMenuItem(
-                                        text = { Text(suggestion) },
+                                    CoconutDropdownMenuItem(
+                                        text = suggestion,
+                                        isSelected = payee.equals(suggestion, ignoreCase = true),
                                         onClick = {
                                             payee = suggestion
                                             payeeDropdownExpanded = false
@@ -695,42 +702,14 @@ fun AddTransactionScreen(
                         )
 
                         val selectedPersonName = uiState.persons.find { it.id == selectedPersonId }?.name ?: "Select Person"
-                        ExposedDropdownMenuBox(
-                            expanded = personDropdownExpanded,
-                            onExpandedChange = { personDropdownExpanded = !personDropdownExpanded }
-                        ) {
-                            OutlinedTextField(
-                                value = selectedPersonName,
-                                onValueChange = {},
-                                readOnly = true,
-                                label = { Text("Split With Person") },
-                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = personDropdownExpanded) },
-                                modifier = Modifier
-                                    .menuAnchor(MenuAnchorType.PrimaryNotEditable)
-                                    .fillMaxWidth()
-                            )
-                            ExposedDropdownMenu(
-                                expanded = personDropdownExpanded,
-                                onDismissRequest = { personDropdownExpanded = false }
-                            ) {
-                                if (uiState.persons.isEmpty()) {
-                                    DropdownMenuItem(
-                                        text = { Text("No persons found. Add in Split & IOUs tab.") },
-                                        onClick = { personDropdownExpanded = false }
-                                    )
-                                } else {
-                                    uiState.persons.forEach { person ->
-                                        DropdownMenuItem(
-                                            text = { Text(person.name) },
-                                            onClick = {
-                                                selectedPersonId = person.id
-                                                personDropdownExpanded = false
-                                            }
-                                        )
-                                    }
-                                }
-                            }
-                        }
+                        CoconutExposedDropdownMenu(
+                            value = selectedPersonName,
+                            options = uiState.persons,
+                            onOptionSelected = { person -> selectedPersonId = person.id },
+                            optionToString = { it.name },
+                            label = "Split With Person",
+                            modifier = Modifier.fillMaxWidth()
+                        )
 
                         Text(
                             text = "Who Paid?",

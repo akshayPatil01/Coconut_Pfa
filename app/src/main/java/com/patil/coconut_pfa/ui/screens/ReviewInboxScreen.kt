@@ -68,6 +68,7 @@ import com.patil.coconut_pfa.data.local.entity.AccountEntity
 import com.patil.coconut_pfa.data.local.entity.CategoryEntity
 import com.patil.coconut_pfa.data.local.entity.SmsItemEntity
 import com.patil.coconut_pfa.navigation.Screen
+import com.patil.coconut_pfa.ui.components.CoconutExposedDropdownMenu
 import com.patil.coconut_pfa.ui.components.AmountText
 import com.patil.coconut_pfa.ui.components.EmptyState
 import com.patil.coconut_pfa.ui.viewmodel.ReviewInboxViewModel
@@ -556,9 +557,6 @@ private fun EditSmsTransactionDialog(
     var selectedCategory by remember { mutableStateOf(initialCategory ?: categories.firstOrNull()) }
     var payee by remember { mutableStateOf(item.merchant ?: "Merchant") }
 
-    var accountExpanded by remember { mutableStateOf(false) }
-    var categoryExpanded by remember { mutableStateOf(false) }
-
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Edit Detected Transaction", fontWeight = FontWeight.Bold) },
@@ -571,48 +569,24 @@ private fun EditSmsTransactionDialog(
                 )
 
                 // Account Dropdown
-                ExposedDropdownMenuBox(expanded = accountExpanded, onExpandedChange = { accountExpanded = !accountExpanded }) {
-                    OutlinedTextField(
-                        value = selectedAccount?.name ?: "Select Account",
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("Account") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = accountExpanded) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .menuAnchor(MenuAnchorType.PrimaryNotEditable)
-                    )
-                    ExposedDropdownMenu(expanded = accountExpanded, onDismissRequest = { accountExpanded = false }) {
-                        accounts.forEach { acc ->
-                            DropdownMenuItem(text = { Text(acc.name) }, onClick = {
-                                selectedAccount = acc
-                                accountExpanded = false
-                            })
-                        }
-                    }
-                }
+                CoconutExposedDropdownMenu(
+                    value = selectedAccount?.name ?: "Select Account",
+                    options = accounts,
+                    onOptionSelected = { selectedAccount = it },
+                    optionToString = { it.name },
+                    label = "Account",
+                    modifier = Modifier.fillMaxWidth()
+                )
 
                 // Category Dropdown
-                ExposedDropdownMenuBox(expanded = categoryExpanded, onExpandedChange = { categoryExpanded = !categoryExpanded }) {
-                    OutlinedTextField(
-                        value = selectedCategory?.name ?: "Select Category",
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("Category") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = categoryExpanded) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .menuAnchor(MenuAnchorType.PrimaryNotEditable)
-                    )
-                    ExposedDropdownMenu(expanded = categoryExpanded, onDismissRequest = { categoryExpanded = false }) {
-                        categories.forEach { cat ->
-                            DropdownMenuItem(text = { Text(cat.name) }, onClick = {
-                                selectedCategory = cat
-                                categoryExpanded = false
-                            })
-                        }
-                    }
-                }
+                CoconutExposedDropdownMenu(
+                    value = selectedCategory?.name ?: "Select Category",
+                    options = categories,
+                    onOptionSelected = { selectedCategory = it },
+                    optionToString = { it.name },
+                    label = "Category",
+                    modifier = Modifier.fillMaxWidth()
+                )
 
                 OutlinedTextField(
                     value = payee,

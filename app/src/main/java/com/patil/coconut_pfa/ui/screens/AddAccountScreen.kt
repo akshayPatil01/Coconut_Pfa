@@ -58,6 +58,7 @@ import com.patil.coconut_pfa.data.model.AccountType
 import com.patil.coconut_pfa.domain.AccountDomainEngine
 import com.patil.coconut_pfa.navigation.Screen
 import com.patil.coconut_pfa.ui.components.AmountInputField
+import com.patil.coconut_pfa.ui.components.CoconutExposedDropdownMenu
 import com.patil.coconut_pfa.ui.components.DatePickerField
 import com.patil.coconut_pfa.ui.theme.Coconut_PfaTheme
 import com.patil.coconut_pfa.ui.viewmodel.AddAccountViewModel
@@ -82,7 +83,6 @@ fun AddAccountScreen(
 
     val bankOptions = listOf("HDFC Bank", "ICICI Bank", "SBI", "Axis Bank", "Other")
     var selectedBank by remember { mutableStateOf(bankOptions[0]) }
-    var bankDropdownExpanded by remember { mutableStateOf(false) }
 
     var last4Digits by remember { mutableStateOf("") }
     var openingBalanceText by remember { mutableStateOf("") }
@@ -235,40 +235,13 @@ fun AddAccountScreen(
                     )
 
                     if (selectedType == AccountType.BANK || selectedType == AccountType.CREDIT_CARD || selectedType == AccountType.LOAN || selectedType == AccountType.FIXED_DEPOSIT) {
-                        Text(
-                            text = "Bank / Provider",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.SemiBold
+                        CoconutExposedDropdownMenu(
+                            value = selectedBank,
+                            options = bankOptions,
+                            onOptionSelected = { selectedBank = it },
+                            label = "Bank / Provider",
+                            modifier = Modifier.fillMaxWidth()
                         )
-                        ExposedDropdownMenuBox(
-                            expanded = bankDropdownExpanded,
-                            onExpandedChange = { bankDropdownExpanded = !bankDropdownExpanded }
-                        ) {
-                            OutlinedTextField(
-                                value = selectedBank,
-                                onValueChange = {},
-                                readOnly = true,
-                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = bankDropdownExpanded) },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
-                                shape = RoundedCornerShape(16.dp)
-                            )
-                            ExposedDropdownMenu(
-                                expanded = bankDropdownExpanded,
-                                onDismissRequest = { bankDropdownExpanded = false }
-                            ) {
-                                bankOptions.forEach { bank ->
-                                    DropdownMenuItem(
-                                        text = { Text(bank) },
-                                        onClick = {
-                                            selectedBank = bank
-                                            bankDropdownExpanded = false
-                                        }
-                                    )
-                                }
-                            }
-                        }
 
                         OutlinedTextField(
                             value = last4Digits,

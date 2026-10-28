@@ -33,6 +33,7 @@ import com.patil.coconut_pfa.data.local.entity.DbSmsStatus
 import com.patil.coconut_pfa.data.local.entity.SmsItemEntity
 import com.patil.coconut_pfa.navigation.Screen
 import com.patil.coconut_pfa.ui.components.AmountText
+import com.patil.coconut_pfa.ui.components.CoconutExposedDropdownMenu
 import com.patil.coconut_pfa.ui.theme.Coconut_PfaTheme
 import com.patil.coconut_pfa.domain.sms.SmsProcessingEngine
 import com.squareup.moshi.JsonClass
@@ -276,36 +277,14 @@ fun ImportStatementScreen(
                             Spacer(modifier = Modifier.height(12.dp))
 
                             // Account Selector Dropdown
-                            var accountDropdownExpanded by remember { mutableStateOf(false) }
-                            ExposedDropdownMenuBox(
-                                expanded = accountDropdownExpanded,
-                                onExpandedChange = { accountDropdownExpanded = !accountDropdownExpanded }
-                            ) {
-                                OutlinedTextField(
-                                    value = selectedAccount?.name ?: "Select Target Account",
-                                    onValueChange = {},
-                                    readOnly = true,
-                                    label = { Text("Target Account") },
-                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = accountDropdownExpanded) },
-                                    modifier = Modifier
-                                        .menuAnchor(MenuAnchorType.PrimaryNotEditable)
-                                        .fillMaxWidth()
-                                )
-                                ExposedDropdownMenu(
-                                    expanded = accountDropdownExpanded,
-                                    onDismissRequest = { accountDropdownExpanded = false }
-                                ) {
-                                    accounts.forEach { acc ->
-                                        DropdownMenuItem(
-                                            text = { Text(acc.name) },
-                                            onClick = {
-                                                selectedAccount = acc
-                                                accountDropdownExpanded = false
-                                            }
-                                        )
-                                    }
-                                }
-                            }
+                            CoconutExposedDropdownMenu(
+                                value = selectedAccount?.name ?: "Select Target Account",
+                                options = accounts,
+                                onOptionSelected = { selectedAccount = it },
+                                optionToString = { it.name },
+                                label = "Target Account",
+                                modifier = Modifier.fillMaxWidth()
+                            )
 
                             Spacer(modifier = Modifier.height(12.dp))
 
@@ -367,36 +346,13 @@ fun ImportStatementScreen(
                                 Spacer(modifier = Modifier.height(12.dp))
 
                                 // Date Format Picker
-                                var dateFormatExpanded by remember { mutableStateOf(false) }
-                                ExposedDropdownMenuBox(
-                                    expanded = dateFormatExpanded,
-                                    onExpandedChange = { dateFormatExpanded = !dateFormatExpanded }
-                                ) {
-                                    OutlinedTextField(
-                                        value = dateFormat,
-                                        onValueChange = {},
-                                        readOnly = true,
-                                        label = { Text("Date Format") },
-                                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = dateFormatExpanded) },
-                                        modifier = Modifier
-                                            .menuAnchor(MenuAnchorType.PrimaryNotEditable)
-                                            .fillMaxWidth()
-                                    )
-                                    ExposedDropdownMenu(
-                                        expanded = dateFormatExpanded,
-                                        onDismissRequest = { dateFormatExpanded = false }
-                                    ) {
-                                        dateFormats.forEach { fmt ->
-                                            DropdownMenuItem(
-                                                text = { Text(fmt) },
-                                                onClick = {
-                                                    dateFormat = fmt
-                                                    dateFormatExpanded = false
-                                                }
-                                            )
-                                        }
-                                    }
-                                }
+                                CoconutExposedDropdownMenu(
+                                    value = dateFormat,
+                                    options = dateFormats,
+                                    onOptionSelected = { dateFormat = it },
+                                    label = "Date Format",
+                                    modifier = Modifier.fillMaxWidth()
+                                )
 
                                 Spacer(modifier = Modifier.height(12.dp))
 
@@ -417,42 +373,18 @@ fun ImportStatementScreen(
                                 )
 
                                 // Amount Mode Dropdown
-                                var amountModeExpanded by remember { mutableStateOf(false) }
-                                ExposedDropdownMenuBox(
-                                    expanded = amountModeExpanded,
-                                    onExpandedChange = { amountModeExpanded = !amountModeExpanded }
-                                ) {
-                                    OutlinedTextField(
-                                        value = if (amountMode == AmountMode.DEBIT_CREDIT_COLUMNS) "Separate Debit & Credit Columns" else "Single Signed Amount Column",
-                                        onValueChange = {},
-                                        readOnly = true,
-                                        label = { Text("Amount Structure") },
-                                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = amountModeExpanded) },
-                                        modifier = Modifier
-                                            .menuAnchor(MenuAnchorType.PrimaryNotEditable)
-                                            .fillMaxWidth()
-                                            .padding(vertical = 4.dp)
-                                    )
-                                    ExposedDropdownMenu(
-                                        expanded = amountModeExpanded,
-                                        onDismissRequest = { amountModeExpanded = false }
-                                    ) {
-                                        DropdownMenuItem(
-                                            text = { Text("Separate Debit & Credit Columns") },
-                                            onClick = {
-                                                amountMode = AmountMode.DEBIT_CREDIT_COLUMNS
-                                                amountModeExpanded = false
-                                            }
-                                        )
-                                        DropdownMenuItem(
-                                            text = { Text("Single Signed Amount Column") },
-                                            onClick = {
-                                                amountMode = AmountMode.SIGNED_AMOUNT
-                                                amountModeExpanded = false
-                                            }
-                                        )
-                                    }
-                                }
+                                CoconutExposedDropdownMenu(
+                                    value = if (amountMode == AmountMode.DEBIT_CREDIT_COLUMNS) "Separate Debit & Credit Columns" else "Single Signed Amount Column",
+                                    options = AmountMode.entries,
+                                    onOptionSelected = { amountMode = it },
+                                    optionToString = { mode ->
+                                        if (mode == AmountMode.DEBIT_CREDIT_COLUMNS) "Separate Debit & Credit Columns" else "Single Signed Amount Column"
+                                    },
+                                    label = "Amount Structure",
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp)
+                                )
 
                                 if (amountMode == AmountMode.DEBIT_CREDIT_COLUMNS) {
                                     ColumnDropdown(
@@ -633,7 +565,6 @@ fun ImportStatementScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ColumnDropdown(
     label: String,
@@ -641,40 +572,17 @@ private fun ColumnDropdown(
     headers: List<String>,
     onSelected: (Int) -> Unit
 ) {
-    var expanded by remember { mutableStateOf(false) }
     val currentText = if (selectedIndex in headers.indices) headers[selectedIndex] else "Column $selectedIndex"
-
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { expanded = !expanded },
-        modifier = Modifier.padding(vertical = 4.dp)
-    ) {
-        OutlinedTextField(
-            value = currentText,
-            onValueChange = {},
-            readOnly = true,
-            label = { Text(label) },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            modifier = Modifier
-                .menuAnchor(MenuAnchorType.PrimaryNotEditable)
-                .fillMaxWidth()
-        )
-
-        ExposedDropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false }
-        ) {
-            headers.forEachIndexed { idx, header ->
-                DropdownMenuItem(
-                    text = { Text(header) },
-                    onClick = {
-                        onSelected(idx)
-                        expanded = false
-                    }
-                )
-            }
-        }
-    }
+    CoconutExposedDropdownMenu(
+        value = currentText,
+        options = headers.indices.toList(),
+        onOptionSelected = { onSelected(it) },
+        optionToString = { idx -> if (idx in headers.indices) headers[idx] else "Column $idx" },
+        label = label,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+    )
 }
 
 private fun getFileName(context: Context, uri: Uri): String? {

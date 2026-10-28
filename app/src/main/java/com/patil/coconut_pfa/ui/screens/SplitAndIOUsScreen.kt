@@ -68,6 +68,7 @@ import com.patil.coconut_pfa.data.local.entity.DbLedgerEntryKind
 import com.patil.coconut_pfa.data.model.LedgerEntry
 import com.patil.coconut_pfa.data.model.PersonIOU
 import com.patil.coconut_pfa.navigation.Screen
+import com.patil.coconut_pfa.ui.components.CoconutExposedDropdownMenu
 import com.patil.coconut_pfa.ui.components.AmountText
 import com.patil.coconut_pfa.ui.theme.Coconut_PfaTheme
 import com.patil.coconut_pfa.ui.viewmodel.SplitAndIOUsUiState
@@ -603,7 +604,6 @@ private fun SettleUpDialog(
     var amountText by remember { mutableStateOf((suggestedPaise / 100).toString()) }
 
     var selectedAccountId by remember { mutableStateOf(accounts.firstOrNull()?.id) }
-    var expandedAccountMenu by remember { mutableStateOf(false) }
     val selectedAccountName = accounts.find { it.id == selectedAccountId }?.name ?: "Select Account"
 
     AlertDialog(
@@ -618,36 +618,14 @@ private fun SettleUpDialog(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
-                ExposedDropdownMenuBox(
-                    expanded = expandedAccountMenu,
-                    onExpandedChange = { expandedAccountMenu = !expandedAccountMenu }
-                ) {
-                    OutlinedTextField(
-                        value = selectedAccountName,
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("Pay From / To Account") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedAccountMenu) },
-                        modifier = Modifier
-                            .menuAnchor(MenuAnchorType.PrimaryNotEditable)
-                            .fillMaxWidth()
-                    )
-
-                    ExposedDropdownMenu(
-                        expanded = expandedAccountMenu,
-                        onDismissRequest = { expandedAccountMenu = false }
-                    ) {
-                        accounts.forEach { acc ->
-                            DropdownMenuItem(
-                                text = { Text(acc.name) },
-                                onClick = {
-                                    selectedAccountId = acc.id
-                                    expandedAccountMenu = false
-                                }
-                            )
-                        }
-                    }
-                }
+                CoconutExposedDropdownMenu(
+                    value = selectedAccountName,
+                    options = accounts,
+                    onOptionSelected = { acc -> selectedAccountId = acc.id },
+                    optionToString = { it.name },
+                    label = "Pay From / To Account",
+                    modifier = Modifier.fillMaxWidth()
+                )
 
                 OutlinedTextField(
                     value = amountText,

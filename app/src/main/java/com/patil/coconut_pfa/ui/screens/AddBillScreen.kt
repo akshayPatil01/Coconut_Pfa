@@ -53,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import com.patil.coconut_pfa.data.local.entity.DbBillFrequency
 import com.patil.coconut_pfa.data.local.entity.DbBillKind
 import com.patil.coconut_pfa.navigation.Screen
+import com.patil.coconut_pfa.ui.components.CoconutExposedDropdownMenu
 import com.patil.coconut_pfa.ui.theme.Coconut_PfaTheme
 import com.patil.coconut_pfa.ui.viewmodel.AddBillUiState
 import com.patil.coconut_pfa.ui.viewmodel.AddBillViewModel
@@ -86,10 +87,7 @@ fun AddBillScreen(
     var remindDaysBefore by remember { mutableIntStateOf(3) }
 
     var selectedAccountId by remember { mutableStateOf<String?>(null) }
-    var accountDropdownExpanded by remember { mutableStateOf(false) }
-
     var selectedCategoryId by remember { mutableStateOf<String?>(null) }
-    var categoryDropdownExpanded by remember { mutableStateOf(false) }
 
     LaunchedEffect(uiState.accounts, uiState.categories) {
         if (selectedAccountId == null && uiState.accounts.isNotEmpty()) {
@@ -238,76 +236,24 @@ fun AddBillScreen(
             )
 
             // Pay-from Account Dropdown
-            Text(
-                text = "Pay-From Account",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold
+            CoconutExposedDropdownMenu(
+                value = selectedAccountName,
+                options = uiState.accounts,
+                onOptionSelected = { acc -> selectedAccountId = acc.id },
+                optionToString = { it.name },
+                label = "Pay-From Account",
+                modifier = Modifier.fillMaxWidth()
             )
-            ExposedDropdownMenuBox(
-                expanded = accountDropdownExpanded,
-                onExpandedChange = { accountDropdownExpanded = !accountDropdownExpanded }
-            ) {
-                OutlinedTextField(
-                    value = selectedAccountName,
-                    onValueChange = {},
-                    readOnly = true,
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = accountDropdownExpanded) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
-                    shape = RoundedCornerShape(12.dp)
-                )
-                ExposedDropdownMenu(
-                    expanded = accountDropdownExpanded,
-                    onDismissRequest = { accountDropdownExpanded = false }
-                ) {
-                    uiState.accounts.forEach { acc ->
-                        DropdownMenuItem(
-                            text = { Text(acc.name) },
-                            onClick = {
-                                selectedAccountId = acc.id
-                                accountDropdownExpanded = false
-                            }
-                        )
-                    }
-                }
-            }
 
             // Category Dropdown
-            Text(
-                text = "Category",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold
+            CoconutExposedDropdownMenu(
+                value = selectedCategoryName,
+                options = uiState.categories,
+                onOptionSelected = { cat -> selectedCategoryId = cat.id },
+                optionToString = { it.name },
+                label = "Category",
+                modifier = Modifier.fillMaxWidth()
             )
-            ExposedDropdownMenuBox(
-                expanded = categoryDropdownExpanded,
-                onExpandedChange = { categoryDropdownExpanded = !categoryDropdownExpanded }
-            ) {
-                OutlinedTextField(
-                    value = selectedCategoryName,
-                    onValueChange = {},
-                    readOnly = true,
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = categoryDropdownExpanded) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
-                    shape = RoundedCornerShape(12.dp)
-                )
-                ExposedDropdownMenu(
-                    expanded = categoryDropdownExpanded,
-                    onDismissRequest = { categoryDropdownExpanded = false }
-                ) {
-                    uiState.categories.forEach { cat ->
-                        DropdownMenuItem(
-                            text = { Text(cat.name) },
-                            onClick = {
-                                selectedCategoryId = cat.id
-                                categoryDropdownExpanded = false
-                            }
-                        )
-                    }
-                }
-            }
 
             // Remind N Days Before Selector
             Text(

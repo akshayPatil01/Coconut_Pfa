@@ -66,6 +66,7 @@ import com.patil.coconut_pfa.data.model.Goal
 import com.patil.coconut_pfa.data.model.GoalContribution
 import com.patil.coconut_pfa.data.repository.FakeData
 import com.patil.coconut_pfa.navigation.Screen
+import com.patil.coconut_pfa.ui.components.CoconutExposedDropdownMenu
 import com.patil.coconut_pfa.ui.components.AmountText
 import com.patil.coconut_pfa.ui.theme.Coconut_PfaTheme
 import com.patil.coconut_pfa.ui.viewmodel.GoalsUiState
@@ -666,7 +667,6 @@ private fun AddContributionDialog(
     var noteText by remember { mutableStateOf("") }
     val accountList = FakeData.accounts.map { it.name }
     var selectedAccount by remember { mutableStateOf(accountList.firstOrNull() ?: "Demo Bank Salary") }
-    var expandedAccountMenu by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -694,36 +694,13 @@ private fun AddContributionDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                ExposedDropdownMenuBox(
-                    expanded = expandedAccountMenu,
-                    onExpandedChange = { expandedAccountMenu = !expandedAccountMenu }
-                ) {
-                    OutlinedTextField(
-                        value = selectedAccount,
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("From Account") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedAccountMenu) },
-                        modifier = Modifier
-                            .menuAnchor(MenuAnchorType.PrimaryNotEditable)
-                            .fillMaxWidth()
-                    )
-
-                    ExposedDropdownMenu(
-                        expanded = expandedAccountMenu,
-                        onDismissRequest = { expandedAccountMenu = false }
-                    ) {
-                        accountList.forEach { acc ->
-                            DropdownMenuItem(
-                                text = { Text(acc) },
-                                onClick = {
-                                    selectedAccount = acc
-                                    expandedAccountMenu = false
-                                }
-                            )
-                        }
-                    }
-                }
+                CoconutExposedDropdownMenu(
+                    value = selectedAccount,
+                    options = accountList,
+                    onOptionSelected = { selectedAccount = it },
+                    label = "From Account",
+                    modifier = Modifier.fillMaxWidth()
+                )
 
                 OutlinedTextField(
                     value = noteText,
