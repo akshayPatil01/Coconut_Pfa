@@ -20,7 +20,7 @@ class ScreenTest {
         assertEquals("Settings", Screen.Settings.title)
         assertEquals("SMS Review Inbox", Screen.ReviewInbox.title)
         assertEquals("Account Details", Screen.AccountDetail("acc_1").title)
-        assertEquals("Add Account", Screen.AddAccount.title)
+        assertEquals("Add Account", Screen.AddAccount().title)
         assertEquals("Add Bill", Screen.AddBill.title)
     }
 }

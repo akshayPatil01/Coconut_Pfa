@@ -69,6 +69,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.patil.coconut_pfa.data.local.datastore.UserSettings
 import com.patil.coconut_pfa.navigation.Screen
 import com.patil.coconut_pfa.ui.components.SectionHeader
 import com.patil.coconut_pfa.ui.theme.Coconut_PfaTheme
@@ -79,21 +80,41 @@ import kotlinx.coroutines.launch
 @Composable
 fun SettingsScreen(
     onNavigate: (Screen) -> Unit,
+    userSettings: UserSettings = UserSettings(),
+    onUpdateBiometricEnabled: (Boolean) -> Unit = {},
+    onUpdateAutoLockSeconds: (Int) -> Unit = {},
+    onUpdatePrivacyByDefault: (Boolean) -> Unit = {},
+    onUpdateSalaryStartDay: (Int) -> Unit = {},
+    onUpdateSmsEnabled: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     val isPrivacyEnabled by PrivacyManager.isPrivacyEnabled.collectAsState()
 
-    // Setting State Variables
-    var pinLockEnabled by remember { mutableStateOf(true) }
-    var fingerprintEnabled by remember { mutableStateOf(true) }
-    var autoLockTimeout by remember { mutableStateOf("After 1 minute") }
-    var privacyByDefault by remember { mutableStateOf(false) }
+    fun secondsToTimeoutLabel(seconds: Int): String = when (seconds) {
+        0 -> "Immediately"
+        300 -> "After 5 minutes"
+        900 -> "After 15 minutes"
+        else -> "After 1 minute"
+    }
 
-    var salaryStartDay by remember { mutableIntStateOf(25) }
+    fun timeoutLabelToSeconds(label: String): Int = when (label) {
+        "Immediately" -> 0
+        "After 5 minutes" -> 300
+        "After 15 minutes" -> 900
+        else -> 60
+    }
 
-    var smsAutoDetectEnabled by remember { mutableStateOf(true) }
+    // Setting State Variables from userSettings
+    var pinLockEnabled by remember(userSettings.pinHash) { mutableStateOf(userSettings.pinHash != null) }
+    var fingerprintEnabled by remember(userSettings.biometricEnabled) { mutableStateOf(userSettings.biometricEnabled) }
+    var autoLockTimeout by remember(userSettings.autoLockSeconds) { mutableStateOf(secondsToTimeoutLabel(userSettings.autoLockSeconds)) }
+    var privacyByDefault by remember(userSettings.privacyModeDefault) { mutableStateOf(userSettings.privacyModeDefault) }
+
+    var salaryStartDay by remember(userSettings.salaryCycleStartDay) { mutableIntStateOf(userSettings.salaryCycleStartDay) }
+
+    var smsAutoDetectEnabled by remember(userSettings.smsEnabled) { mutableStateOf(userSettings.smsEnabled) }
 
     var reminderTime by remember { mutableStateOf("09:00 PM") }
     var reminderDaysBefore by remember { mutableIntStateOf(3) }
@@ -134,19 +155,27 @@ fun SettingsScreen(
                         title = "PIN Protection",
                         subtitle = "Require 4-digit PIN to open app",
                         checked = pinLockEnabled,
-                        onCheckedChange = { pinLockEnabled = it }
+                        onCheckedChange = { checked ->
+                            pinLockEnabled = checked
+                        }
                     )
                     SettingsSwitchRow(
                         title = "Fingerprint / Biometric",
                         subtitle = "Use device biometric unlock",
                         checked = fingerprintEnabled,
-                        onCheckedChange = { fingerprintEnabled = it }
+                        onCheckedChange = { checked ->
+                            fingerprintEnabled = checked
+                            onUpdateBiometricEnabled(checked)
+                        }
                     )
                     SettingsDropdownRow(
                         title = "Auto-lock Timeout",
                         currentValue = autoLockTimeout,
                         options = listOf("Immediately", "After 1 minute", "After 5 minutes", "After 15 minutes"),
-                        onOptionSelected = { autoLockTimeout = it }
+                        onOptionSelected = { selected ->
+                            autoLockTimeout = selected
+                            onUpdateAutoLockSeconds(timeoutLabelToSeconds(selected))
+                        }
                     )
                     SettingsSwitchRow(
                         title = "Privacy Mode (Mask Balances)",
@@ -158,7 +187,10 @@ fun SettingsScreen(
                         title = "Privacy Mode by Default",
                         subtitle = "Always launch app in privacy mode",
                         checked = privacyByDefault,
-                        onCheckedChange = { privacyByDefault = it }
+                        onCheckedChange = { checked ->
+                            privacyByDefault = checked
+                            onUpdatePrivacyByDefault(checked)
+                        }
                     )
                 }
             }
@@ -173,6 +205,7 @@ fun SettingsScreen(
                         onOptionSelected = { selected ->
                             val day = selected.replace("Day ", "").replace(" of the month", "").toIntOrNull() ?: 25
                             salaryStartDay = day
+                            onUpdateSalaryStartDay(day)
                         }
                     )
                 }
@@ -196,7 +229,10 @@ fun SettingsScreen(
                         title = "Enable SMS Auto-Detection",
                         subtitle = "Read bank & card SMS alerts automatically",
                         checked = smsAutoDetectEnabled,
-                        onCheckedChange = { smsAutoDetectEnabled = it }
+                        onCheckedChange = { checked ->
+                            smsAutoDetectEnabled = checked
+                            onUpdateSmsEnabled(checked)
+                        }
                     )
                     SettingsNavigationRow(
                         title = "SMS Parser Test Screen",

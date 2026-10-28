@@ -33,9 +33,11 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,20 +45,34 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.patil.coconut_pfa.data.model.Account
+import com.patil.coconut_pfa.data.local.entity.AccountEntity
+import com.patil.coconut_pfa.data.local.entity.CardDetailsEntity
+import com.patil.coconut_pfa.data.local.entity.DbAccountInstitution
+import com.patil.coconut_pfa.data.local.entity.DbAccountType
+import com.patil.coconut_pfa.data.local.entity.FdDetailsEntity
+import com.patil.coconut_pfa.data.local.entity.LoanDetailsEntity
+import com.patil.coconut_pfa.data.local.entity.ValuationEntity
 import com.patil.coconut_pfa.data.model.AccountType
-import com.patil.coconut_pfa.data.model.CardPaymentStatus
-import com.patil.coconut_pfa.data.repository.FakeData
+import com.patil.coconut_pfa.domain.AccountDomainEngine
 import com.patil.coconut_pfa.navigation.Screen
 import com.patil.coconut_pfa.ui.theme.Coconut_PfaTheme
+import com.patil.coconut_pfa.ui.viewmodel.AddAccountViewModel
+import com.patil.coconut_pfa.util.KolkataDateTimeUtils
+import kotlinx.coroutines.launch
 import java.util.UUID
+import kotlin.math.abs
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun AddAccountScreen(
     onNavigate: (Screen) -> Unit,
+    accountId: String? = null,
     modifier: Modifier = Modifier,
+    viewModel: AddAccountViewModel? = null,
 ) {
+    val coroutineScope = rememberCoroutineScope()
+    val isEditMode = accountId != null
+
     var selectedType by remember { mutableStateOf(AccountType.BANK) }
     var accountName by remember { mutableStateOf("") }
 
@@ -78,17 +94,65 @@ fun AddAccountScreen(
     var monthsLeftText by remember { mutableStateOf("12") }
 
     var principalText by remember { mutableStateOf("") }
-    var fdStartDate by remember { mutableStateOf("01 Nov 2024") }
-    var maturityDate by remember { mutableStateOf("01 Nov 2025") }
+    var fdStartDate by remember { mutableStateOf(KolkataDateTimeUtils.currentDateString()) }
+    var maturityDate by remember { mutableStateOf("2025-12-31") }
     var maturityAmountText by remember { mutableStateOf("") }
 
     var investmentValueText by remember { mutableStateOf("") }
+
+    // Pre-fill fields in Edit Mode
+    LaunchedEffect(accountId) {
+        if (isEditMode && viewModel != null) {
+            val entity = viewModel.getAccountToEdit()
+            if (entity != null) {
+                selectedType = AccountDomainEngine.mapToDomainType(entity.type)
+                accountName = entity.name
+                selectedBank = AccountDomainEngine.mapInstitutionName(entity.institution)
+                last4Digits = entity.last4 ?: ""
+                openingBalanceText = (abs(entity.openingBalancePaise) / 100.0).toString()
+                includeInNetWorth = entity.includeInNetWorth
+
+                when (entity.type) {
+                    DbAccountType.CREDIT_CARD -> {
+                        val card = viewModel.getCardDetailsToEdit()
+                        if (card != null) {
+                            creditLimitText = (card.creditLimitPaise / 100.0).toString()
+                            statementDayText = card.statementDay.toString()
+                            dueDayText = card.dueDay.toString()
+                        }
+                    }
+                    DbAccountType.LOAN -> {
+                        val loan = viewModel.getLoanDetailsToEdit()
+                        if (loan != null) {
+                            interestRateText = (loan.annualRateBps / 100.0).toString()
+                            emiAmountText = (loan.emiPaise / 100.0).toString()
+                            monthsLeftText = loan.tenureMonths.toString()
+                        }
+                    }
+                    DbAccountType.FD -> {
+                        val fd = viewModel.getFdDetailsToEdit()
+                        if (fd != null) {
+                            principalText = (fd.principalPaise / 100.0).toString()
+                            interestRateText = (fd.annualRateBps / 100.0).toString()
+                            fdStartDate = fd.startDate
+                            maturityDate = fd.maturityDate
+                            maturityAmountText = fd.maturityAmountPaise?.let { (it / 100.0).toString() } ?: ""
+                        }
+                    }
+                    DbAccountType.INVESTMENT -> {
+                        investmentValueText = (abs(entity.openingBalancePaise) / 100.0).toString()
+                    }
+                    else -> {}
+                }
+            }
+        }
+    }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
-                title = { Text("Add Account", fontWeight = FontWeight.Bold) },
+                title = { Text(if (isEditMode) "Edit Account" else "Add Account", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = { onNavigate(Screen.Accounts) }) {
                         Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
@@ -105,7 +169,7 @@ fun AddAccountScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // 1. Account Type Picker (First)
+            // 1. Account Type Picker
             Text(
                 text = "Account Type",
                 style = MaterialTheme.typography.titleSmall,
@@ -175,7 +239,7 @@ fun AddAccountScreen(
                     }
                 }
 
-                // Last 4 digits (optional)
+                // Last 4 digits
                 OutlinedTextField(
                     value = last4Digits,
                     onValueChange = { if (it.length <= 4) last4Digits = it.filter { char -> char.isDigit() } },
@@ -388,38 +452,97 @@ fun AddAccountScreen(
             // Save Account Action Button
             Button(
                 onClick = {
-                    val rawBal = (openingBalanceText.toDoubleOrNull() ?: 0.0) * 100
-                    val balanceInPaise = when (selectedType) {
-                        AccountType.CREDIT_CARD, AccountType.LOAN -> -rawBal.toLong()
-                        else -> rawBal.toLong()
-                    }
+                    coroutineScope.launch {
+                        val targetAccountId = accountId ?: UUID.randomUUID().toString()
+                        val rawBal = ((openingBalanceText.toDoubleOrNull() ?: 0.0) * 100).toLong()
+                        val openingBal = when (selectedType) {
+                            AccountType.CREDIT_CARD, AccountType.LOAN -> -abs(rawBal)
+                            else -> abs(rawBal)
+                        }
 
-                    val newAccount = Account(
-                        id = UUID.randomUUID().toString(),
-                        name = accountName.ifBlank { "${selectedType.displayName} Account" },
-                        type = selectedType,
-                        balanceInPaise = balanceInPaise,
-                        accountNumberLast4 = last4Digits.ifBlank { null },
-                        bankName = selectedBank,
-                        includeInNetWorth = includeInNetWorth,
-                        creditLimitInPaise = ((creditLimitText.toDoubleOrNull() ?: 0.0) * 100).toLong(),
-                        statementDay = statementDayText.toIntOrNull(),
-                        dueDate = "$dueDayText Nov 2024",
-                        cardStatus = CardPaymentStatus.UNPAID,
-                        emiAmountInPaise = ((emiAmountText.toDoubleOrNull() ?: 0.0) * 100).toLong(),
-                        interestRate = interestRateText.toDoubleOrNull() ?: 0.0,
-                        monthsLeft = monthsLeftText.toIntOrNull() ?: 12,
-                        principalInPaise = ((principalText.toDoubleOrNull() ?: 0.0) * 100).toLong(),
-                        fdInterestRate = interestRateText.toDoubleOrNull() ?: 0.0,
-                        fdStartDate = fdStartDate,
-                        maturityDate = maturityDate,
-                        maturityAmountInPaise = ((maturityAmountText.toDoubleOrNull() ?: 0.0) * 100).toLong(),
-                        currentValueInPaise = if (investmentValueText.isNotBlank()) {
-                            ((investmentValueText.toDoubleOrNull() ?: 0.0) * 100).toLong()
-                        } else balanceInPaise
-                    )
-                    FakeData.addAccount(newAccount)
-                    onNavigate(Screen.Accounts)
+                        val dbType = AccountDomainEngine.mapToDbType(selectedType)
+                        val dbInst = AccountDomainEngine.mapInstitutionToEnum(selectedBank)
+
+                        val accountEntity = AccountEntity(
+                            id = targetAccountId,
+                            name = accountName.ifBlank { "${selectedType.displayName} Account" },
+                            type = dbType,
+                            institution = dbInst,
+                            last4 = last4Digits.ifBlank { null },
+                            openingBalancePaise = openingBal,
+                            openingDate = KolkataDateTimeUtils.currentDateString(),
+                            icon = when (selectedType) {
+                                AccountType.BANK -> "account_balance"
+                                AccountType.CREDIT_CARD -> "credit_card"
+                                AccountType.CASH -> "payments"
+                                AccountType.WALLET -> "account_balance_wallet"
+                                AccountType.LOAN -> "payments"
+                                AccountType.INVESTMENT -> "show_chart"
+                                AccountType.FIXED_DEPOSIT -> "savings"
+                            },
+                            colour = 0xFF1E88E5L,
+                            includeInNetWorth = includeInNetWorth
+                        )
+
+                        var cardDetails: CardDetailsEntity? = null
+                        var loanDetails: LoanDetailsEntity? = null
+                        var fdDetails: FdDetailsEntity? = null
+                        var valuation: ValuationEntity? = null
+
+                        when (selectedType) {
+                            AccountType.CREDIT_CARD -> {
+                                cardDetails = CardDetailsEntity(
+                                    accountId = targetAccountId,
+                                    creditLimitPaise = ((creditLimitText.toDoubleOrNull() ?: 0.0) * 100).toLong(),
+                                    statementDay = statementDayText.toIntOrNull() ?: 15,
+                                    dueDay = dueDayText.toIntOrNull() ?: 5
+                                )
+                            }
+                            AccountType.LOAN -> {
+                                loanDetails = LoanDetailsEntity(
+                                    accountId = targetAccountId,
+                                    principalPaise = abs(rawBal),
+                                    annualRateBps = ((interestRateText.toDoubleOrNull() ?: 0.0) * 100).toInt(),
+                                    tenureMonths = monthsLeftText.toIntOrNull() ?: 12,
+                                    emiPaise = ((emiAmountText.toDoubleOrNull() ?: 0.0) * 100).toLong(),
+                                    startDate = KolkataDateTimeUtils.currentDateString(),
+                                    emiDay = dueDayText.toIntOrNull() ?: 10
+                                )
+                            }
+                            AccountType.FIXED_DEPOSIT -> {
+                                fdDetails = FdDetailsEntity(
+                                    accountId = targetAccountId,
+                                    principalPaise = ((principalText.toDoubleOrNull() ?: 0.0) * 100).toLong(),
+                                    annualRateBps = ((interestRateText.toDoubleOrNull() ?: 0.0) * 100).toInt(),
+                                    startDate = fdStartDate,
+                                    maturityDate = maturityDate,
+                                    maturityAmountPaise = ((maturityAmountText.toDoubleOrNull() ?: 0.0) * 100).toLong()
+                                )
+                            }
+                            AccountType.INVESTMENT -> {
+                                if (investmentValueText.isNotBlank()) {
+                                    valuation = ValuationEntity(
+                                        id = UUID.randomUUID().toString(),
+                                        accountId = targetAccountId,
+                                        date = KolkataDateTimeUtils.currentDateString(),
+                                        valuePaise = ((investmentValueText.toDoubleOrNull() ?: 0.0) * 100).toLong()
+                                    )
+                                }
+                            }
+                            else -> {}
+                        }
+
+                        viewModel?.saveAccount(
+                            accountEntity = accountEntity,
+                            cardDetails = cardDetails,
+                            loanDetails = loanDetails,
+                            fdDetails = fdDetails,
+                            valuation = valuation,
+                            isEditMode = isEditMode
+                        )
+
+                        onNavigate(Screen.Accounts)
+                    }
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -427,7 +550,7 @@ fun AddAccountScreen(
                 shape = RoundedCornerShape(14.dp)
             ) {
                 Text(
-                    text = "Save Account",
+                    text = if (isEditMode) "Update Account" else "Save Account",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )

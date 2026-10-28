@@ -57,7 +57,8 @@ data class Account(
     // Investment specific fields
     val currentValueInPaise: Long = balanceInPaise,
     // Net worth flag
-    val includeInNetWorth: Boolean = true
+    val includeInNetWorth: Boolean = true,
+    val archived: Boolean = false
 ) {
     val availableCreditInPaise: Long
         get() = (creditLimitInPaise - abs(balanceInPaise)).coerceAtLeast(0L)

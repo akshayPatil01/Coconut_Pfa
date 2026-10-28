@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.AccountBalance
@@ -29,15 +30,12 @@ import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.Sms
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -52,6 +50,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.patil.coconut_pfa.navigation.Screen
@@ -60,6 +60,16 @@ import com.patil.coconut_pfa.ui.theme.Coconut_PfaTheme
 @Composable
 fun OnboardingScreen(
     onNavigate: (Screen) -> Unit,
+    onCompleteOnboarding: (
+        pin: String,
+        enableBiometric: Boolean,
+        salaryDay: Int,
+        addBank: Boolean,
+        addCard: Boolean,
+        addCash: Boolean,
+        addLoan: Boolean,
+        addFd: Boolean
+    ) -> Unit = { _, _, _, _, _, _, _, _ -> },
     modifier: Modifier = Modifier,
 ) {
     var step by remember { mutableIntStateOf(1) } // Steps 1 to 8
@@ -72,6 +82,8 @@ fun OnboardingScreen(
     var addBank by remember { mutableStateOf(true) }
     var addCard by remember { mutableStateOf(true) }
     var addCash by remember { mutableStateOf(true) }
+    var addLoan by remember { mutableStateOf(true) }
+    var addFd by remember { mutableStateOf(true) }
 
     var smsPermissionGranted by remember { mutableStateOf(true) }
     var notifPermissionGranted by remember { mutableStateOf(true) }
@@ -107,7 +119,10 @@ fun OnboardingScreen(
                     color = MaterialTheme.colorScheme.primary
                 )
 
-                TextButton(onClick = { onNavigate(Screen.Home) }) {
+                TextButton(onClick = {
+                    onCompleteOnboarding(pin, enableBiometric, salaryDay, addBank, addCard, addCash, addLoan, addFd)
+                    onNavigate(Screen.Home)
+                }) {
                     Text("Skip")
                 }
             }
@@ -133,7 +148,9 @@ fun OnboardingScreen(
                         5 -> OnboardingInitialAccountsStep(
                             addBank = addBank, onBankChange = { addBank = it },
                             addCard = addCard, onCardChange = { addCard = it },
-                            addCash = addCash, onCashChange = { addCash = it }
+                            addCash = addCash, onCashChange = { addCash = it },
+                            addLoan = addLoan, onLoanChange = { addLoan = it },
+                            addFd = addFd, onFdChange = { addFd = it }
                         )
                         6 -> OnboardingCategoriesPreviewStep()
                         7 -> OnboardingPermissionsStep(
@@ -154,6 +171,7 @@ fun OnboardingScreen(
                 if (step < 8) {
                     Button(
                         onClick = { step++ },
+                        enabled = step != 2 || pin.length == 4,
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(14.dp)
                     ) {
@@ -163,7 +181,10 @@ fun OnboardingScreen(
                     }
                 } else {
                     Button(
-                        onClick = { onNavigate(Screen.Home) },
+                        onClick = {
+                            onCompleteOnboarding(pin, enableBiometric, salaryDay, addBank, addCard, addCash, addLoan, addFd)
+                            onNavigate(Screen.Home)
+                        },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(14.dp),
                         colors = androidx.compose.material3.ButtonDefaults.buttonColors(
@@ -215,9 +236,14 @@ private fun OnboardingSetPinStep(pin: String, onPinChange: (String) -> Unit) {
         Spacer(modifier = Modifier.height(20.dp))
         OutlinedTextField(
             value = pin,
-            onValueChange = { if (it.length <= 4) onPinChange(it) },
+            onValueChange = { input ->
+                val filtered = input.filter { it.isDigit() }
+                if (filtered.length <= 4) onPinChange(filtered)
+            },
             label = { Text("4-Digit PIN") },
             singleLine = true,
+            visualTransformation = PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
             modifier = Modifier.width(200.dp)
         )
     }
@@ -249,9 +275,17 @@ private fun OnboardingSalaryDayStep(day: Int, onDayChange: (Int) -> Unit) {
         Spacer(modifier = Modifier.height(20.dp))
         OutlinedTextField(
             value = day.toString(),
-            onValueChange = { onDayChange(it.toIntOrNull() ?: 25) },
+            onValueChange = { input ->
+                val parsed = input.filter { it.isDigit() }.toIntOrNull()
+                if (parsed != null && parsed in 1..31) {
+                    onDayChange(parsed)
+                } else if (input.isEmpty()) {
+                    onDayChange(1)
+                }
+            },
             label = { Text("Start Day (1-31)") },
             singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier.width(200.dp)
         )
     }
@@ -262,25 +296,35 @@ private fun OnboardingInitialAccountsStep(
     addBank: Boolean, onBankChange: (Boolean) -> Unit,
     addCard: Boolean, onCardChange: (Boolean) -> Unit,
     addCash: Boolean, onCashChange: (Boolean) -> Unit,
+    addLoan: Boolean, onLoanChange: (Boolean) -> Unit,
+    addFd: Boolean, onFdChange: (Boolean) -> Unit,
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Icon(imageVector = Icons.Rounded.AccountBalance, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(48.dp))
         Spacer(modifier = Modifier.height(16.dp))
         Text(text = "Add Initial Accounts", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        Text(text = "Select default accounts to generate", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(text = "Select default accounts & details to initialize", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(modifier = Modifier.height(16.dp))
 
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
             Checkbox(checked = addBank, onCheckedChange = onBankChange)
             Text("Demo Bank Salary (₹2,45,000)")
         }
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
             Checkbox(checked = addCard, onCheckedChange = onCardChange)
-            Text("Card A Premier Credit Card")
+            Text("Card A Premier Credit Card (Limit ₹1.5L)")
         }
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
             Checkbox(checked = addCash, onCheckedChange = onCashChange)
             Text("Cash Wallet (₹4,500)")
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
+            Checkbox(checked = addLoan, onCheckedChange = onLoanChange)
+            Text("Home Loan (₹25L @ 8.5%, EMI ₹21.6k)")
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
+            Checkbox(checked = addFd, onCheckedChange = onFdChange)
+            Text("Fixed Deposit (₹1L @ 7.2%, Dec 2025)")
         }
     }
 }

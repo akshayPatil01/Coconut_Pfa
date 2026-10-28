@@ -1,5 +1,6 @@
 package com.patil.coconut_pfa.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -23,8 +24,11 @@ import androidx.compose.material.icons.automirrored.rounded.ShowChart
 import androidx.compose.material.icons.rounded.AccountBalance
 import androidx.compose.material.icons.rounded.AccountBalanceWallet
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Archive
 import androidx.compose.material.icons.rounded.CreditCard
 import androidx.compose.material.icons.rounded.Event
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Money
 import androidx.compose.material.icons.rounded.Payments
@@ -33,11 +37,16 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -47,31 +56,33 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.patil.coconut_pfa.data.model.Account
 import com.patil.coconut_pfa.data.model.AccountType
-import com.patil.coconut_pfa.data.repository.FakeData
 import com.patil.coconut_pfa.navigation.Screen
 import com.patil.coconut_pfa.ui.components.AmountText
 import com.patil.coconut_pfa.ui.components.SparklineGraph
 import com.patil.coconut_pfa.ui.theme.Coconut_PfaTheme
+import com.patil.coconut_pfa.ui.viewmodel.AccountsScreenUiState
+import com.patil.coconut_pfa.ui.viewmodel.AccountsViewModel
 
 @Composable
 fun AccountsScreen(
     onNavigate: (Screen) -> Unit,
+    accountsViewModel: AccountsViewModel? = null,
     modifier: Modifier = Modifier,
 ) {
-    // Group accounts by AccountType or specific custom groups
-    val accountsList = FakeData.accounts
-    val totalNetWorth = FakeData.netWorthInPaise
-    val totalAssets = FakeData.totalAssetsInPaise
-    val totalLiabilities = FakeData.totalLiabilitiesInPaise
+    val uiState by accountsViewModel?.uiState?.collectAsState() ?: remember { mutableStateOf(AccountsScreenUiState()) }
+    var showArchived by remember { mutableStateOf(false) }
 
-    // Grouping by display groups: Bank, Cash & wallets, Credit cards, Loans, Investments & FDs
-    val groups = remember(accountsList.size) {
+    val activeAccounts = uiState.activeAccounts
+    val archivedAccounts = uiState.archivedAccounts
+
+    // Grouping by display groups: Bank, Cash & Wallets, Credit Cards, Loans, Investments & FDs
+    val groups = remember(activeAccounts) {
         listOf(
-            "Bank" to accountsList.filter { it.type == AccountType.BANK },
-            "Cash & Wallets" to accountsList.filter { it.type == AccountType.CASH || it.type == AccountType.WALLET },
-            "Credit Cards" to accountsList.filter { it.type == AccountType.CREDIT_CARD },
-            "Loans" to accountsList.filter { it.type == AccountType.LOAN },
-            "Investments & FDs" to accountsList.filter { it.type == AccountType.INVESTMENT || it.type == AccountType.FIXED_DEPOSIT }
+            "Bank" to activeAccounts.filter { it.type == AccountType.BANK },
+            "Cash & Wallets" to activeAccounts.filter { it.type == AccountType.CASH || it.type == AccountType.WALLET },
+            "Credit Cards" to activeAccounts.filter { it.type == AccountType.CREDIT_CARD },
+            "Loans" to activeAccounts.filter { it.type == AccountType.LOAN },
+            "Investments & FDs" to activeAccounts.filter { it.type == AccountType.INVESTMENT || it.type == AccountType.FIXED_DEPOSIT }
         ).filter { it.second.isNotEmpty() }
     }
 
@@ -79,7 +90,7 @@ fun AccountsScreen(
         modifier = modifier.fillMaxSize(),
         floatingActionButton = {
             ExtendedFloatingActionButton(
-                onClick = { onNavigate(Screen.AddAccount) },
+                onClick = { onNavigate(Screen.AddAccount()) },
                 icon = { Icon(Icons.Rounded.Add, contentDescription = "Add Account") },
                 text = { Text("Add Account") },
                 containerColor = MaterialTheme.colorScheme.primary,
@@ -96,9 +107,10 @@ fun AccountsScreen(
             // Net Worth Summary Card with Assets, Liabilities, and Sparkline Graph
             item(key = "net_worth_card") {
                 NetWorthDetailCard(
-                    netWorth = totalNetWorth,
-                    assets = totalAssets,
-                    liabilities = totalLiabilities,
+                    netWorth = uiState.totalNetWorth,
+                    assets = uiState.totalAssets,
+                    liabilities = uiState.totalLiabilities,
+                    sparklinePoints = uiState.sparklineTrend.map { it.toFloat() },
                     modifier = Modifier.padding(16.dp)
                 )
             }
@@ -123,6 +135,60 @@ fun AccountsScreen(
                     )
                 }
             }
+
+            // Archived Accounts Section
+            if (archivedAccounts.isNotEmpty()) {
+                item(key = "archived_section_header") {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    OutlinedCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                            .clickable { showArchived = !showArchived },
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Archive,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    text = "Archived Accounts (${archivedAccounts.size})",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Icon(
+                                imageVector = if (showArchived) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                                contentDescription = if (showArchived) "Collapse" else "Expand",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
+                if (showArchived) {
+                    items(archivedAccounts, key = { "archived_${it.id}" }) { account ->
+                        AccountItemCard(
+                            account = account,
+                            onAccountClick = { onNavigate(Screen.AccountDetail(account.id)) },
+                            isArchived = true,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -135,6 +201,7 @@ private fun NetWorthDetailCard(
     netWorth: Long,
     assets: Long,
     liabilities: Long,
+    sparklinePoints: List<Float>,
     modifier: Modifier = Modifier,
 ) {
     Card(
@@ -167,7 +234,7 @@ private fun NetWorthDetailCard(
 
             // Sparkline Graph
             SparklineGraph(
-                dataPoints = FakeData.sparklineTrendPoints,
+                dataPoints = sparklinePoints,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp),
@@ -192,7 +259,7 @@ private fun NetWorthDetailCard(
                         amountInPaise = assets,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF2E7D32) // Assets green
+                        color = Color(0xFF2E7D32)
                     )
                 }
 
@@ -274,6 +341,7 @@ private fun AccountGroupHeader(
 private fun AccountItemCard(
     account: Account,
     onAccountClick: () -> Unit,
+    isArchived: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     Card(
@@ -282,9 +350,9 @@ private fun AccountItemCard(
             .clickable(onClick = onAccountClick),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = if (isArchived) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f) else MaterialTheme.colorScheme.surface
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isArchived) 0.dp else 1.dp)
     ) {
         Column(
             modifier = Modifier.padding(16.dp)
@@ -315,11 +383,27 @@ private fun AccountItemCard(
                     Spacer(modifier = Modifier.width(12.dp))
 
                     Column {
-                        Text(
-                            text = account.name,
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.SemiBold
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = account.name,
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            if (isArchived) {
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Surface(
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                                ) {
+                                    Text(
+                                        text = "Archived",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
 
                         val subText = buildString {
                             account.bankName?.let { append(it) }

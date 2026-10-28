@@ -8,10 +8,30 @@ import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.patil.coconut_pfa.data.local.datastore.UserSettings
+import com.patil.coconut_pfa.data.local.datastore.UserSettingsDataStore
+import com.patil.coconut_pfa.data.local.db.CoconutDatabase
+import com.patil.coconut_pfa.data.local.security.LockManager
+import com.patil.coconut_pfa.data.local.security.PinHasher
+import com.patil.coconut_pfa.data.repository.AccountRepository
+import com.patil.coconut_pfa.data.repository.NetWorthRepository
+import com.patil.coconut_pfa.data.repository.PersonLedgerRepository
+import com.patil.coconut_pfa.data.repository.SettingsRepository
+import com.patil.coconut_pfa.data.repository.TransactionRepository
 import com.patil.coconut_pfa.navigation.Screen
 import com.patil.coconut_pfa.ui.components.CoconutBottomBar
 import com.patil.coconut_pfa.ui.components.CoconutNavigationDrawer
@@ -36,6 +56,10 @@ import com.patil.coconut_pfa.ui.screens.SplitAndIOUsScreen
 import com.patil.coconut_pfa.ui.screens.SubscriptionsScreen
 import com.patil.coconut_pfa.ui.screens.TransactionsScreen
 import com.patil.coconut_pfa.ui.screens.TrashScreen
+import com.patil.coconut_pfa.ui.viewmodel.AccountDetailViewModel
+import com.patil.coconut_pfa.ui.viewmodel.AccountsViewModel
+import com.patil.coconut_pfa.ui.viewmodel.AddAccountViewModel
+import com.patil.coconut_pfa.util.PrivacyManager
 import kotlinx.coroutines.launch
 
 /**
@@ -45,8 +69,65 @@ import kotlinx.coroutines.launch
 fun CoconutApp(
     modifier: Modifier = Modifier,
 ) {
-    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val context = LocalContext.current
+    val database = remember { CoconutDatabase.getInstance(context) }
+    val accountRepository = remember {
+        AccountRepository(
+            accountDao = database.accountDao(),
+            cardDetailsDao = database.cardDetailsDao(),
+            cardStatementDao = database.cardStatementDao(),
+            loanDetailsDao = database.loanDetailsDao(),
+            fdDetailsDao = database.fdDetailsDao(),
+            valuationDao = database.valuationDao()
+        )
+    }
+    val transactionRepository = remember { TransactionRepository(database.txnDao()) }
+    val netWorthRepository = remember { NetWorthRepository(database.netWorthSnapshotDao()) }
+    val personLedgerRepository = remember { PersonLedgerRepository(database.personDao(), database.ledgerEntryDao()) }
+
+    val userSettingsDataStore = remember { UserSettingsDataStore(context) }
+    val settingsRepository = remember { SettingsRepository(userSettingsDataStore) }
+
+    val userSettings by settingsRepository.settingsFlow.collectAsState(initial = UserSettings())
+    val isLocked by LockManager.isLocked.collectAsState()
+
+    val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
+    val hasColdStarted = remember { mutableStateOf(false) }
+
+    // Sync PrivacyMode default state & perform cold start lock once settings are loaded
+    LaunchedEffect(userSettings.onboardingDone, userSettings.pinHash, userSettings.privacyModeDefault) {
+        PrivacyManager.setPrivacy(userSettings.privacyModeDefault)
+        if (userSettings.onboardingDone && userSettings.pinHash != null && !hasColdStarted.value) {
+            LockManager.lock()
+            hasColdStarted.value = true
+        }
+    }
+
+    // Lifecycle Observer for Auto-Lock when backgrounded for >= autoLockSeconds
+    DisposableEffect(lifecycleOwner, userSettings.autoLockSeconds, userSettings.onboardingDone, userSettings.pinHash) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_STOP -> {
+                    LockManager.onAppBackgrounded()
+                }
+                Lifecycle.Event.ON_START -> {
+                    LockManager.onAppForegrounded(
+                        autoLockSeconds = userSettings.autoLockSeconds,
+                        isOnboardingDone = userSettings.onboardingDone,
+                        hasPin = userSettings.pinHash != null
+                    )
+                }
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val backStack = remember { mutableStateListOf<Screen>(Screen.Home) }
     val currentDestination = backStack.lastOrNull() ?: Screen.Home
 
@@ -68,13 +149,53 @@ fun CoconutApp(
         }
     }
 
-    val isFullScreenOverlay = currentDestination == Screen.Onboarding || currentDestination == Screen.LockScreen
+    val handleCompleteOnboarding = { pin: String, enableBiometric: Boolean, salaryDay: Int, addBank: Boolean, addCard: Boolean, addCash: Boolean, addLoan: Boolean, addFd: Boolean ->
+        val salt = PinHasher.generateSalt()
+        val hashB64 = PinHasher.hashPin(pin, salt)
+        val saltB64 = PinHasher.saltToBase64(salt)
+
+        scope.launch {
+            settingsRepository.setPin(hashB64, saltB64)
+            settingsRepository.setBiometricEnabled(enableBiometric)
+            settingsRepository.setSalaryCycleStartDay(salaryDay)
+            accountRepository.createOnboardingAccounts(addBank, addCard, addCash, addLoan, addFd)
+            settingsRepository.setOnboardingDone(true)
+            LockManager.unlock()
+        }
+    }
+
+    val handleWipeAndReset = {
+        scope.launch {
+            settingsRepository.setOnboardingDone(false)
+            settingsRepository.setPin(null, null)
+            LockManager.unlock()
+        }
+    }
+
+    val isFullScreenOverlay = !userSettings.onboardingDone || isLocked || currentDestination == Screen.Onboarding || currentDestination == Screen.LockScreen
 
     if (isFullScreenOverlay) {
-        when (currentDestination) {
-            Screen.Onboarding -> OnboardingScreen(onNavigate = navigateTo, modifier = modifier)
-            Screen.LockScreen -> LockScreen(onNavigate = navigateTo, modifier = modifier)
-            else -> Unit
+        when {
+            !userSettings.onboardingDone || currentDestination == Screen.Onboarding -> {
+                OnboardingScreen(
+                    onNavigate = navigateTo,
+                    onCompleteOnboarding = { pin, bio, day, b, c, ca, l, fd ->
+                        handleCompleteOnboarding(pin, bio, day, b, c, ca, l, fd)
+                    },
+                    modifier = modifier
+                )
+            }
+            isLocked || currentDestination == Screen.LockScreen -> {
+                LockScreen(
+                    onNavigate = navigateTo,
+                    pinHash = userSettings.pinHash,
+                    pinSalt = userSettings.pinSalt,
+                    biometricEnabled = userSettings.biometricEnabled,
+                    onUnlock = { LockManager.unlock() },
+                    onWipeAndReset = { handleWipeAndReset() },
+                    modifier = modifier
+                )
+            }
         }
     } else {
         ModalNavigationDrawer(
@@ -122,23 +243,90 @@ fun CoconutApp(
                     Screen.Home -> HomeScreen(onNavigate = navigateTo, modifier = screenModifier)
                     Screen.Transactions -> TransactionsScreen(onNavigate = navigateTo, modifier = screenModifier)
                     Screen.Payments -> PaymentsScreen(onNavigate = navigateTo, modifier = screenModifier)
-                    Screen.Accounts -> AccountsScreen(onNavigate = navigateTo, modifier = screenModifier)
+                    Screen.Accounts -> {
+                        val accountsViewModel: AccountsViewModel = viewModel(
+                            factory = AccountsViewModel.Factory(
+                                accountRepository = accountRepository,
+                                transactionRepository = transactionRepository,
+                                netWorthRepository = netWorthRepository,
+                                personLedgerRepository = personLedgerRepository,
+                                settingsRepository = settingsRepository
+                            )
+                        )
+                        AccountsScreen(
+                            onNavigate = navigateTo,
+                            accountsViewModel = accountsViewModel,
+                            modifier = screenModifier
+                        )
+                    }
                     Screen.AddTransaction -> AddTransactionScreen(onNavigate = navigateTo, modifier = screenModifier)
                     Screen.Goals -> GoalsScreen(onNavigate = navigateTo, modifier = screenModifier)
                     Screen.Subscriptions -> SubscriptionsScreen(onNavigate = navigateTo, modifier = screenModifier)
                     Screen.SplitAndIOUs -> SplitAndIOUsScreen(onNavigate = navigateTo, modifier = screenModifier)
                     Screen.Reports -> ReportsScreen(onNavigate = navigateTo, modifier = screenModifier)
-                    Screen.Settings -> SettingsScreen(onNavigate = navigateTo, modifier = screenModifier)
+                    Screen.Settings -> SettingsScreen(
+                        onNavigate = navigateTo,
+                        userSettings = userSettings,
+                        onUpdateBiometricEnabled = { enabled -> scope.launch { settingsRepository.setBiometricEnabled(enabled) } },
+                        onUpdateAutoLockSeconds = { seconds -> scope.launch { settingsRepository.setAutoLockSeconds(seconds) } },
+                        onUpdatePrivacyByDefault = { enabled -> scope.launch { settingsRepository.setPrivacyModeDefault(enabled) } },
+                        onUpdateSalaryStartDay = { day -> scope.launch { settingsRepository.setSalaryCycleStartDay(day) } },
+                        onUpdateSmsEnabled = { enabled -> scope.launch { settingsRepository.setSmsEnabled(enabled) } },
+                        modifier = screenModifier
+                    )
                     Screen.ReviewInbox -> ReviewInboxScreen(onNavigate = navigateTo, modifier = screenModifier)
-                    is Screen.AccountDetail -> AccountDetailScreen(accountId = dest.accountId, onNavigate = navigateTo, modifier = screenModifier)
-                    Screen.AddAccount -> AddAccountScreen(onNavigate = navigateTo, modifier = screenModifier)
+                    is Screen.AccountDetail -> {
+                        val accountDetailViewModel: AccountDetailViewModel = viewModel(
+                            key = "account_detail_${dest.accountId}",
+                            factory = AccountDetailViewModel.Factory(
+                                accountId = dest.accountId,
+                                accountRepository = accountRepository,
+                                transactionRepository = transactionRepository
+                            )
+                        )
+                        AccountDetailScreen(
+                            accountId = dest.accountId,
+                            onNavigate = navigateTo,
+                            modifier = screenModifier,
+                            viewModel = accountDetailViewModel
+                        )
+                    }
+                    is Screen.AddAccount -> {
+                        val addAccountViewModel: AddAccountViewModel = viewModel(
+                            key = "add_account_${dest.accountId ?: "new"}",
+                            factory = AddAccountViewModel.Factory(
+                                accountId = dest.accountId,
+                                accountRepository = accountRepository
+                            )
+                        )
+                        AddAccountScreen(
+                            onNavigate = navigateTo,
+                            accountId = dest.accountId,
+                            modifier = screenModifier,
+                            viewModel = addAccountViewModel
+                        )
+                    }
                     Screen.AddBill -> AddBillScreen(onNavigate = navigateTo, modifier = screenModifier)
                     Screen.ImportStatement -> ImportStatementScreen(onNavigate = navigateTo, modifier = screenModifier)
                     Screen.ReceiptScan -> ReceiptScanScreen(onNavigate = navigateTo, modifier = screenModifier)
                     Screen.Trash -> TrashScreen(onNavigate = navigateTo, modifier = screenModifier)
                     Screen.ParserTest -> ParserTestScreen(onNavigate = navigateTo, modifier = screenModifier)
-                    Screen.Onboarding -> OnboardingScreen(onNavigate = navigateTo, modifier = screenModifier)
-                    Screen.LockScreen -> LockScreen(onNavigate = navigateTo, modifier = screenModifier)
+                    Screen.Onboarding -> OnboardingScreen(
+                        onNavigate = navigateTo,
+                        onCompleteOnboarding = { pin, bio, day, b, c, ca, l, fd ->
+                            handleCompleteOnboarding(pin, bio, day, b, c, ca, l, fd)
+                        },
+                        modifier = screenModifier
+                    )
+                    Screen.LockScreen -> LockScreen(
+                        onNavigate = navigateTo,
+                        pinHash = userSettings.pinHash,
+                        pinSalt = userSettings.pinSalt,
+                        biometricEnabled = userSettings.biometricEnabled,
+                        onUnlock = { LockManager.unlock() },
+                        onWipeAndReset = { handleWipeAndReset() },
+                        modifier = screenModifier
+                    )
                 }
             }
         }

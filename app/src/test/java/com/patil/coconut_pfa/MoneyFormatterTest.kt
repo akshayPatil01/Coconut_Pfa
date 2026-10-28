@@ -21,7 +21,7 @@ class MoneyFormatterTest {
     @Test
     fun testNegativeAmountFormatting() {
         val result = MoneyFormatter.format(-50000L) // -500 rupees
-        assertEquals("−₹500", result)
+        assertEquals("-₹500", result)
     }
 
     @Test

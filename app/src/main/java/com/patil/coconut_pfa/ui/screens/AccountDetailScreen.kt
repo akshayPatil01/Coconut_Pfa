@@ -20,10 +20,10 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.AccountBalance
+import androidx.compose.material.icons.rounded.Archive
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Pending
-import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -40,6 +40,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -51,15 +52,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.patil.coconut_pfa.data.local.entity.TxnEntity
 import com.patil.coconut_pfa.data.model.Account
 import com.patil.coconut_pfa.data.model.AccountType
 import com.patil.coconut_pfa.data.model.EmiScheduleItem
-import com.patil.coconut_pfa.data.model.Transaction
-import com.patil.coconut_pfa.data.repository.FakeData
 import com.patil.coconut_pfa.navigation.Screen
 import com.patil.coconut_pfa.ui.components.AmountText
 import com.patil.coconut_pfa.ui.components.SectionHeader
 import com.patil.coconut_pfa.ui.theme.Coconut_PfaTheme
+import com.patil.coconut_pfa.ui.viewmodel.AccountDetailScreenUiState
+import com.patil.coconut_pfa.ui.viewmodel.AccountDetailViewModel
 import kotlin.math.abs
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -68,16 +70,13 @@ fun AccountDetailScreen(
     accountId: String,
     onNavigate: (Screen) -> Unit,
     modifier: Modifier = Modifier,
+    viewModel: AccountDetailViewModel? = null,
 ) {
-    val accountList = FakeData.accounts
-    val account = accountList.find { it.id == accountId } ?: accountList.first()
+    val uiState by viewModel?.uiState?.collectAsState() ?: remember { mutableStateOf(AccountDetailScreenUiState(isLoading = false)) }
+    val account = uiState.account
 
     var showReconcileDialog by remember { mutableStateOf(false) }
     var showUpdateValueDialog by remember { mutableStateOf(false) }
-
-    val accountTransactions = remember(accountId) {
-        FakeData.transactions.filter { it.accountId == accountId || it.targetAccountId == accountId }
-    }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -85,94 +84,134 @@ fun AccountDetailScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text(account.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
                         Text(
-                            text = account.type.displayName + (account.bankName?.let { " • $it" } ?: ""),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            text = account?.name ?: "Account Details",
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleMedium
                         )
+                        account?.let { acc ->
+                            Text(
+                                text = acc.type.displayName + (acc.bankName?.let { " • $it" } ?: ""),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 },
                 navigationIcon = {
                     IconButton(onClick = { onNavigate(Screen.Accounts) }) {
                         Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
                     }
+                },
+                actions = {
+                    account?.let { acc ->
+                        IconButton(onClick = { onNavigate(Screen.AddAccount(acc.id)) }) {
+                            Icon(Icons.Rounded.Edit, contentDescription = "Edit Account")
+                        }
+                        IconButton(onClick = { viewModel?.toggleArchived() }) {
+                            Icon(
+                                imageVector = Icons.Rounded.Archive,
+                                contentDescription = if (acc.archived) "Unarchive Account" else "Archive Account",
+                                tint = if (acc.archived) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                 }
             )
         }
     ) { innerPadding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // Balance Card & Reconcile Button
-            item(key = "balance_header") {
-                AccountBalanceHeaderCard(
-                    account = account,
-                    onReconcileClick = { showReconcileDialog = true }
-                )
+        if (account == null && uiState.isLoading) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("Loading account details...")
             }
-
-            // Type-Specific Panel
-            item(key = "type_specific_panel") {
-                TypeSpecificPanel(
-                    account = account,
-                    onUpdateValueClick = { showUpdateValueDialog = true }
-                )
+        } else if (account == null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("Account not found.")
             }
-
-            // Account Transactions Section
-            item(key = "transactions_header") {
-                SectionHeader(
-                    title = "Account Transactions",
-                    subtitle = "${accountTransactions.size} recorded transactions"
-                )
-            }
-
-            if (accountTransactions.isEmpty()) {
-                item(key = "no_tx") {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                    ) {
-                        Text(
-                            text = "No recent transactions found for this account.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(16.dp)
-                        )
-                    }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Balance Card & Reconcile Button
+                item(key = "balance_header") {
+                    AccountBalanceHeaderCard(
+                        account = account,
+                        onReconcileClick = { showReconcileDialog = true }
+                    )
                 }
-            } else {
-                items(accountTransactions, key = { it.id }) { tx ->
-                    AccountTransactionRow(tx = tx)
+
+                // Type-Specific Panel
+                item(key = "type_specific_panel") {
+                    TypeSpecificPanel(
+                        account = account,
+                        onUpdateValueClick = { showUpdateValueDialog = true }
+                    )
+                }
+
+                // Account Transactions Section
+                item(key = "transactions_header") {
+                    SectionHeader(
+                        title = "Account Transactions",
+                        subtitle = "${uiState.transactions.size} recorded transactions"
+                    )
+                }
+
+                if (uiState.transactions.isEmpty()) {
+                    item(key = "no_tx") {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                        ) {
+                            Text(
+                                text = "No recent transactions found for this account.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(16.dp)
+                            )
+                        }
+                    }
+                } else {
+                    items(uiState.transactions, key = { it.id }) { tx ->
+                        AccountTransactionEntityRow(tx = tx)
+                    }
                 }
             }
         }
     }
 
     // Reconcile Balance Dialog
-    if (showReconcileDialog) {
+    if (showReconcileDialog && account != null) {
         ReconcileDialog(
             currentBalanceInPaise = account.balanceInPaise,
             onDismiss = { showReconcileDialog = false },
             onConfirm = { newBalanceInPaise ->
-                FakeData.updateAccountBalance(account.id, newBalanceInPaise)
+                viewModel?.reconcileBalance(newBalanceInPaise)
                 showReconcileDialog = false
             }
         )
     }
 
     // Update Investment Value Dialog
-    if (showUpdateValueDialog) {
+    if (showUpdateValueDialog && account != null) {
         UpdateValueDialog(
             currentValueInPaise = account.currentValueInPaise,
             onDismiss = { showUpdateValueDialog = false },
             onConfirm = { newValueInPaise ->
-                FakeData.updateAccountBalance(account.id, newValueInPaise)
+                viewModel?.updateInvestmentValue(newValueInPaise)
                 showUpdateValueDialog = false
             }
         )
@@ -222,12 +261,6 @@ private fun AccountBalanceHeaderCard(
                     onClick = onReconcileClick,
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Tune,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
                     Text("Reconcile")
                 }
             }
@@ -526,7 +559,7 @@ private fun DetailTextItem(label: String, value: String) {
 }
 
 @Composable
-private fun AccountTransactionRow(tx: Transaction) {
+private fun AccountTransactionEntityRow(tx: TxnEntity) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
@@ -562,12 +595,12 @@ private fun AccountTransactionRow(tx: Transaction) {
 
                 Column {
                     Text(
-                        text = tx.payee.ifBlank { tx.category },
+                        text = tx.payee?.ifBlank { tx.type.name } ?: tx.type.name,
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold
                     )
                     Text(
-                        text = "${tx.category} • ${tx.type.name}",
+                        text = tx.note ?: tx.type.name,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -575,7 +608,7 @@ private fun AccountTransactionRow(tx: Transaction) {
             }
 
             AmountText(
-                amountInPaise = tx.amountInPaise,
+                amountInPaise = tx.amountPaise,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )

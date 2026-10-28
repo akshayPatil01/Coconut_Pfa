@@ -14,7 +14,7 @@ object MoneyFormatter {
      * Examples:
      * - 10000000L -> "₹1,00,000"
      * - 125050L -> "₹1,250.50"
-     * - -50000L -> "−₹500"
+     * - -50000L -> "-₹500"
      * - isPrivacyEnabled = true -> "₹••••••"
      *
      * @param amountInPaise The money amount in paise (1 Rupee = 100 paise).
@@ -45,7 +45,7 @@ object MoneyFormatter {
             ""
         }
 
-        val prefix = if (isNegative) "−" else ""
+        val prefix = if (isNegative) "-" else ""
         val symbolStr = if (showSymbol) "₹" else ""
 
         return "$prefix$symbolStr$formattedRupees$formattedPaise"

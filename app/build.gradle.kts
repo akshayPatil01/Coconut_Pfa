@@ -43,22 +43,7 @@ android {
     }
 }
 
-try {
-    val peClass = Class.forName("java.lang.ProcessEnvironment")
-    val envField = peClass.getDeclaredField("theEnvironment")
-    envField.isAccessible = true
-    @Suppress("UNCHECKED_CAST")
-    val env = envField.get(null) as MutableMap<String, String>
-    env.keys.filter { it.equals("CLASSPATH", ignoreCase = true) || it.equals("ANDROID_PREFS_ROOT", ignoreCase = true) }.toList().forEach { env.remove(it) }
 
-    val ciEnvField = peClass.getDeclaredField("theCaseInsensitiveEnvironment")
-    ciEnvField.isAccessible = true
-    @Suppress("UNCHECKED_CAST")
-    val ciEnv = ciEnvField.get(null) as MutableMap<String, String>
-    ciEnv.keys.filter { it.equals("CLASSPATH", ignoreCase = true) || it.equals("ANDROID_PREFS_ROOT", ignoreCase = true) }.toList().forEach { ciEnv.remove(it) }
-} catch (t: Throwable) {
-    println("Could not clear environment variables from ProcessEnvironment: ${t.message}")
-}
 
 
 
@@ -83,6 +68,7 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.biometric)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -92,6 +78,7 @@ dependencies {
     implementation(libs.androidx.navigation3.ui)
     implementation(libs.androidx.room.ktx)
     implementation(libs.androidx.room.runtime)
+    implementation(libs.sqlcipher.android)
     implementation(libs.coil.compose)
     implementation(libs.converter.moshi)
     implementation(libs.kotlinx.coroutines.android)
