@@ -34,6 +34,7 @@ import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.QrCodeScanner
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import com.patil.coconut_pfa.ui.components.GradientButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -742,18 +743,18 @@ fun AddTransactionScreen(
                 }
 
                 // "Save" Button with validation & DB call
-                Button(
+                GradientButton(
                     onClick = {
                         val amountDouble = rawAmountInput.toDoubleOrNull() ?: 0.0
                         val amountPaise = (amountDouble * 100).toLong()
 
                         if (amountPaise <= 0L) {
                             scope.launch { snackbarHostState.showSnackbar("Please enter a valid amount greater than 0") }
-                            return@Button
+                            return@GradientButton
                         }
                         if (fromAccount == null && !(isSplitEnabled && selectedTabItem == 0 && !paidByMe)) {
                             scope.launch { snackbarHostState.showSnackbar("Please select an account") }
-                            return@Button
+                            return@GradientButton
                         }
 
                         scope.launch {
@@ -824,10 +825,7 @@ fun AddTransactionScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(54.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary
-                    )
+                    shape = RoundedCornerShape(16.dp)
                 ) {
                     Text(
                         text = "Save Transaction",

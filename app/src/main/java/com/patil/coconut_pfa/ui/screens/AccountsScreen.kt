@@ -34,7 +34,6 @@ import androidx.compose.material.icons.rounded.Money
 import androidx.compose.material.icons.rounded.Payments
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
@@ -49,6 +48,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -59,8 +60,10 @@ import com.patil.coconut_pfa.data.model.Account
 import com.patil.coconut_pfa.data.model.AccountType
 import com.patil.coconut_pfa.navigation.Screen
 import com.patil.coconut_pfa.ui.components.AmountText
+import com.patil.coconut_pfa.ui.components.GradientExtendedFloatingActionButton
 import com.patil.coconut_pfa.ui.theme.Coconut_PfaTheme
 import com.patil.coconut_pfa.ui.theme.ExpenseRed
+import com.patil.coconut_pfa.ui.theme.GradientOrangeCoralStart
 import com.patil.coconut_pfa.ui.theme.IncomeGreen
 import com.patil.coconut_pfa.ui.theme.PastelCoral
 import com.patil.coconut_pfa.ui.theme.PastelEmerald
@@ -96,12 +99,10 @@ fun AccountsScreen(
     Scaffold(
         modifier = modifier.fillMaxSize(),
         floatingActionButton = {
-            ExtendedFloatingActionButton(
+            GradientExtendedFloatingActionButton(
                 onClick = { onNavigate(Screen.AddAccount()) },
                 icon = { Icon(Icons.Rounded.Add, contentDescription = "Add Account") },
                 text = { Text("Add Account") },
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
                 shape = RoundedCornerShape(16.dp)
             )
         }
@@ -238,134 +239,162 @@ private fun NetWorthDetailCard(
     val badgeBg = if (isPositiveTrend) Color(0xFF12392B) else Color(0xFF3B181A)
     val badgeFg = if (isPositiveTrend) IncomeGreen else ExpenseRed
 
-    Card(
-        modifier = modifier.fillMaxWidth(),
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .shadow(
+                elevation = 8.dp,
+                shape = RoundedCornerShape(28.dp),
+                ambientColor = Color.Black.copy(alpha = 0.5f)
+            ),
         shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.cardColors(containerColor = cardBgColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(22.dp)
-        ) {
-            // Header Row: Total Net Worth label & Trend pill badge
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Total Net Worth",
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium,
-                    color = labelTextColor
+        color = cardBgColor,
+        border = BorderStroke(
+            width = 1.dp,
+            brush = Brush.horizontalGradient(
+                colors = listOf(
+                    Color(0xFF262A30),
+                    GradientOrangeCoralStart.copy(alpha = 0.35f),
+                    Color(0xFF262A30)
                 )
-                Surface(
-                    shape = RoundedCornerShape(20.dp),
-                    color = badgeBg
-                ) {
-                    Text(
-                        text = trendText,
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = badgeFg,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Main Net Worth Value
-            AmountText(
-                amountInPaise = netWorth,
-                style = MaterialTheme.typography.displaySmall,
-                fontWeight = FontWeight.Bold,
-                color = primaryTextColor
             )
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // Inner Assets vs Liabilities Card Container
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
-                color = innerCardBgColor
+        )
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            Color(0xFF1B1E22),
+                            cardBgColor
+                        )
+                    )
+                )
+        ) {
+            Column(
+                modifier = Modifier.padding(22.dp)
             ) {
+                // Header Row: Total Net Worth label & Trend pill badge
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 16.dp),
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Assets Column
-                    Column(
-                        modifier = Modifier.weight(1f)
+                    Text(
+                        text = "Total Net Worth",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Medium,
+                        color = labelTextColor
+                    )
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = badgeBg
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(8.dp)
-                                    .background(IncomeGreen, CircleShape)
-                            )
-                            Text(
-                                text = "Assets",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Normal,
-                                color = labelTextColor
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(6.dp))
-                        AmountText(
-                            amountInPaise = assets,
-                            style = MaterialTheme.typography.titleLarge.copy(fontSize = 21.sp),
-                            fontWeight = FontWeight.Bold,
-                            color = primaryTextColor,
-                            showDecimals = false
+                        Text(
+                            text = trendText,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = badgeFg,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                         )
                     }
+                }
 
-                    // Vertical Separator Line
-                    Box(
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Main Net Worth Value
+                AmountText(
+                    amountInPaise = netWorth,
+                    style = MaterialTheme.typography.displaySmall,
+                    fontWeight = FontWeight.Bold,
+                    color = primaryTextColor
+                )
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // Inner Assets vs Liabilities Card Container
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    color = innerCardBgColor
+                ) {
+                    Row(
                         modifier = Modifier
-                            .height(36.dp)
-                            .width(1.dp)
-                            .background(labelTextColor.copy(alpha = 0.2f))
-                    )
-
-                    Spacer(modifier = Modifier.width(16.dp))
-
-                    // Liabilities Column
-                    Column(
-                        modifier = Modifier.weight(1f)
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        // Assets Column
+                        Column(
+                            modifier = Modifier.weight(1f)
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(8.dp)
-                                    .background(ExpenseRed, CircleShape)
-                            )
-                            Text(
-                                text = "Liabilities",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Normal,
-                                color = labelTextColor
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .background(IncomeGreen, CircleShape)
+                                )
+                                Text(
+                                    text = "Assets",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Normal,
+                                    color = labelTextColor
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            AmountText(
+                                amountInPaise = assets,
+                                style = MaterialTheme.typography.titleLarge.copy(fontSize = 21.sp),
+                                fontWeight = FontWeight.Bold,
+                                color = primaryTextColor,
+                                showDecimals = false
                             )
                         }
-                        Spacer(modifier = Modifier.height(6.dp))
-                        AmountText(
-                            amountInPaise = liabilities,
-                            style = MaterialTheme.typography.titleLarge.copy(fontSize = 21.sp),
-                            fontWeight = FontWeight.Bold,
-                            color = primaryTextColor,
-                            showDecimals = false
+
+                        // Vertical Separator Line
+                        Box(
+                            modifier = Modifier
+                                .height(36.dp)
+                                .width(1.dp)
+                                .background(labelTextColor.copy(alpha = 0.2f))
                         )
+
+                        Spacer(modifier = Modifier.width(16.dp))
+
+                        // Liabilities Column
+                        Column(
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .background(ExpenseRed, CircleShape)
+                                )
+                                Text(
+                                    text = "Liabilities",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Normal,
+                                    color = labelTextColor
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            AmountText(
+                                amountInPaise = liabilities,
+                                style = MaterialTheme.typography.titleLarge.copy(fontSize = 21.sp),
+                                fontWeight = FontWeight.Bold,
+                                color = primaryTextColor,
+                                showDecimals = false
+                            )
+                        }
                     }
                 }
             }

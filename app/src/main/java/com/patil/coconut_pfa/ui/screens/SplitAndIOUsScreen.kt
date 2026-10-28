@@ -37,6 +37,7 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
+import com.patil.coconut_pfa.ui.components.GradientFloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -131,11 +132,8 @@ fun SplitAndIOUsScreen(
                         contentDescription = "Add Person"
                     )
                 }
-                FloatingActionButton(
-                    onClick = { onNavigate(Screen.AddTransaction()) },
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    shape = CircleShape
+                GradientFloatingActionButton(
+                    onClick = { onNavigate(Screen.AddTransaction()) }
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.Add,

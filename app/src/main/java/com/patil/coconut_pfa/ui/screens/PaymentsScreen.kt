@@ -42,7 +42,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import com.patil.coconut_pfa.ui.components.CoconutDropdownMenu
 import com.patil.coconut_pfa.ui.components.CoconutDropdownMenuItem
-import androidx.compose.material3.ExtendedFloatingActionButton
+import com.patil.coconut_pfa.ui.components.GradientExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -101,12 +101,10 @@ fun PaymentsScreen(
     Scaffold(
         modifier = modifier.fillMaxSize(),
         floatingActionButton = {
-            ExtendedFloatingActionButton(
+            GradientExtendedFloatingActionButton(
                 onClick = { onNavigate(Screen.AddBill()) },
                 icon = { Icon(Icons.Rounded.Add, contentDescription = "Add Bill") },
-                text = { Text("Add Bill") },
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary
+                text = { Text("Add Bill") }
             )
         }
     ) { innerPadding ->

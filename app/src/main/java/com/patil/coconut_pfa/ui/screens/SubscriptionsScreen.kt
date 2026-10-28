@@ -26,7 +26,7 @@ import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
+import com.patil.coconut_pfa.ui.components.GradientFloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -69,11 +69,8 @@ fun SubscriptionsScreen(
     Scaffold(
         modifier = modifier.fillMaxSize(),
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = { onNavigate(Screen.AddBill(initialKind = "SUBSCRIPTION")) },
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-                shape = CircleShape
+            GradientFloatingActionButton(
+                onClick = { onNavigate(Screen.AddBill(initialKind = "SUBSCRIPTION")) }
             ) {
                 Icon(
                     imageVector = Icons.Rounded.Add,

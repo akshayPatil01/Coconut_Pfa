@@ -35,6 +35,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import com.patil.coconut_pfa.ui.components.GradientButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -453,7 +454,7 @@ fun AddAccountScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             // Save / Update Action Button
-            Button(
+            GradientButton(
                 onClick = {
                     coroutineScope.launch {
                         val targetAccountId = accountId ?: UUID.randomUUID().toString()

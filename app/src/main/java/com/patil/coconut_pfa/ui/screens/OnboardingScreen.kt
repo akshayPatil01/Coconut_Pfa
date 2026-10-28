@@ -33,6 +33,7 @@ import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.Sms
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import com.patil.coconut_pfa.ui.components.GradientButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
@@ -207,7 +208,7 @@ fun OnboardingScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 if (step < 8) {
-                    Button(
+                    GradientButton(
                         onClick = { step++ },
                         enabled = step != 2 || pin.length == 4,
                         modifier = Modifier.fillMaxWidth(),
@@ -218,16 +219,13 @@ fun OnboardingScreen(
                         Icon(imageVector = Icons.Rounded.ChevronRight, contentDescription = null)
                     }
                 } else {
-                    Button(
+                    GradientButton(
                         onClick = {
                             onCompleteOnboarding(pin, enableBiometric, salaryDay, addBank, addCard, addCash, addLoan, addFd)
                             onNavigate(Screen.Home)
                         },
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary
-                        )
+                        shape = RoundedCornerShape(14.dp)
                     ) {
                         Icon(imageVector = Icons.Rounded.CheckCircle, contentDescription = null)
                         Spacer(modifier = Modifier.width(6.dp))
