@@ -15,7 +15,12 @@ sealed interface Screen {
     }
 
     @Serializable
-    data object Transactions : Screen {
+    data class Transactions(
+        val initialCategory: String? = null,
+        val initialCycle: String? = null,
+        val initialStartDateMillis: Long? = null,
+        val initialEndDateMillis: Long? = null
+    ) : Screen {
         override val title: String = "Transactions"
     }
 

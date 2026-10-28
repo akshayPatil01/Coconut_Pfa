@@ -53,7 +53,11 @@ class TransactionsViewModel(
     private val transactionRepository: TransactionRepository,
     private val accountRepository: AccountRepository,
     private val categoryRepository: CategoryRepository,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    initialCategory: String? = null,
+    initialCycle: String? = null,
+    val initialStartDateMillis: Long? = null,
+    val initialEndDateMillis: Long? = null
 ) : ViewModel() {
 
     private val _searchQuery = MutableStateFlow("")
@@ -62,13 +66,13 @@ class TransactionsViewModel(
     private val _selectedType = MutableStateFlow<DbTxnType?>(null)
     val selectedType = _selectedType.asStateFlow()
 
-    private val _selectedCategory = MutableStateFlow<String?>(null)
+    private val _selectedCategory = MutableStateFlow<String?>(initialCategory)
     val selectedCategory = _selectedCategory.asStateFlow()
 
     private val _selectedAccount = MutableStateFlow<String?>(null)
     val selectedAccount = _selectedAccount.asStateFlow()
 
-    private val _selectedCycle = MutableStateFlow("Current Cycle")
+    private val _selectedCycle = MutableStateFlow(initialCycle ?: "Current Cycle")
     val selectedCycle = _selectedCycle.asStateFlow()
 
     private val _selectedSource = MutableStateFlow<DbTxnSource?>(null)
@@ -113,8 +117,12 @@ class TransactionsViewModel(
         val filteredTxns = txns.filter { tx ->
             val txDate = KolkataDateTimeUtils.epochMillisToLocalDate(tx.occurredAt)
 
-            // Date cycle filter
-            if (cycleRange != null && txDate !in cycleRange) {
+            // Date range / cycle filter
+            if (initialStartDateMillis != null && initialEndDateMillis != null) {
+                if (tx.occurredAt !in initialStartDateMillis..initialEndDateMillis) {
+                    return@filter false
+                }
+            } else if (cycleRange != null && txDate !in cycleRange) {
                 return@filter false
             }
 
@@ -254,7 +262,11 @@ class TransactionsViewModel(
         private val transactionRepository: TransactionRepository,
         private val accountRepository: AccountRepository,
         private val categoryRepository: CategoryRepository,
-        private val settingsRepository: SettingsRepository
+        private val settingsRepository: SettingsRepository,
+        private val initialCategory: String? = null,
+        private val initialCycle: String? = null,
+        private val initialStartDateMillis: Long? = null,
+        private val initialEndDateMillis: Long? = null
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -262,7 +274,11 @@ class TransactionsViewModel(
                 transactionRepository,
                 accountRepository,
                 categoryRepository,
-                settingsRepository
+                settingsRepository,
+                initialCategory,
+                initialCycle,
+                initialStartDateMillis,
+                initialEndDateMillis
             ) as T
         }
     }

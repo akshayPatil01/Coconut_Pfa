@@ -815,7 +815,7 @@ fun AddTransactionScreen(
 
                             if (success) {
                                 snackbarHostState.showSnackbar("Transaction saved successfully!")
-                                onNavigate(Screen.Transactions)
+                                onNavigate(Screen.Transactions())
                             } else {
                                 snackbarHostState.showSnackbar("Failed to save transaction. Check inputs.")
                             }

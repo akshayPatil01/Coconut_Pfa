@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.BarChart
 import androidx.compose.material.icons.rounded.CalendarViewMonth
 import androidx.compose.material.icons.rounded.PieChart
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenuItem
@@ -39,6 +40,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -51,33 +53,36 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.patil.coconut_pfa.data.model.CategorySpendItem
 import com.patil.coconut_pfa.data.model.CycleSpendItem
 import com.patil.coconut_pfa.data.model.DailySpendHeatmapItem
-import com.patil.coconut_pfa.data.repository.FakeData
 import com.patil.coconut_pfa.navigation.Screen
 import com.patil.coconut_pfa.ui.components.AmountText
 import com.patil.coconut_pfa.ui.theme.Coconut_PfaTheme
+import com.patil.coconut_pfa.ui.viewmodel.ReportsUiState
+import com.patil.coconut_pfa.ui.viewmodel.ReportsViewModel
 import com.patil.coconut_pfa.util.MoneyFormatter
+import com.patil.coconut_pfa.util.PrivacyManager
+import java.time.ZoneId
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReportsScreen(
     onNavigate: (Screen) -> Unit = {},
     modifier: Modifier = Modifier,
+    viewModel: ReportsViewModel? = null
 ) {
-    var selectedCycle by remember { mutableStateOf(FakeData.reportCycles.first()) }
+    val uiState by viewModel?.uiState?.collectAsState() ?: remember { mutableStateOf(ReportsUiState()) }
+    val isPrivacyEnabled by PrivacyManager.isPrivacyEnabled.collectAsState()
+
     var expandedCycleMenu by remember { mutableStateOf(false) }
 
-    var showTwelveCycles by remember { mutableStateOf(false) }
-    var selectedHeatmapDay by remember { mutableStateOf<DailySpendHeatmapItem?>(null) }
-
-    val categoryList = FakeData.categorySpendData
-    val cycleHistory = if (showTwelveCycles) FakeData.cycleSpendHistory12 else FakeData.cycleSpendHistory6
-    val heatmapData = FakeData.dailySpendHeatmap
+    val selectedCycleLabel = if (isPrivacyEnabled) "••••" else (uiState.selectedCycle?.label ?: "Current Cycle")
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -91,7 +96,7 @@ fun ReportsScreen(
                 onExpandedChange = { expandedCycleMenu = !expandedCycleMenu }
             ) {
                 OutlinedTextField(
-                    value = selectedCycle,
+                    value = selectedCycleLabel,
                     onValueChange = {},
                     readOnly = true,
                     label = { Text("Selected Salary Cycle") },
@@ -106,11 +111,11 @@ fun ReportsScreen(
                     expanded = expandedCycleMenu,
                     onDismissRequest = { expandedCycleMenu = false }
                 ) {
-                    FakeData.reportCycles.forEach { cycle ->
+                    uiState.availableCycles.forEach { cycleOpt ->
                         DropdownMenuItem(
-                            text = { Text(cycle) },
+                            text = { Text(if (isPrivacyEnabled) "••••" else cycleOpt.label) },
                             onClick = {
-                                selectedCycle = cycle
+                                viewModel?.selectCycle(cycleOpt)
                                 expandedCycleMenu = false
                             }
                         )
@@ -121,41 +126,74 @@ fun ReportsScreen(
 
         // Section 1: Category Donut Chart
         item {
-            CategoryDonutChartCard(categories = categoryList)
+            CategoryDonutChartCard(
+                categories = uiState.categorySpendItems,
+                isPrivacyEnabled = isPrivacyEnabled,
+                onCategoryClick = { categoryItem ->
+                    onNavigate(
+                        Screen.Transactions(
+                            initialCategory = categoryItem.categoryName,
+                            initialCycle = uiState.selectedCycle?.label
+                        )
+                    )
+                }
+            )
         }
 
         // Section 2: Multi-Cycle Bar Chart (6 vs 12 Toggle)
         item {
             CycleBarChartCard(
-                history = cycleHistory,
-                showTwelveCycles = showTwelveCycles,
-                onToggle12Cycles = { showTwelveCycles = it }
+                history = if (uiState.showTwelveCycles) uiState.cycleSpendHistory12 else uiState.cycleSpendHistory6,
+                showTwelveCycles = uiState.showTwelveCycles,
+                onToggle12Cycles = { viewModel?.toggle12Cycles(it) },
+                isPrivacyEnabled = isPrivacyEnabled
             )
         }
 
         // Section 3: Daily Spend Calendar Heatmap
         item {
             DailySpendHeatmapCard(
-                heatmapItems = heatmapData,
-                selectedDay = selectedHeatmapDay,
-                onDayClick = { selectedHeatmapDay = it }
+                heatmapItems = uiState.dailyHeatmapItems,
+                selectedDay = uiState.selectedHeatmapDay,
+                onDayClick = { viewModel?.selectHeatmapDay(it) },
+                onViewDayTransactions = { dayItem ->
+                    val zoneId = ZoneId.of("Asia/Kolkata")
+                    val date = uiState.selectedCycle?.period?.startDate?.withDayOfMonth(dayItem.dayOfMonth) ?: java.time.LocalDate.now()
+                    val startMillis = date.atStartOfDay(zoneId).toInstant().toEpochMilli()
+                    val endMillis = date.plusDays(1).atStartOfDay(zoneId).toInstant().toEpochMilli() - 1
+                    onNavigate(
+                        Screen.Transactions(
+                            initialStartDateMillis = startMillis,
+                            initialEndDateMillis = endMillis,
+                            initialCycle = uiState.selectedCycle?.label
+                        )
+                    )
+                },
+                isPrivacyEnabled = isPrivacyEnabled
             )
         }
     }
 }
 
 /**
- * Category Donut Chart composable with Canvas rendering and Legend.
+ * Category Donut Chart composable with Canvas rendering, Legend, and tap-to-filter.
  */
 @Composable
 private fun CategoryDonutChartCard(
     categories: List<CategorySpendItem>,
+    isPrivacyEnabled: Boolean,
+    onCategoryClick: (CategorySpendItem) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val totalSpend = categories.sumOf { it.amountInPaise }
+    val categoriesDesc = categories.joinToString { "${if (isPrivacyEnabled) "Protected" else it.categoryName}: ${it.percentage}%" }
 
     Card(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .semantics {
+                contentDescription = "Category spending breakdown chart. Total spend ${MoneyFormatter.format(totalSpend, isPrivacyEnabled)}. Categories: $categoriesDesc"
+            },
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -194,7 +232,7 @@ private fun CategoryDonutChartCard(
                         drawArc(
                             color = item.color,
                             startAngle = startAngle,
-                            sweepAngle = sweepAngle - 2f, // gap
+                            sweepAngle = sweepAngle - 2f,
                             useCenter = false,
                             style = Stroke(width = strokeWidth)
                         )
@@ -221,48 +259,59 @@ private fun CategoryDonutChartCard(
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Interactive Legend
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                categories.forEach { item ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(12.dp)
-                                    .clip(CircleShape)
-                                    .background(item.color)
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text(
-                                text = item.categoryName,
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Surface(
-                                shape = CircleShape,
-                                color = item.color.copy(alpha = 0.15f)
-                            ) {
+            // Interactive Legend (Tap category to filter transactions)
+            if (categories.isEmpty()) {
+                Text(
+                    text = "No expenses recorded for this cycle.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    categories.forEach { item ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onCategoryClick(item) }
+                                .padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(12.dp)
+                                        .clip(CircleShape)
+                                        .background(item.color)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
                                 Text(
-                                    text = "${item.percentage}%",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = item.color,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                    text = if (isPrivacyEnabled) "••••" else item.categoryName,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold
                                 )
                             }
-                            Spacer(modifier = Modifier.width(8.dp))
-                            AmountText(
-                                amountInPaise = item.amountInPaise,
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold
-                            )
+
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = item.color.copy(alpha = 0.15f)
+                                ) {
+                                    Text(
+                                        text = "${item.percentage}%",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = item.color,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                AmountText(
+                                    amountInPaise = item.amountInPaise,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
                     }
                 }
@@ -272,20 +321,25 @@ private fun CategoryDonutChartCard(
 }
 
 /**
- * Multi-Cycle Bar Chart composable with Canvas rendering and 6/12 cycle toggle.
+ * Multi-Cycle Bar Chart composable with Canvas rendering, 6/12 cycle toggle, and TalkBack description.
  */
 @Composable
 private fun CycleBarChartCard(
     history: List<CycleSpendItem>,
     showTwelveCycles: Boolean,
     onToggle12Cycles: (Boolean) -> Unit,
+    isPrivacyEnabled: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val barColorExpense = MaterialTheme.colorScheme.error
     val barColorIncome = Color(0xFF2E7D32)
 
     Card(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .semantics {
+                contentDescription = "Income vs expense history bar chart for ${history.size} cycles. Showing income and expense trends."
+            },
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -327,7 +381,6 @@ private fun CycleBarChartCard(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Canvas Bar Chart
             val maxAmount = history.maxOfOrNull { maxOf(it.incomeInPaise, it.expenseInPaise) } ?: 10000000L
 
             Canvas(
@@ -340,7 +393,7 @@ private fun CycleBarChartCard(
                 val bottomPadding = 40f
                 val chartHeight = height - bottomPadding
 
-                val itemCount = history.size
+                val itemCount = if (history.isNotEmpty()) history.size else 1
                 val groupWidth = width / itemCount
 
                 history.forEachIndexed { index, item ->
@@ -353,7 +406,6 @@ private fun CycleBarChartCard(
                     val incomeH = incomeRatio * chartHeight
                     val expenseH = expenseRatio * chartHeight
 
-                    // Draw Income Bar (Green)
                     drawRoundRect(
                         color = barColorIncome,
                         topLeft = Offset(xCenter - barW - 2f, chartHeight - incomeH),
@@ -361,7 +413,6 @@ private fun CycleBarChartCard(
                         cornerRadius = CornerRadius(4f, 4f)
                     )
 
-                    // Draw Expense Bar (Red)
                     drawRoundRect(
                         color = barColorExpense,
                         topLeft = Offset(xCenter + 2f, chartHeight - expenseH),
@@ -373,14 +424,13 @@ private fun CycleBarChartCard(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Labels row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceAround
             ) {
                 history.forEach { item ->
                     Text(
-                        text = item.cycleLabel.take(3),
+                        text = if (isPrivacyEnabled) "••" else item.cycleLabel.take(4),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -389,7 +439,6 @@ private fun CycleBarChartCard(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Legend
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.Center,
@@ -410,7 +459,7 @@ private fun CycleBarChartCard(
 }
 
 /**
- * Calendar Heatmap composable displaying 30-31 daily spending squares with color intensity.
+ * Calendar Heatmap composable displaying daily spending squares, tap to view transactions.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -418,10 +467,16 @@ private fun DailySpendHeatmapCard(
     heatmapItems: List<DailySpendHeatmapItem>,
     selectedDay: DailySpendHeatmapItem?,
     onDayClick: (DailySpendHeatmapItem) -> Unit,
+    onViewDayTransactions: (DailySpendHeatmapItem) -> Unit,
+    isPrivacyEnabled: Boolean,
     modifier: Modifier = Modifier,
 ) {
     Card(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .semantics {
+                contentDescription = "Daily spending calendar heatmap showing spending intensity across ${heatmapItems.size} days of the cycle."
+            },
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -484,25 +539,39 @@ private fun DailySpendHeatmapCard(
                     color = MaterialTheme.colorScheme.primaryContainer,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Row(
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text(
-                            text = "Spend on ${item.dateLabel}:",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                        AmountText(
-                            amountInPaise = item.amountInPaise,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Spend on ${if (isPrivacyEnabled) "••••" else item.dateLabel}:",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                            AmountText(
+                                amountInPaise = item.amountInPaise,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+
+                        Button(
+                            onClick = { onViewDayTransactions(item) },
+                            modifier = Modifier.align(Alignment.End)
+                        ) {
+                            Text("View Transactions")
+                        }
                     }
                 }
             }

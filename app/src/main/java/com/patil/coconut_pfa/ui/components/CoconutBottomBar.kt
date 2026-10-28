@@ -74,8 +74,8 @@ fun CoconutBottomBar(
             BottomNavItem(
                 icon = Icons.AutoMirrored.Rounded.ReceiptLong,
                 label = "Transactions",
-                selected = currentDestination == Screen.Transactions,
-                onClick = { onNavigateToTab(Screen.Transactions) },
+                selected = currentDestination is Screen.Transactions,
+                onClick = { onNavigateToTab(Screen.Transactions()) },
                 modifier = Modifier.weight(1f)
             )
 

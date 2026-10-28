@@ -9,7 +9,7 @@ class ScreenTest {
     @Test
     fun screenTitles_areCorrect() {
         assertEquals("Coconut PFA", Screen.Home.title)
-        assertEquals("Transactions", Screen.Transactions.title)
+        assertEquals("Transactions", Screen.Transactions().title)
         assertEquals("Payments", Screen.Payments.title)
         assertEquals("Accounts", Screen.Accounts.title)
         assertEquals("Add Transaction", Screen.AddTransaction().title)

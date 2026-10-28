@@ -40,6 +40,7 @@ import com.patil.coconut_pfa.ui.viewmodel.AddBillViewModel
 import com.patil.coconut_pfa.ui.viewmodel.GoalsViewModel
 import com.patil.coconut_pfa.ui.viewmodel.HomeViewModel
 import com.patil.coconut_pfa.ui.viewmodel.PaymentsViewModel
+import com.patil.coconut_pfa.ui.viewmodel.ReportsViewModel
 import com.patil.coconut_pfa.ui.viewmodel.SplitAndIOUsViewModel
 import com.patil.coconut_pfa.ui.viewmodel.SubscriptionsViewModel
 import com.patil.coconut_pfa.navigation.Screen
@@ -337,13 +338,18 @@ fun CoconutApp(
                             modifier = screenModifier
                         )
                     }
-                    Screen.Transactions -> {
+                    is Screen.Transactions -> {
                         val transactionsViewModel: TransactionsViewModel = viewModel(
+                            key = "txn_${dest.initialCategory}_${dest.initialCycle}_${dest.initialStartDateMillis}",
                             factory = TransactionsViewModel.Factory(
                                 transactionRepository = transactionRepository,
                                 accountRepository = accountRepository,
                                 categoryRepository = categoryRepository,
-                                settingsRepository = settingsRepository
+                                settingsRepository = settingsRepository,
+                                initialCategory = dest.initialCategory,
+                                initialCycle = dest.initialCycle,
+                                initialStartDateMillis = dest.initialStartDateMillis,
+                                initialEndDateMillis = dest.initialEndDateMillis
                             )
                         )
                         TransactionsScreen(
@@ -432,7 +438,20 @@ fun CoconutApp(
                         )
                         SplitAndIOUsScreen(onNavigate = navigateTo, modifier = screenModifier, viewModel = splitAndIOUsViewModel)
                     }
-                    Screen.Reports -> ReportsScreen(onNavigate = navigateTo, modifier = screenModifier)
+                    Screen.Reports -> {
+                        val reportsViewModel: ReportsViewModel = viewModel(
+                            factory = ReportsViewModel.Factory(
+                                transactionRepository = transactionRepository,
+                                categoryRepository = categoryRepository,
+                                settingsRepository = settingsRepository
+                            )
+                        )
+                        ReportsScreen(
+                            onNavigate = navigateTo,
+                            viewModel = reportsViewModel,
+                            modifier = screenModifier
+                        )
+                    }
                     Screen.Settings -> SettingsScreen(
                         onNavigate = navigateTo,
                         userSettings = userSettings,
