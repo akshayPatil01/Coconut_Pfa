@@ -817,9 +817,6 @@ fun AddTransactionScreen(
                             }
 
                             if (success) {
-                                val accName = fromAccount?.name ?: "Account"
-                                val formattedAmt = MoneyFormatter.format(amountPaise)
-                                snackbarHostState.showSnackbar("Transaction Saved\n$accName · $formattedAmt")
                                 onNavigate(Screen.Transactions())
                             } else {
                                 snackbarHostState.showSnackbar("Failed to save transaction. Check inputs.")

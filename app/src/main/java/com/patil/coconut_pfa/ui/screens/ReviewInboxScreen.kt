@@ -1,5 +1,6 @@
 package com.patil.coconut_pfa.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -11,13 +12,16 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.AccountBalance
@@ -25,10 +29,12 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.CreditCard
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.HelpOutline
 import androidx.compose.material.icons.rounded.Inbox
 import androidx.compose.material.icons.rounded.Link
+import androidx.compose.material.icons.rounded.Payments
 import androidx.compose.material.icons.rounded.Sms
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -37,6 +43,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
@@ -61,6 +68,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
+import com.patil.coconut_pfa.data.local.entity.DbAccountType
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -101,31 +110,25 @@ fun ReviewInboxScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            // Header Row
+            // Sub-header Row (Status & Action)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { onNavigate(Screen.Home) }) {
-                        Icon(imageVector = Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
-                    }
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Column {
-                        Text(
-                            text = "SMS Review Inbox",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "${uiState.pendingSmsList.size} unread • Real-time SMS Detection",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant
+                ) {
+                    Text(
+                        text = "${uiState.pendingSmsList.size} Pending SMS",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                    )
                 }
 
                 if (uiState.pendingSmsList.any { it.matchedAccountId != null && it.suggestedCategoryId != null }) {
@@ -232,8 +235,8 @@ fun ReviewInboxScreen(
             initialAccount = defaultAcc,
             initialCategory = defaultCat,
             onDismiss = { selectedSmsForEdit = null },
-            onSave = { accId, catId, payee ->
-                viewModel.confirmSms(sms, accId, catId, payee)
+            onSave = { accId, catId, payee, amountPaise ->
+                viewModel.confirmSms(sms, accId, catId, payee, amountPaise)
                 selectedSmsForEdit = null
                 scope.launch { snackbarHostState.showSnackbar("Transaction confirmed & updated") }
             }
@@ -280,6 +283,7 @@ private fun SmsReviewItemCard(
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
@@ -543,6 +547,24 @@ private fun UnparsedSmsCard(
     }
 }
 
+private enum class AccountTypeFilter(val label: String) {
+    ALL("All"),
+    BANK("Bank"),
+    CREDIT_CARD("Credit Card"),
+    CASH_WALLET("Cash / Wallet"),
+    OTHER("Loans & Other")
+}
+
+private fun List<AccountEntity>.filterByGroup(filter: AccountTypeFilter): List<AccountEntity> {
+    return when (filter) {
+        AccountTypeFilter.ALL -> this
+        AccountTypeFilter.BANK -> filter { it.type == DbAccountType.BANK }
+        AccountTypeFilter.CREDIT_CARD -> filter { it.type == DbAccountType.CREDIT_CARD }
+        AccountTypeFilter.CASH_WALLET -> filter { it.type == DbAccountType.CASH || it.type == DbAccountType.WALLET }
+        AccountTypeFilter.OTHER -> filter { it.type == DbAccountType.LOAN || it.type == DbAccountType.INVESTMENT || it.type == DbAccountType.FD }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun EditSmsTransactionDialog(
@@ -552,29 +574,59 @@ private fun EditSmsTransactionDialog(
     initialAccount: AccountEntity?,
     initialCategory: CategoryEntity?,
     onDismiss: () -> Unit,
-    onSave: (accountId: String, categoryId: String, payee: String) -> Unit,
+    onSave: (accountId: String, categoryId: String, payee: String, amountPaise: Long) -> Unit,
 ) {
+    var selectedAccountFilter by remember { mutableStateOf(AccountTypeFilter.ALL) }
+    val filteredAccounts = remember(accounts, selectedAccountFilter) {
+        accounts.filterByGroup(selectedAccountFilter)
+    }
+
     var selectedAccount by remember { mutableStateOf(initialAccount ?: accounts.firstOrNull()) }
     var selectedCategory by remember { mutableStateOf(initialCategory ?: categories.firstOrNull()) }
     var payee by remember { mutableStateOf(item.merchant ?: "Merchant") }
+    var amountText by remember {
+        mutableStateOf((item.amountPaise ?: 0L).let { if (it > 0) String.format(Locale.US, "%.2f", it / 100.0) else "" })
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Edit Detected Transaction", fontWeight = FontWeight.Bold) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    text = "Amount: ${MoneyFormatter.format(item.amountPaise ?: 0L)}",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                // Amount Field
+                OutlinedTextField(
+                    value = amountText,
+                    onValueChange = { amountText = it },
+                    label = { Text("Amount (₹)") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.fillMaxWidth()
                 )
+
+                // Account Filter Chips
+                Text("Account Type:", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(AccountTypeFilter.entries.toTypedArray()) { filter ->
+                        FilterChip(
+                            selected = selectedAccountFilter == filter,
+                            onClick = {
+                                selectedAccountFilter = filter
+                                val newFiltered = accounts.filterByGroup(filter)
+                                if (selectedAccount !in newFiltered && newFiltered.isNotEmpty()) {
+                                    selectedAccount = newFiltered.first()
+                                }
+                            },
+                            label = { Text(filter.label, style = MaterialTheme.typography.labelSmall) }
+                        )
+                    }
+                }
 
                 // Account Dropdown
                 CoconutExposedDropdownMenu(
                     value = selectedAccount?.name ?: "Select Account",
-                    options = accounts,
+                    options = if (filteredAccounts.isNotEmpty()) filteredAccounts else accounts,
                     onOptionSelected = { selectedAccount = it },
-                    optionToString = { it.name },
+                    optionToString = { "${it.name} (${it.type.name.replace("_", " ")})" },
                     label = "Account",
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -601,11 +653,13 @@ private fun EditSmsTransactionDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    if (selectedAccount != null && selectedCategory != null) {
-                        onSave(selectedAccount!!.id, selectedCategory!!.id, payee)
+                    val doubleAmt = amountText.toDoubleOrNull() ?: 0.0
+                    val parsedAmountPaise = (doubleAmt * 100).toLong()
+                    if (selectedAccount != null && selectedCategory != null && parsedAmountPaise > 0) {
+                        onSave(selectedAccount!!.id, selectedCategory!!.id, payee, parsedAmountPaise)
                     }
                 },
-                enabled = selectedAccount != null && selectedCategory != null
+                enabled = selectedAccount != null && selectedCategory != null && (amountText.toDoubleOrNull() ?: 0.0) > 0
             ) {
                 Text("Confirm & Save")
             }
@@ -622,36 +676,91 @@ private fun AccountSelectionDialog(
     onDismiss: () -> Unit,
     onAccountSelected: (AccountEntity) -> Unit
 ) {
+    var selectedFilter by remember { mutableStateOf(AccountTypeFilter.ALL) }
+    val filteredAccounts = remember(accounts, selectedFilter) {
+        accounts.filterByGroup(selectedFilter)
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Select Bank Account", fontWeight = FontWeight.Bold) },
         text = {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(accounts) { acc ->
-                    Card(
+            Column {
+                // Type Filter Chips Row
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp)
+                ) {
+                    items(AccountTypeFilter.entries.toTypedArray()) { filter ->
+                        FilterChip(
+                            selected = selectedFilter == filter,
+                            onClick = { selectedFilter = filter },
+                            label = { Text(filter.label, style = MaterialTheme.typography.labelSmall) }
+                        )
+                    }
+                }
+
+                if (filteredAccounts.isEmpty()) {
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { onAccountSelected(acc) },
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                            .padding(vertical = 24.dp),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(14.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(imageVector = Icons.Rounded.AccountBalance, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column {
-                                Text(text = acc.name, fontWeight = FontWeight.Bold)
-                                Text(text = "${acc.institution.name} • Last 4: ${acc.last4 ?: "None"}", style = MaterialTheme.typography.bodySmall)
+                        Text(
+                            text = "No accounts found for ${selectedFilter.label}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                } else {
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.heightIn(max = 350.dp)
+                    ) {
+                        items(filteredAccounts) { acc ->
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onAccountSelected(acc) },
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = when (acc.type) {
+                                            DbAccountType.CREDIT_CARD -> Icons.Rounded.CreditCard
+                                            DbAccountType.CASH -> Icons.Rounded.Payments
+                                            else -> Icons.Rounded.AccountBalance
+                                        },
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column {
+                                        Text(text = acc.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                                        Text(
+                                            text = "${acc.type.name.replace("_", " ")} • Last 4: ${acc.last4 ?: "N/A"}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
                 }
             }
         },
-        confirmButton = {
+        confirmButton = {},
+        dismissButton = {
             TextButton(onClick = onDismiss) { Text("Cancel") }
         }
     )

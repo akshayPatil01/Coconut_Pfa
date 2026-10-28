@@ -1,5 +1,6 @@
 package com.patil.coconut_pfa.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -70,6 +71,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.patil.coconut_pfa.data.local.entity.AccountEntity
@@ -158,7 +160,7 @@ fun TransactionsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(padding),
-                    placeholder = { Text("Search payee, category, note, amount...") },
+                    placeholder = { Text("Search transactions...", maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     leadingIcon = {
                         Icon(imageVector = Icons.Rounded.Search, contentDescription = "Search")
                     },
@@ -679,6 +681,7 @@ private fun TransactionEntityItemRow(
             .fillMaxWidth()
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),

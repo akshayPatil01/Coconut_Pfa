@@ -65,17 +65,19 @@ class ReviewInboxViewModel(
         sms: SmsItemEntity,
         selectedAccountId: String,
         selectedCategoryId: String,
-        payee: String?
+        payee: String?,
+        customAmountPaise: Long? = null
     ) {
         viewModelScope.launch {
             val isIncome = sms.parsedType == "CREDIT"
             val txnType = if (isIncome) DbTxnType.INCOME else DbTxnType.EXPENSE
             val txnId = UUID.randomUUID().toString()
+            val finalAmountPaise = customAmountPaise ?: sms.amountPaise ?: 0L
 
             val txn = TxnEntity(
                 id = txnId,
                 type = txnType,
-                amountPaise = sms.amountPaise ?: 0L,
+                amountPaise = finalAmountPaise,
                 accountId = selectedAccountId,
                 categoryId = selectedCategoryId,
                 payee = payee?.trim()?.ifEmpty { null } ?: sms.merchant,
@@ -89,6 +91,7 @@ class ReviewInboxViewModel(
                 status = DbSmsStatus.CONFIRMED,
                 matchedAccountId = selectedAccountId,
                 suggestedCategoryId = selectedCategoryId,
+                amountPaise = finalAmountPaise,
                 resolvedAt = System.currentTimeMillis(),
                 txnId = txnId
             )
