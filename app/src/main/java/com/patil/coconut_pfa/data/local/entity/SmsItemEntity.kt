@@ -11,7 +11,8 @@ import java.util.UUID
         Index("matchedAccountId"),
         Index("suggestedCategoryId"),
         Index("txnId"),
-        Index("receivedAt")
+        Index("receivedAt"),
+        Index("status")
     ]
 )
 data class SmsItemEntity(

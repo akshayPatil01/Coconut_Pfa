@@ -35,6 +35,10 @@ class TransactionRepository(
         txnDao.insert(txn)
         triggerWidgetUpdate()
     }
+    suspend fun saveTransactions(txns: List<TxnEntity>) {
+        txnDao.insertAll(txns)
+        triggerWidgetUpdate()
+    }
     suspend fun updateTransaction(txn: TxnEntity) {
         txnDao.update(txn)
         triggerWidgetUpdate()

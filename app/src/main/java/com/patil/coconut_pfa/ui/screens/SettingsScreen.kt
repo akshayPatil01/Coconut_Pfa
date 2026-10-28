@@ -105,6 +105,7 @@ fun SettingsScreen(
     onUpdateReminderHour: (Int) -> Unit = {},
     onUpdateDefaultReminderDays: (Int) -> Unit = {},
     onUpdateShowAmountOnWidget: (Boolean) -> Unit = {},
+    onGenerateFakeTransactions: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -757,6 +758,21 @@ fun SettingsScreen(
                                     Icon(imageVector = Icons.Rounded.Lock, contentDescription = null, modifier = Modifier.size(16.dp))
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text("Show Lock Screen Overlay")
+                                }
+
+                                Button(
+                                    onClick = {
+                                        onGenerateFakeTransactions()
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar("Generated 10,000 fake transactions successfully!")
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Icon(imageVector = Icons.Rounded.BugReport, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Generate 10,000 Fake Transactions")
                                 }
                             }
                         }

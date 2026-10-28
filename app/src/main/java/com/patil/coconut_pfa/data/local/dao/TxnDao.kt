@@ -29,6 +29,9 @@ interface TxnDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(txn: TxnEntity)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(txns: List<TxnEntity>)
+
     @Update
     suspend fun update(txn: TxnEntity)
 

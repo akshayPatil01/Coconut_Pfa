@@ -470,6 +470,24 @@ fun CoconutApp(
                         onUpdateSalaryStartDay = { day -> scope.launch { settingsRepository.setSalaryCycleStartDay(day) } },
                         onUpdateSmsEnabled = { enabled -> scope.launch { settingsRepository.setSmsEnabled(enabled) } },
                         onUpdateShowAmountOnWidget = { enabled -> scope.launch { settingsRepository.setShowAmountOnWidget(enabled) } },
+                        onGenerateFakeTransactions = {
+                            scope.launch {
+                                val txns = (1..10000).map { i ->
+                                    com.patil.coconut_pfa.data.local.entity.TxnEntity(
+                                        id = "fake_txn_$i",
+                                        type = if (i % 5 == 0) com.patil.coconut_pfa.data.local.entity.DbTxnType.INCOME else com.patil.coconut_pfa.data.local.entity.DbTxnType.EXPENSE,
+                                        amountPaise = (100..50000L).random(),
+                                        accountId = "acc_1",
+                                        categoryId = "cat_exp_groceries",
+                                        payee = "Merchant $i",
+                                        note = "Fake txn #$i",
+                                        occurredAt = System.currentTimeMillis() - (i.toLong() * 60 * 1000L),
+                                        source = com.patil.coconut_pfa.data.local.entity.DbTxnSource.MANUAL
+                                    )
+                                }
+                                transactionRepository.saveTransactions(txns)
+                            }
+                        },
                         modifier = screenModifier
                     )
                     Screen.ReviewInbox -> {
