@@ -1,0 +1,53 @@
+# Built application files
+*.apk
+*.ap_
+*.aab
+*.dex
+*.class
+
+# Gradle files
+.gradle/
+/build/
+/out/
+
+# Local configuration file (sdk path, etc.)
+local.properties
+
+# IntelliJ project files
+*.iml
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/usage.statistics.xml
+.idea/dictionaries
+.idea/shelf
+.idea/caches
+.idea/libraries
+.idea/modules.xml
+.idea/navEditor.xml
+.idea/assetWizardSettings.xml
+.idea/compiler.xml
+.idea/deploymentTargetSelector.xml
+.idea/gradle.xml
+.idea/misc.xml
+.idea/runConfigurations.xml
+.idea/vcs.xml
+.idea/codeStyles/
+.idea/fileTemplates/
+.idea/inspectionProfiles/
+
+# OS files
+.DS_Store
+*.log
+
+# Captures and Native build
+captures/
+.externalNativeBuild
+.cxx
+
+# Kotlin
+.kotlin/
+
+# Agent / Artifacts / Fake JDK
+.agent/
+.artifacts/
+fake_jdk/
