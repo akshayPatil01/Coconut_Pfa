@@ -1,42 +1,35 @@
 package com.patil.coconut_pfa.ui.components
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.DarkMode
-import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material.icons.rounded.Visibility
-import androidx.compose.material.icons.rounded.VisibilityOff
-import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
-import com.patil.coconut_pfa.data.local.datastore.ThemeMode
+import androidx.compose.ui.unit.dp
 import com.patil.coconut_pfa.ui.theme.Coconut_PfaTheme
-import com.patil.coconut_pfa.util.PrivacyManager
 
 /**
- * Top App Bar for Coconut PFA.
- * Supports screen-customized header styles with custom title and actions slots.
+ * Clean & Consistent Top App Bar for Coconut PFA.
+ * Supports screen title, subtitle, navigation drawer button, and a clean settings action.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,37 +38,44 @@ fun CoconutTopBar(
     onMenuClick: () -> Unit,
     onSettingsClick: () -> Unit,
     modifier: Modifier = Modifier,
-    themeMode: ThemeMode = ThemeMode.SYSTEM,
-    onToggleTheme: (() -> Unit)? = null,
+    subtitle: String? = null,
     titleContent: (@Composable () -> Unit)? = null,
     actionsContent: (@Composable RowScope.() -> Unit)? = null,
 ) {
-    val isPrivacyEnabled by PrivacyManager.isPrivacyEnabled.collectAsState()
-    val isDark = when (themeMode) {
-        ThemeMode.DARK -> true
-        ThemeMode.LIGHT -> false
-        ThemeMode.SYSTEM -> isSystemInDarkTheme()
-    }
-
-    CenterAlignedTopAppBar(
+    TopAppBar(
         title = {
             if (titleContent != null) {
                 titleContent()
             } else {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Column {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    if (!subtitle.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = subtitle,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Normal,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             }
         },
         navigationIcon = {
             IconButton(onClick = onMenuClick) {
                 Icon(
                     imageVector = Icons.Rounded.Menu,
-                    contentDescription = "Open drawer"
+                    contentDescription = "Open drawer",
+                    tint = MaterialTheme.colorScheme.onSurface
                 )
             }
         },
@@ -83,41 +83,25 @@ fun CoconutTopBar(
             if (actionsContent != null) {
                 actionsContent()
             } else {
-                if (onToggleTheme != null) {
-                    IconButton(onClick = onToggleTheme) {
-                        AnimatedContent(
-                            targetState = isDark,
-                            transitionSpec = {
-                                (fadeIn() + scaleIn(initialScale = 0.7f)).togetherWith(
-                                    fadeOut() + scaleOut(targetScale = 0.7f)
-                                )
-                            },
-                            label = "ThemeToggleAnimation"
-                        ) { dark ->
-                            Icon(
-                                imageVector = if (dark) Icons.Rounded.LightMode else Icons.Rounded.DarkMode,
-                                contentDescription = if (dark) "Switch to Light Mode" else "Switch to Dark Mode",
-                                tint = if (dark) Color(0xFFFFD54F) else MaterialTheme.colorScheme.primary
-                            )
-                        }
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.8f),
+                    modifier = Modifier.padding(end = 8.dp)
+                ) {
+                    IconButton(
+                        onClick = onSettingsClick,
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Settings,
+                            contentDescription = "Settings",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
                     }
-                }
-                IconButton(onClick = { PrivacyManager.togglePrivacy() }) {
-                    Icon(
-                        imageVector = if (isPrivacyEnabled) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
-                        contentDescription = if (isPrivacyEnabled) "Disable Privacy Mode" else "Enable Privacy Mode",
-                        tint = if (isPrivacyEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                    )
-                }
-                IconButton(onClick = onSettingsClick) {
-                    Icon(
-                        imageVector = Icons.Rounded.Settings,
-                        contentDescription = "Settings"
-                    )
                 }
             }
         },
-        colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+        colors = TopAppBarDefaults.topAppBarColors(
             containerColor = Color.Transparent,
             titleContentColor = MaterialTheme.colorScheme.onSurface,
             navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
@@ -132,10 +116,10 @@ fun CoconutTopBar(
 private fun CoconutTopBarPreview() {
     Coconut_PfaTheme {
         CoconutTopBar(
-            title = "Coconut PFA",
+            title = "Dashboard",
+            subtitle = "Track your financial progress",
             onMenuClick = {},
-            onSettingsClick = {},
-            onToggleTheme = {}
+            onSettingsClick = {}
         )
     }
 }

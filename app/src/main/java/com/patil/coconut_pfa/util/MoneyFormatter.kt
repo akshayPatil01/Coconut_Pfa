@@ -20,12 +20,14 @@ object MoneyFormatter {
      * @param amountInPaise The money amount in paise (1 Rupee = 100 paise).
      * @param isPrivacyEnabled If true, returns a masked representation ("₹••••••").
      * @param showSymbol Whether to include the '₹' symbol. Default is true.
+     * @param showDecimals Whether to include decimal paise values. Default is true.
      * @return Formatted currency string.
      */
     fun format(
         amountInPaise: Long,
         isPrivacyEnabled: Boolean = false,
         showSymbol: Boolean = true,
+        showDecimals: Boolean = true,
     ): String {
         if (isPrivacyEnabled) {
             return if (showSymbol) "₹••••••" else "••••••"
@@ -38,7 +40,7 @@ object MoneyFormatter {
 
         val formattedRupees = formatIndianRupees(rupees)
 
-        val formattedPaise = if (paise > 0) {
+        val formattedPaise = if (showDecimals && paise > 0) {
             val paiseString = if (paise < 10) "0$paise" else paise.toString()
             ".$paiseString"
         } else {

@@ -308,6 +308,7 @@ fun CoconutApp(
                     topBar = {
                         CoconutTopBar(
                             title = currentDestination.title,
+                            subtitle = currentDestination.subtitle,
                             onMenuClick = {
                                 scope.launch {
                                     if (drawerState.isClosed) drawerState.open() else drawerState.close()
@@ -315,15 +316,6 @@ fun CoconutApp(
                             },
                             onSettingsClick = {
                                 navigateTo(Screen.Settings)
-                            },
-                            themeMode = userSettings.themeMode,
-                            onToggleTheme = {
-                                val nextMode = when (userSettings.themeMode) {
-                                    com.patil.coconut_pfa.data.local.datastore.ThemeMode.LIGHT -> com.patil.coconut_pfa.data.local.datastore.ThemeMode.DARK
-                                    com.patil.coconut_pfa.data.local.datastore.ThemeMode.DARK -> com.patil.coconut_pfa.data.local.datastore.ThemeMode.LIGHT
-                                    com.patil.coconut_pfa.data.local.datastore.ThemeMode.SYSTEM -> com.patil.coconut_pfa.data.local.datastore.ThemeMode.DARK
-                                }
-                                scope.launch { settingsRepository.setThemeMode(nextMode) }
                             }
                         )
                     },

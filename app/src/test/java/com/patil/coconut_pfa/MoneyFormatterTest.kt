@@ -55,6 +55,15 @@ class MoneyFormatterTest {
     }
 
     @Test
+    fun testShowDecimalsFalse() {
+        val resultWithPaise = MoneyFormatter.format(125050L, showDecimals = false) // 1250.50 rupees
+        assertEquals("₹1,250", resultWithPaise)
+
+        val resultZeroPaise = MoneyFormatter.format(2900L, showDecimals = false) // 29.00 rupees
+        assertEquals("₹29", resultZeroPaise)
+    }
+
+    @Test
     fun testRupeesToPaiseConversion() {
         assertEquals(100000L, MoneyFormatter.rupeesToPaise(1000L))
         assertEquals(125050L, MoneyFormatter.rupeesToPaise(1250.50))

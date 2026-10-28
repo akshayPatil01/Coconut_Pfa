@@ -36,6 +36,7 @@ fun AmountText(
     color: Color = Color.Unspecified,
     fontWeight: FontWeight? = null,
     showSymbol: Boolean = true,
+    showDecimals: Boolean = true,
 ) {
     val isPrivacyEnabled by PrivacyManager.isPrivacyEnabled.collectAsState()
     var isTemporarilyRevealed by remember { mutableStateOf(false) }
@@ -53,7 +54,7 @@ fun AmountText(
         }
     }
 
-    val displayText = remember(amountInPaise, isPrivacyEnabled, isTemporarilyRevealed, showSymbol) {
+    val displayText = remember(amountInPaise, isPrivacyEnabled, isTemporarilyRevealed, showSymbol, showDecimals) {
         if (isPrivacyEnabled && !isTemporarilyRevealed) {
             if (showSymbol) "₹ ••••" else "••••"
         } else {
@@ -61,6 +62,7 @@ fun AmountText(
                 amountInPaise = amountInPaise,
                 isPrivacyEnabled = false,
                 showSymbol = showSymbol,
+                showDecimals = showDecimals,
             )
         }
     }

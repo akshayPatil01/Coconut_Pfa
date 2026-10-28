@@ -38,8 +38,8 @@ import androidx.compose.material.icons.rounded.SwapHoriz
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import com.patil.coconut_pfa.ui.components.CoconutDropdownMenu
+import com.patil.coconut_pfa.ui.components.CoconutDropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -193,13 +193,14 @@ fun TransactionsScreen(
                             onClick = { cycleDropdownExpanded = true },
                             text = uiState.selectedCycle
                         )
-                        DropdownMenu(
+                        CoconutDropdownMenu(
                             expanded = cycleDropdownExpanded,
                             onDismissRequest = { cycleDropdownExpanded = false }
                         ) {
                             listOf("Current Cycle", "Previous Cycle", "All Time").forEach { option ->
-                                DropdownMenuItem(
-                                    text = { Text(option) },
+                                CoconutDropdownMenuItem(
+                                    text = option,
+                                    isSelected = option == uiState.selectedCycle,
                                     onClick = {
                                         viewModel?.updateSelectedCycle(option)
                                         cycleDropdownExpanded = false
@@ -218,20 +219,22 @@ fun TransactionsScreen(
                             onClick = { typeDropdownExpanded = true },
                             text = uiState.selectedType?.name ?: "Type: All"
                         )
-                        DropdownMenu(
+                        CoconutDropdownMenu(
                             expanded = typeDropdownExpanded,
                             onDismissRequest = { typeDropdownExpanded = false }
                         ) {
-                            DropdownMenuItem(
-                                text = { Text("All Types") },
+                            CoconutDropdownMenuItem(
+                                text = "All Types",
+                                isSelected = uiState.selectedType == null,
                                 onClick = {
                                     viewModel?.updateSelectedType(null)
                                     typeDropdownExpanded = false
                                 }
                             )
                             DbTxnType.entries.forEach { type ->
-                                DropdownMenuItem(
-                                    text = { Text(type.name) },
+                                CoconutDropdownMenuItem(
+                                    text = type.name,
+                                    isSelected = uiState.selectedType == type,
                                     onClick = {
                                         viewModel?.updateSelectedType(type)
                                         typeDropdownExpanded = false
@@ -253,20 +256,22 @@ fun TransactionsScreen(
                             onClick = { categoryDropdownExpanded = true },
                             text = selectedCatName
                         )
-                        DropdownMenu(
+                        CoconutDropdownMenu(
                             expanded = categoryDropdownExpanded,
                             onDismissRequest = { categoryDropdownExpanded = false }
                         ) {
-                            DropdownMenuItem(
-                                text = { Text("All Categories") },
+                            CoconutDropdownMenuItem(
+                                text = "All Categories",
+                                isSelected = uiState.selectedCategory == null,
                                 onClick = {
                                     viewModel?.updateSelectedCategory(null)
                                     categoryDropdownExpanded = false
                                 }
                             )
                             uiState.categoryMap.values.distinctBy { it.name }.forEach { cat ->
-                                DropdownMenuItem(
-                                    text = { Text(cat.name) },
+                                CoconutDropdownMenuItem(
+                                    text = cat.name,
+                                    isSelected = uiState.selectedCategory == cat.id,
                                     onClick = {
                                         viewModel?.updateSelectedCategory(cat.id)
                                         categoryDropdownExpanded = false
@@ -288,20 +293,22 @@ fun TransactionsScreen(
                             onClick = { accountDropdownExpanded = true },
                             text = selectedAccName
                         )
-                        DropdownMenu(
+                        CoconutDropdownMenu(
                             expanded = accountDropdownExpanded,
                             onDismissRequest = { accountDropdownExpanded = false }
                         ) {
-                            DropdownMenuItem(
-                                text = { Text("All Accounts") },
+                            CoconutDropdownMenuItem(
+                                text = "All Accounts",
+                                isSelected = uiState.selectedAccount == null,
                                 onClick = {
                                     viewModel?.updateSelectedAccount(null)
                                     accountDropdownExpanded = false
                                 }
                             )
                             uiState.accountMap.values.forEach { acc ->
-                                DropdownMenuItem(
-                                    text = { Text(acc.name) },
+                                CoconutDropdownMenuItem(
+                                    text = acc.name,
+                                    isSelected = uiState.selectedAccount == acc.id,
                                     onClick = {
                                         viewModel?.updateSelectedAccount(acc.id)
                                         accountDropdownExpanded = false
@@ -320,20 +327,22 @@ fun TransactionsScreen(
                             onClick = { sourceDropdownExpanded = true },
                             text = uiState.selectedSource?.name ?: "Source: All"
                         )
-                        DropdownMenu(
+                        CoconutDropdownMenu(
                             expanded = sourceDropdownExpanded,
                             onDismissRequest = { sourceDropdownExpanded = false }
                         ) {
-                            DropdownMenuItem(
-                                text = { Text("All Sources") },
+                            CoconutDropdownMenuItem(
+                                text = "All Sources",
+                                isSelected = uiState.selectedSource == null,
                                 onClick = {
                                     viewModel?.updateSelectedSource(null)
                                     sourceDropdownExpanded = false
                                 }
                             )
                             DbTxnSource.entries.forEach { src ->
-                                DropdownMenuItem(
-                                    text = { Text(src.name) },
+                                CoconutDropdownMenuItem(
+                                    text = src.name,
+                                    isSelected = uiState.selectedSource == src,
                                     onClick = {
                                         viewModel?.updateSelectedSource(src)
                                         sourceDropdownExpanded = false

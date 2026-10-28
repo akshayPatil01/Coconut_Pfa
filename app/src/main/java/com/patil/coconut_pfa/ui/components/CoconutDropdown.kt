@@ -49,7 +49,7 @@ fun CoconutDropdownMenuItem(
     enabled: Boolean = true,
 ) {
     val containerColor = if (isSelected) {
-        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
     } else {
         Color.Transparent
     }
@@ -123,7 +123,7 @@ fun CoconutDropdownMenu(
         expanded = expanded,
         onDismissRequest = onDismissRequest,
         shape = RoundedCornerShape(20.dp),
-        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        containerColor = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
         modifier = modifier.padding(vertical = 4.dp),
         content = content
@@ -182,7 +182,7 @@ fun <T> CoconutExposedDropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
             shape = RoundedCornerShape(20.dp),
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            containerColor = MaterialTheme.colorScheme.surface,
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
             modifier = Modifier.padding(vertical = 4.dp)
         ) {

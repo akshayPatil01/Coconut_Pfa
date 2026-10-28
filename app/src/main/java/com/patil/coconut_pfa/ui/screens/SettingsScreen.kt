@@ -1290,7 +1290,7 @@ private fun SettingsDropdownRow(
                 expanded = expanded,
                 onDismissRequest = { expanded = false },
                 shape = RoundedCornerShape(18.dp),
-                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                containerColor = MaterialTheme.colorScheme.surface,
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
             ) {
                 options.forEach { opt ->

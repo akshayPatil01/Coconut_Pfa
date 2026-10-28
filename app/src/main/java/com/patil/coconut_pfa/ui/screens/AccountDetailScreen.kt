@@ -335,24 +335,53 @@ private fun CreditCardPanel(account: Account) {
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            DetailItem(label = "Credit Limit", valueInPaise = account.creditLimitInPaise)
-            DetailItem(label = "Outstanding", valueInPaise = abs(account.balanceInPaise), isError = true)
+            DetailItem(
+                label = "Credit Limit",
+                valueInPaise = account.creditLimitInPaise,
+                modifier = Modifier.weight(1f)
+            )
+            DetailItem(
+                label = "Outstanding",
+                valueInPaise = abs(account.balanceInPaise),
+                isError = true,
+                horizontalAlignment = Alignment.End,
+                modifier = Modifier.weight(1f)
+            )
         }
 
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            DetailItem(label = "Available Credit", valueInPaise = account.availableCreditInPaise, isGreen = true)
-            DetailTextItem(label = "Statement Day", value = "${account.statementDay ?: "15"}th of month")
+            DetailItem(
+                label = "Available Credit",
+                valueInPaise = account.availableCreditInPaise,
+                isGreen = true,
+                modifier = Modifier.weight(1f)
+            )
+            DetailTextItem(
+                label = "Statement Day",
+                value = "${account.statementDay ?: "15"}th of month",
+                horizontalAlignment = Alignment.End,
+                modifier = Modifier.weight(1f)
+            )
         }
 
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            DetailTextItem(label = "Next Due Date", value = account.dueDate ?: "N/A")
-            DetailItem(label = "Minimum Due", valueInPaise = account.minimumDueInPaise)
+            DetailTextItem(
+                label = "Next Due Date",
+                value = account.dueDate ?: "N/A",
+                modifier = Modifier.weight(1f)
+            )
+            DetailItem(
+                label = "Minimum Due",
+                valueInPaise = account.minimumDueInPaise,
+                horizontalAlignment = Alignment.End,
+                modifier = Modifier.weight(1f)
+            )
         }
     }
 }
@@ -364,16 +393,35 @@ private fun LoanPanel(account: Account) {
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            DetailItem(label = "Loan Outstanding", valueInPaise = account.loanOutstandingInPaise, isError = true)
-            DetailItem(label = "Monthly EMI", valueInPaise = account.emiAmountInPaise)
+            DetailItem(
+                label = "Loan Outstanding",
+                valueInPaise = account.loanOutstandingInPaise,
+                isError = true,
+                modifier = Modifier.weight(1f)
+            )
+            DetailItem(
+                label = "Monthly EMI",
+                valueInPaise = account.emiAmountInPaise,
+                horizontalAlignment = Alignment.End,
+                modifier = Modifier.weight(1f)
+            )
         }
 
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            DetailTextItem(label = "Interest Rate", value = "${account.interestRate}% p.a.")
-            DetailTextItem(label = "Months Left", value = "${account.monthsLeft} months")
+            DetailTextItem(
+                label = "Interest Rate",
+                value = "${account.interestRate}% p.a.",
+                modifier = Modifier.weight(1f)
+            )
+            DetailTextItem(
+                label = "Months Left",
+                value = "${account.monthsLeft} months",
+                horizontalAlignment = Alignment.End,
+                modifier = Modifier.weight(1f)
+            )
         }
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -452,23 +500,46 @@ private fun FixedDepositPanel(account: Account) {
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            DetailItem(label = "Principal Amount", valueInPaise = account.principalInPaise)
-            DetailTextItem(label = "Interest Rate", value = "${account.fdInterestRate}% p.a.")
+            DetailItem(
+                label = "Principal Amount",
+                valueInPaise = account.principalInPaise,
+                modifier = Modifier.weight(1f)
+            )
+            DetailTextItem(
+                label = "Interest Rate",
+                value = "${account.fdInterestRate}% p.a.",
+                horizontalAlignment = Alignment.End,
+                modifier = Modifier.weight(1f)
+            )
         }
 
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            DetailTextItem(label = "Start Date", value = account.fdStartDate ?: "N/A")
-            DetailTextItem(label = "Maturity Date", value = account.maturityDate ?: "N/A")
+            DetailTextItem(
+                label = "Start Date",
+                value = account.fdStartDate ?: "N/A",
+                modifier = Modifier.weight(1f)
+            )
+            DetailTextItem(
+                label = "Maturity Date",
+                value = account.maturityDate ?: "N/A",
+                horizontalAlignment = Alignment.End,
+                modifier = Modifier.weight(1f)
+            )
         }
 
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            DetailItem(label = "Maturity Amount", valueInPaise = account.maturityAmountInPaise, isGreen = true)
+            DetailItem(
+                label = "Maturity Amount",
+                valueInPaise = account.maturityAmountInPaise,
+                isGreen = true,
+                modifier = Modifier.weight(1f)
+            )
         }
     }
 }
@@ -517,8 +588,17 @@ private fun GeneralAccountPanel(account: Account) {
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            DetailTextItem(label = "Account Type", value = account.type.displayName)
-            DetailTextItem(label = "Net Worth Status", value = if (account.includeInNetWorth) "Included" else "Excluded")
+            DetailTextItem(
+                label = "Account Type",
+                value = account.type.displayName,
+                modifier = Modifier.weight(1f)
+            )
+            DetailTextItem(
+                label = "Net Worth Status",
+                value = if (account.includeInNetWorth) "Included" else "Excluded",
+                horizontalAlignment = Alignment.End,
+                modifier = Modifier.weight(1f)
+            )
         }
     }
 }
@@ -529,8 +609,13 @@ private fun DetailItem(
     valueInPaise: Long,
     isError: Boolean = false,
     isGreen: Boolean = false,
+    horizontalAlignment: Alignment.Horizontal = Alignment.Start,
+    modifier: Modifier = Modifier,
 ) {
-    Column {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = horizontalAlignment
+    ) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,
@@ -550,8 +635,16 @@ private fun DetailItem(
 }
 
 @Composable
-private fun DetailTextItem(label: String, value: String) {
-    Column {
+private fun DetailTextItem(
+    label: String,
+    value: String,
+    horizontalAlignment: Alignment.Horizontal = Alignment.Start,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = horizontalAlignment
+    ) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,
