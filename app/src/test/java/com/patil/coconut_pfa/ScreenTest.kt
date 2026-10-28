@@ -12,7 +12,7 @@ class ScreenTest {
         assertEquals("Transactions", Screen.Transactions.title)
         assertEquals("Payments", Screen.Payments.title)
         assertEquals("Accounts", Screen.Accounts.title)
-        assertEquals("Add Transaction", Screen.AddTransaction.title)
+        assertEquals("Add Transaction", Screen.AddTransaction().title)
         assertEquals("Financial Goals", Screen.Goals.title)
         assertEquals("Subscriptions", Screen.Subscriptions.title)
         assertEquals("Split & IOUs", Screen.SplitAndIOUs.title)

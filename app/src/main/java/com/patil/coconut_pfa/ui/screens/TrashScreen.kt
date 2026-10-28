@@ -1,6 +1,5 @@
 package com.patil.coconut_pfa.ui.screens
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,6 +37,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,27 +45,32 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.patil.coconut_pfa.data.model.TrashItem
-import com.patil.coconut_pfa.data.repository.FakeData
+import com.patil.coconut_pfa.data.local.entity.TxnEntity
 import com.patil.coconut_pfa.navigation.Screen
 import com.patil.coconut_pfa.ui.components.AmountText
 import com.patil.coconut_pfa.ui.components.EmptyState
 import com.patil.coconut_pfa.ui.theme.Coconut_PfaTheme
-import com.patil.coconut_pfa.util.MoneyFormatter
+import com.patil.coconut_pfa.ui.viewmodel.TrashUiState
+import com.patil.coconut_pfa.ui.viewmodel.TrashViewModel
+import com.patil.coconut_pfa.util.KolkataDateTimeUtils
 import kotlinx.coroutines.launch
 
 @Composable
 fun TrashScreen(
     onNavigate: (Screen) -> Unit,
     modifier: Modifier = Modifier,
+    viewModel: TrashViewModel? = null
 ) {
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
-    val trashList = FakeData.trashItems
+
+    val uiState by viewModel?.uiState?.collectAsState() ?: remember {
+        mutableStateOf(TrashUiState(isLoading = false))
+    }
+
     var showEmptyTrashDialog by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -104,7 +109,7 @@ fun TrashScreen(
                     }
                 }
 
-                if (trashList.isNotEmpty()) {
+                if (uiState.trashTxns.isNotEmpty()) {
                     TextButton(onClick = { showEmptyTrashDialog = true }) {
                         Icon(imageVector = Icons.Rounded.DeleteSweep, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(4.dp))
@@ -113,7 +118,7 @@ fun TrashScreen(
                 }
             }
 
-            if (trashList.isEmpty()) {
+            if (uiState.trashTxns.isEmpty() && !uiState.isLoading) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -134,15 +139,28 @@ fun TrashScreen(
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    items(trashList, key = { it.id }) { item ->
-                        TrashItemCard(
-                            item = item,
+                    items(uiState.trashTxns, key = { it.id }) { tx ->
+                        val accountName = tx.accountId?.let { uiState.accountMap[it]?.name }
+                        val categoryName = tx.categoryId?.let { uiState.categoryMap[it]?.name } ?: tx.categoryId
+                        val title = tx.payee ?: categoryName ?: "Transaction"
+
+                        val deletedAt = tx.deletedAt ?: System.currentTimeMillis()
+                        val daysPassed = ((System.currentTimeMillis() - deletedAt) / (86400 * 1000L)).toInt()
+                        val daysLeft = maxOf(0, 30 - daysPassed)
+                        val deletedDateStr = KolkataDateTimeUtils.epochMillisToDateString(deletedAt)
+
+                        TrashTxnCard(
+                            tx = tx,
+                            title = title,
+                            deletedDate = deletedDateStr,
+                            itemType = "Transaction • ${tx.type.name}" + (accountName?.let { " • $it" } ?: ""),
+                            daysLeft = daysLeft,
                             onRestore = {
-                                FakeData.restoreTrashItem(item)
+                                viewModel?.restore(tx.id)
                                 scope.launch { snackbarHostState.showSnackbar("Item restored successfully!") }
                             },
                             onDeleteForever = {
-                                FakeData.deleteTrashItemPermanently(item)
+                                viewModel?.deleteForever(tx)
                                 scope.launch { snackbarHostState.showSnackbar("Item permanently deleted") }
                             }
                         )
@@ -156,11 +174,11 @@ fun TrashScreen(
         AlertDialog(
             onDismissRequest = { showEmptyTrashDialog = false },
             title = { Text("Empty Trash?", fontWeight = FontWeight.Bold) },
-            text = { Text("This will permanently delete all ${trashList.size} items in the trash. This action cannot be undone.") },
+            text = { Text("This will permanently delete all ${uiState.trashTxns.size} items in the trash. This action cannot be undone.") },
             confirmButton = {
                 Button(
                     onClick = {
-                        trashList.clear()
+                        viewModel?.emptyTrash()
                         showEmptyTrashDialog = false
                         scope.launch { snackbarHostState.showSnackbar("Trash emptied") }
                     },
@@ -177,8 +195,12 @@ fun TrashScreen(
 }
 
 @Composable
-private fun TrashItemCard(
-    item: TrashItem,
+private fun TrashTxnCard(
+    tx: TxnEntity,
+    title: String,
+    deletedDate: String,
+    itemType: String,
+    daysLeft: Int,
     onRestore: () -> Unit,
     onDeleteForever: () -> Unit,
     modifier: Modifier = Modifier,
@@ -195,21 +217,23 @@ private fun TrashItemCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
-                    Text(text = item.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(text = title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Text(
-                        text = "Deleted ${item.deletedDate} • ${item.itemType}",
+                        text = "Deleted $deletedDate • $itemType",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+
+                Spacer(modifier = Modifier.width(8.dp))
 
                 Surface(
                     shape = CircleShape,
                     color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
                 ) {
                     Text(
-                        text = "${item.daysLeft} days left",
+                        text = "$daysLeft days left",
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onErrorContainer,
@@ -218,10 +242,8 @@ private fun TrashItemCard(
                 }
             }
 
-            item.amountInPaise?.let { amount ->
-                Spacer(modifier = Modifier.height(8.dp))
-                AmountText(amountInPaise = amount, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
-            }
+            Spacer(modifier = Modifier.height(8.dp))
+            AmountText(amountInPaise = tx.amountPaise, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
 
             Spacer(modifier = Modifier.height(16.dp))
 

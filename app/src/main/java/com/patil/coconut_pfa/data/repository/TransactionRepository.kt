@@ -10,6 +10,7 @@ class TransactionRepository(
     fun getAllActiveTransactions(): Flow<List<TxnEntity>> = txnDao.getAllActiveTxnsFlow()
     fun getTransactionsForAccount(accountId: String): Flow<List<TxnEntity>> = txnDao.getTxnsForAccountFlow(accountId)
     fun getTrashTransactions(): Flow<List<TxnEntity>> = txnDao.getTrashTxnsFlow()
+    fun getDistinctPayees(): Flow<List<String>> = txnDao.getDistinctPayeesFlow()
     suspend fun getTransactionById(id: String): TxnEntity? = txnDao.getTxnById(id)
 
     suspend fun saveTransaction(txn: TxnEntity) = txnDao.insert(txn)
@@ -17,4 +18,5 @@ class TransactionRepository(
     suspend fun softDeleteTransaction(id: String) = txnDao.softDelete(id)
     suspend fun restoreTransaction(id: String) = txnDao.restore(id)
     suspend fun deleteTransaction(txn: TxnEntity) = txnDao.delete(txn)
+    suspend fun purgeOldTrash(cutoffMillis: Long) = txnDao.purgeOldTrash(cutoffMillis)
 }

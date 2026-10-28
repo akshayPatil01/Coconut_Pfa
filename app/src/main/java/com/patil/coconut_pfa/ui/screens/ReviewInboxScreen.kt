@@ -177,7 +177,7 @@ fun ReviewInboxScreen(
                             UnparsedSmsCard(
                                 item = sms,
                                 onTapToFill = {
-                                    onNavigate(Screen.AddTransaction)
+                                    onNavigate(Screen.AddTransaction())
                                 },
                                 onDismiss = {
                                     smsList.remove(sms)

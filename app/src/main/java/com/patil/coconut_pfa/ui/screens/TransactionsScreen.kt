@@ -21,11 +21,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
-import androidx.compose.material.icons.automirrored.rounded.CallSplit
 import androidx.compose.material.icons.automirrored.rounded.ReceiptLong
 import androidx.compose.material.icons.rounded.Category
 import androidx.compose.material.icons.rounded.Clear
+import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.CreditCard
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Inbox
 import androidx.compose.material.icons.rounded.LocalGasStation
 import androidx.compose.material.icons.rounded.Payments
@@ -39,17 +40,28 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,263 +71,396 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.patil.coconut_pfa.data.model.Transaction
-import com.patil.coconut_pfa.data.model.TransactionType
+import com.patil.coconut_pfa.data.local.entity.AccountEntity
+import com.patil.coconut_pfa.data.local.entity.CategoryEntity
+import com.patil.coconut_pfa.data.local.entity.DbTxnSource
+import com.patil.coconut_pfa.data.local.entity.DbTxnType
+import com.patil.coconut_pfa.data.local.entity.TxnEntity
 import com.patil.coconut_pfa.data.repository.FakeData
 import com.patil.coconut_pfa.navigation.Screen
 import com.patil.coconut_pfa.ui.components.AmountText
 import com.patil.coconut_pfa.ui.components.EmptyState
 import com.patil.coconut_pfa.ui.theme.Coconut_PfaTheme
+import com.patil.coconut_pfa.ui.viewmodel.DayGroupedTransactions
+import com.patil.coconut_pfa.ui.viewmodel.TransactionsUiState
+import com.patil.coconut_pfa.ui.viewmodel.TransactionsViewModel
+import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TransactionsScreen(
     onNavigate: (Screen) -> Unit,
     modifier: Modifier = Modifier,
+    viewModel: TransactionsViewModel? = null
 ) {
-    var searchQuery by remember { mutableStateOf("") }
-    var selectedType by remember { mutableStateOf<TransactionType?>(null) }
-    var selectedCategory by remember { mutableStateOf<String?>(null) }
-    var selectedAccount by remember { mutableStateOf<String?>(null) }
-    var selectedCycle by remember { mutableStateOf("Current Cycle") }
+    val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    val uiState by viewModel?.uiState?.collectAsState() ?: remember {
+        mutableStateOf(TransactionsUiState(isLoading = false))
+    }
 
     // Dropdown visibility states
     var typeDropdownExpanded by remember { mutableStateOf(false) }
     var categoryDropdownExpanded by remember { mutableStateOf(false) }
     var accountDropdownExpanded by remember { mutableStateOf(false) }
     var cycleDropdownExpanded by remember { mutableStateOf(false) }
+    var sourceDropdownExpanded by remember { mutableStateOf(false) }
 
-    val accountMap = remember { FakeData.accounts.associateBy { it.id } }
-
-    // Filter transactions based on search query and chip filters
-    val filteredTransactionsByDay = remember(
-        searchQuery,
-        selectedType,
-        selectedCategory,
-        selectedAccount,
-        selectedCycle
-    ) {
-        FakeData.transactionsByDay.mapValues { (_, txList) ->
-            txList.filter { tx ->
-                val matchesSearch = searchQuery.isBlank() ||
-                        tx.payee.contains(searchQuery, ignoreCase = true) ||
-                        tx.category.contains(searchQuery, ignoreCase = true) ||
-                        (tx.note?.contains(searchQuery, ignoreCase = true) == true)
-
-                val matchesType = selectedType == null || tx.type == selectedType
-                val matchesCategory = selectedCategory == null || tx.category.equals(selectedCategory, ignoreCase = true)
-                val matchesAccount = selectedAccount == null || tx.accountId == selectedAccount || tx.targetAccountId == selectedAccount
-
-                matchesSearch && matchesType && matchesCategory && matchesAccount
-            }
-        }.filterValues { it.isNotEmpty() }
-    }
-
-    Column(
-        modifier = modifier.fillMaxSize()
-    ) {
-        // Top Search Bar
-        PaddingValues(horizontal = 16.dp, vertical = 8.dp).let { padding ->
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(padding),
-                placeholder = { Text("Search payee, category, note...") },
-                leadingIcon = {
-                    Icon(imageVector = Icons.Rounded.Search, contentDescription = "Search")
-                },
-                trailingIcon = {
-                    if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { searchQuery = "" }) {
-                            Icon(imageVector = Icons.Rounded.Clear, contentDescription = "Clear search")
-                        }
-                    }
-                },
-                singleLine = true,
-                shape = RoundedCornerShape(16.dp)
-            )
-        }
-
-        // Filter Chips Row
-        LazyRow(
-            modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
         ) {
-            // 1. Cycle Filter Chip
-            item {
-                Box {
-                    FilterChip(
-                        selected = selectedCycle != "All Time",
-                        onClick = { cycleDropdownExpanded = true },
-                        label = { Text(selectedCycle) }
-                    )
-                    DropdownMenu(
-                        expanded = cycleDropdownExpanded,
-                        onDismissRequest = { cycleDropdownExpanded = false }
-                    ) {
-                        listOf("Current Cycle", "Previous Cycle", "All Time").forEach { option ->
-                            DropdownMenuItem(
-                                text = { Text(option) },
-                                onClick = {
-                                    selectedCycle = option
-                                    cycleDropdownExpanded = false
-                                }
-                            )
+            // Top Search Bar
+            PaddingValues(horizontal = 16.dp, vertical = 8.dp).let { padding ->
+                OutlinedTextField(
+                    value = uiState.searchQuery,
+                    onValueChange = { viewModel?.updateSearchQuery(it) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(padding),
+                    placeholder = { Text("Search payee, category, note, amount...") },
+                    leadingIcon = {
+                        Icon(imageVector = Icons.Rounded.Search, contentDescription = "Search")
+                    },
+                    trailingIcon = {
+                        if (uiState.searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { viewModel?.updateSearchQuery("") }) {
+                                Icon(imageVector = Icons.Rounded.Clear, contentDescription = "Clear search")
+                            }
+                        }
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(16.dp)
+                )
+            }
+
+            // Filter Chips Row
+            LazyRow(
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // 1. Cycle Filter Chip
+                item {
+                    Box {
+                        FilterChip(
+                            selected = uiState.selectedCycle != "All Time",
+                            onClick = { cycleDropdownExpanded = true },
+                            label = { Text(uiState.selectedCycle) }
+                        )
+                        DropdownMenu(
+                            expanded = cycleDropdownExpanded,
+                            onDismissRequest = { cycleDropdownExpanded = false }
+                        ) {
+                            listOf("Current Cycle", "Previous Cycle", "All Time").forEach { option ->
+                                DropdownMenuItem(
+                                    text = { Text(option) },
+                                    onClick = {
+                                        viewModel?.updateSelectedCycle(option)
+                                        cycleDropdownExpanded = false
+                                    }
+                                )
+                            }
                         }
                     }
                 }
-            }
 
-            // 2. Type Filter Chip
-            item {
-                Box {
-                    FilterChip(
-                        selected = selectedType != null,
-                        onClick = { typeDropdownExpanded = true },
-                        label = { Text(selectedType?.displayName ?: "Type: All") }
-                    )
-                    DropdownMenu(
-                        expanded = typeDropdownExpanded,
-                        onDismissRequest = { typeDropdownExpanded = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("All Types") },
-                            onClick = {
-                                selectedType = null
-                                typeDropdownExpanded = false
-                            }
+                // 2. Type Filter Chip
+                item {
+                    Box {
+                        FilterChip(
+                            selected = uiState.selectedType != null,
+                            onClick = { typeDropdownExpanded = true },
+                            label = { Text(uiState.selectedType?.name ?: "Type: All") }
                         )
-                        TransactionType.entries.forEach { type ->
+                        DropdownMenu(
+                            expanded = typeDropdownExpanded,
+                            onDismissRequest = { typeDropdownExpanded = false }
+                        ) {
                             DropdownMenuItem(
-                                text = { Text(type.displayName) },
+                                text = { Text("All Types") },
                                 onClick = {
-                                    selectedType = type
+                                    viewModel?.updateSelectedType(null)
                                     typeDropdownExpanded = false
                                 }
                             )
+                            DbTxnType.entries.forEach { type ->
+                                DropdownMenuItem(
+                                    text = { Text(type.name) },
+                                    onClick = {
+                                        viewModel?.updateSelectedType(type)
+                                        typeDropdownExpanded = false
+                                    }
+                                )
+                            }
                         }
                     }
                 }
-            }
 
-            // 3. Category Filter Chip
-            item {
-                Box {
-                    val categories = remember {
-                        FakeData.transactions.map { it.category }.distinct()
-                    }
-                    FilterChip(
-                        selected = selectedCategory != null,
-                        onClick = { categoryDropdownExpanded = true },
-                        label = { Text(selectedCategory ?: "Category: All") }
-                    )
-                    DropdownMenu(
-                        expanded = categoryDropdownExpanded,
-                        onDismissRequest = { categoryDropdownExpanded = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("All Categories") },
-                            onClick = {
-                                selectedCategory = null
-                                categoryDropdownExpanded = false
-                            }
+                // 3. Category Filter Chip
+                item {
+                    Box {
+                        val selectedCatName = uiState.selectedCategory?.let { catId ->
+                            uiState.categoryMap[catId]?.name ?: catId
+                        } ?: "Category: All"
+                        FilterChip(
+                            selected = uiState.selectedCategory != null,
+                            onClick = { categoryDropdownExpanded = true },
+                            label = { Text(selectedCatName) }
                         )
-                        categories.forEach { cat ->
+                        DropdownMenu(
+                            expanded = categoryDropdownExpanded,
+                            onDismissRequest = { categoryDropdownExpanded = false }
+                        ) {
                             DropdownMenuItem(
-                                text = { Text(cat) },
+                                text = { Text("All Categories") },
                                 onClick = {
-                                    selectedCategory = cat
+                                    viewModel?.updateSelectedCategory(null)
                                     categoryDropdownExpanded = false
                                 }
                             )
+                            uiState.categoryMap.values.distinctBy { it.name }.forEach { cat ->
+                                DropdownMenuItem(
+                                    text = { Text(cat.name) },
+                                    onClick = {
+                                        viewModel?.updateSelectedCategory(cat.id)
+                                        categoryDropdownExpanded = false
+                                    }
+                                )
+                            }
                         }
                     }
                 }
-            }
 
-            // 4. Account Filter Chip
-            item {
-                Box {
-                    FilterChip(
-                        selected = selectedAccount != null,
-                        onClick = { accountDropdownExpanded = true },
-                        label = {
-                            val name = selectedAccount?.let { accountMap[it]?.name } ?: "Account: All"
-                            Text(name)
-                        }
-                    )
-                    DropdownMenu(
-                        expanded = accountDropdownExpanded,
-                        onDismissRequest = { accountDropdownExpanded = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("All Accounts") },
-                            onClick = {
-                                selectedAccount = null
-                                accountDropdownExpanded = false
-                            }
+                // 4. Account Filter Chip
+                item {
+                    Box {
+                        val selectedAccName = uiState.selectedAccount?.let { accId ->
+                            uiState.accountMap[accId]?.name ?: accId
+                        } ?: "Account: All"
+                        FilterChip(
+                            selected = uiState.selectedAccount != null,
+                            onClick = { accountDropdownExpanded = true },
+                            label = { Text(selectedAccName) }
                         )
-                        FakeData.accounts.forEach { acc ->
+                        DropdownMenu(
+                            expanded = accountDropdownExpanded,
+                            onDismissRequest = { accountDropdownExpanded = false }
+                        ) {
                             DropdownMenuItem(
-                                text = { Text(acc.name) },
+                                text = { Text("All Accounts") },
                                 onClick = {
-                                    selectedAccount = acc.id
+                                    viewModel?.updateSelectedAccount(null)
                                     accountDropdownExpanded = false
                                 }
                             )
+                            uiState.accountMap.values.forEach { acc ->
+                                DropdownMenuItem(
+                                    text = { Text(acc.name) },
+                                    onClick = {
+                                        viewModel?.updateSelectedAccount(acc.id)
+                                        accountDropdownExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // 5. Source Filter Chip
+                item {
+                    Box {
+                        FilterChip(
+                            selected = uiState.selectedSource != null,
+                            onClick = { sourceDropdownExpanded = true },
+                            label = { Text(uiState.selectedSource?.name ?: "Source: All") }
+                        )
+                        DropdownMenu(
+                            expanded = sourceDropdownExpanded,
+                            onDismissRequest = { sourceDropdownExpanded = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("All Sources") },
+                                onClick = {
+                                    viewModel?.updateSelectedSource(null)
+                                    sourceDropdownExpanded = false
+                                }
+                            )
+                            DbTxnSource.entries.forEach { src ->
+                                DropdownMenuItem(
+                                    text = { Text(src.name) },
+                                    onClick = {
+                                        viewModel?.updateSelectedSource(src)
+                                        sourceDropdownExpanded = false
+                                    }
+                                )
+                            }
                         }
                     }
                 }
             }
-        }
 
-        Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-        // Main List Content
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 16.dp)
-        ) {
-            // "5 SMS to review" Banner at Top of Feed
-            item {
-                if (FakeData.smsReviewItems.isNotEmpty()) {
-                    SmsBannerInTransactions(
-                        unreadCount = FakeData.smsReviewItems.size,
-                        onClick = { onNavigate(Screen.ReviewInbox) },
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                    )
-                }
-            }
-
-            if (filteredTransactionsByDay.isEmpty()) {
+            // Main List Content
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 16.dp)
+            ) {
+                // SMS Review Banner at Top of Feed
                 item {
-                    EmptyState(
-                        title = "No Matching Transactions",
-                        description = "Try adjusting your search query or filter chips.",
-                        icon = Icons.Rounded.Search
-                    )
-                }
-            } else {
-                filteredTransactionsByDay.forEach { (dateLabel, txList) ->
-                    // Group Header with Day Summary
-                    item(key = "header_$dateLabel") {
-                        DayHeader(dateLabel = dateLabel, txList = txList)
-                    }
-
-                    // Transaction Items
-                    items(txList, key = { it.id }) { tx ->
-                        TransactionItemRow(
-                            transaction = tx,
-                            accountMap = accountMap,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                    if (FakeData.smsReviewItems.isNotEmpty()) {
+                        SmsBannerInTransactions(
+                            unreadCount = FakeData.smsReviewItems.size,
+                            onClick = { onNavigate(Screen.ReviewInbox) },
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                         )
+                    }
+                }
+
+                if (uiState.groupedTransactions.isEmpty() && !uiState.isLoading) {
+                    item {
+                        EmptyState(
+                            title = "No Transactions Found",
+                            description = "Try adjusting your search query or filter chips.",
+                            icon = Icons.Rounded.Search
+                        )
+                    }
+                } else {
+                    uiState.groupedTransactions.forEach { dayGroup ->
+                        // Group Header with Day Summary
+                        item(key = "header_${dayGroup.dateLabel}") {
+                            DayHeaderEntity(dayGroup = dayGroup)
+                        }
+
+                        // Transaction Items with Swipe Gestures
+                        items(dayGroup.transactions, key = { it.id }) { tx ->
+                            SwipeableTransactionItem(
+                                tx = tx,
+                                accountMap = uiState.accountMap,
+                                categoryMap = uiState.categoryMap,
+                                onTap = { onNavigate(Screen.AddTransaction(txnId = tx.id)) },
+                                onDuplicate = { onNavigate(Screen.AddTransaction(duplicateTxnId = tx.id)) },
+                                onDelete = {
+                                    viewModel?.softDeleteTransaction(tx.id)
+                                    scope.launch {
+                                        val result = snackbarHostState.showSnackbar(
+                                            message = "Transaction deleted",
+                                            actionLabel = "Undo",
+                                            duration = SnackbarDuration.Short
+                                        )
+                                        if (result == SnackbarResult.ActionPerformed) {
+                                            viewModel?.restoreTransaction(tx.id)
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                            )
+                        }
                     }
                 }
             }
         }
     }
+}
+
+/**
+ * Swipeable wrapper using Material3 SwipeToDismissBox.
+ * Swipe left -> Delete (soft delete with Undo)
+ * Swipe right -> Duplicate (opens Add pre-filled with today's date)
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SwipeableTransactionItem(
+    tx: TxnEntity,
+    accountMap: Map<String, AccountEntity>,
+    categoryMap: Map<String, CategoryEntity>,
+    onTap: () -> Unit,
+    onDuplicate: () -> Unit,
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            when (value) {
+                SwipeToDismissBoxValue.EndToStart -> { // Swipe left -> Delete
+                    onDelete()
+                    true
+                }
+                SwipeToDismissBoxValue.StartToEnd -> { // Swipe right -> Duplicate
+                    onDuplicate()
+                    false
+                }
+                else -> false
+            }
+        }
+    )
+
+    SwipeToDismissBox(
+        state = dismissState,
+        modifier = modifier.clip(RoundedCornerShape(16.dp)),
+        backgroundContent = {
+            val direction = dismissState.dismissDirection
+            val color = when (direction) {
+                SwipeToDismissBoxValue.StartToEnd -> MaterialTheme.colorScheme.primaryContainer
+                SwipeToDismissBoxValue.EndToStart -> MaterialTheme.colorScheme.errorContainer
+                else -> Color.Transparent
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(color, shape = RoundedCornerShape(16.dp))
+                    .padding(horizontal = 20.dp),
+                contentAlignment = if (direction == SwipeToDismissBoxValue.StartToEnd) Alignment.CenterStart else Alignment.CenterEnd
+            ) {
+                if (direction == SwipeToDismissBoxValue.StartToEnd) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Rounded.ContentCopy,
+                            contentDescription = "Duplicate",
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Duplicate",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                } else if (direction == SwipeToDismissBoxValue.EndToStart) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "Delete",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Icon(
+                            imageVector = Icons.Rounded.Delete,
+                            contentDescription = "Delete",
+                            tint = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
+                }
+            }
+        },
+        content = {
+            TransactionEntityItemRow(
+                tx = tx,
+                accountMap = accountMap,
+                categoryMap = categoryMap,
+                onClick = onTap
+            )
+        }
+    )
 }
 
 /**
@@ -398,18 +543,9 @@ private fun SmsBannerInTransactions(
  * Daily header showing date label and total spent/received in the day.
  */
 @Composable
-private fun DayHeader(
-    dateLabel: String,
-    txList: List<Transaction>,
+private fun DayHeaderEntity(
+    dayGroup: DayGroupedTransactions
 ) {
-    val daySpent = txList
-        .filter { it.type == TransactionType.EXPENSE || it.type == TransactionType.TRANSFER }
-        .sumOf { it.amountInPaise }
-
-    val dayReceived = txList
-        .filter { it.type == TransactionType.INCOME || it.type == TransactionType.REFUND }
-        .sumOf { it.amountInPaise }
-
     Surface(
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
         modifier = Modifier.fillMaxWidth()
@@ -422,14 +558,14 @@ private fun DayHeader(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = dateLabel,
+                text = dayGroup.dateLabel,
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (daySpent > 0) {
+                if (dayGroup.daySpentPaise > 0) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = "Spent: ",
@@ -437,7 +573,7 @@ private fun DayHeader(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         AmountText(
-                            amountInPaise = daySpent,
+                            amountInPaise = dayGroup.daySpentPaise,
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.error
@@ -445,7 +581,7 @@ private fun DayHeader(
                     }
                 }
 
-                if (dayReceived > 0) {
+                if (dayGroup.dayReceivedPaise > 0) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = "Recv: ",
@@ -453,7 +589,7 @@ private fun DayHeader(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         AmountText(
-                            amountInPaise = dayReceived,
+                            amountInPaise = dayGroup.dayReceivedPaise,
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary
@@ -466,22 +602,29 @@ private fun DayHeader(
 }
 
 /**
- * Individual Transaction item card with category icon, payee, account details, note, split badge, and [AmountText].
+ * Individual Transaction item card with category icon, payee, account details, note, and [AmountText].
  */
 @Composable
-private fun TransactionItemRow(
-    transaction: Transaction,
-    accountMap: Map<String, com.patil.coconut_pfa.data.model.Account>,
+private fun TransactionEntityItemRow(
+    tx: TxnEntity,
+    accountMap: Map<String, AccountEntity>,
+    categoryMap: Map<String, CategoryEntity>,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val account = accountMap[transaction.accountId]
-    val targetAccount = transaction.targetAccountId?.let { accountMap[it] }
+    val account = accountMap[tx.accountId]
+    val targetAccount = tx.toAccountId?.let { accountMap[it] }
+    val category = tx.categoryId?.let { categoryMap[it] }
 
-    val isPositive = transaction.type == TransactionType.INCOME || transaction.type == TransactionType.REFUND
+    val isPositive = tx.type == DbTxnType.INCOME || tx.type == DbTxnType.REFUND
     val amountColor = if (isPositive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
 
+    val categoryName = category?.name ?: tx.categoryId ?: "General"
+
     Card(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
@@ -499,15 +642,15 @@ private fun TransactionItemRow(
                 modifier = Modifier
                     .size(42.dp)
                     .background(
-                        color = getCategoryContainerColor(transaction.type),
+                        color = getDbCategoryContainerColor(tx.type),
                         shape = CircleShape
                     ),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = getCategoryIcon(transaction.category, transaction.type),
-                    contentDescription = transaction.category,
-                    tint = getCategoryIconColor(transaction.type),
+                    imageVector = getDbCategoryIcon(categoryName, tx.type),
+                    contentDescription = categoryName,
+                    tint = getDbCategoryIconColor(tx.type),
                     modifier = Modifier.size(22.dp)
                 )
             }
@@ -518,32 +661,23 @@ private fun TransactionItemRow(
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = transaction.payee,
+                        text = tx.payee ?: categoryName,
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
-                    if (transaction.isSplit) {
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Rounded.CallSplit,
-                            contentDescription = "Split transaction",
-                            tint = MaterialTheme.colorScheme.tertiary,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
                 }
 
                 Spacer(modifier = Modifier.height(2.dp))
 
                 // Account & Target account text
-                val accountDisplay = when (transaction.type) {
-                    TransactionType.TRANSFER, TransactionType.SETTLEMENT -> {
+                val accountDisplay = when (tx.type) {
+                    DbTxnType.TRANSFER, DbTxnType.SETTLEMENT -> {
                         val fromName = account?.name ?: "Account"
                         val toName = targetAccount?.name ?: "Target Account"
                         "$fromName ↔ $toName"
                     }
-                    else -> account?.name ?: transaction.category
+                    else -> account?.name ?: categoryName
                 }
 
                 Text(
@@ -552,9 +686,9 @@ private fun TransactionItemRow(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
-                if (!transaction.note.isNullOrBlank()) {
+                if (!tx.note.isNullOrBlank()) {
                     Text(
-                        text = transaction.note,
+                        text = tx.note,
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.outline
                     )
@@ -574,7 +708,7 @@ private fun TransactionItemRow(
                         )
                     }
                     AmountText(
-                        amountInPaise = transaction.amountInPaise,
+                        amountInPaise = tx.amountPaise,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = amountColor
@@ -582,7 +716,7 @@ private fun TransactionItemRow(
                 }
 
                 Text(
-                    text = transaction.category,
+                    text = categoryName,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.outline
                 )
@@ -592,28 +726,28 @@ private fun TransactionItemRow(
 }
 
 @Composable
-private fun getCategoryContainerColor(type: TransactionType): Color {
+private fun getDbCategoryContainerColor(type: DbTxnType): Color {
     return when (type) {
-        TransactionType.INCOME -> MaterialTheme.colorScheme.primaryContainer
-        TransactionType.REFUND -> MaterialTheme.colorScheme.tertiaryContainer
-        TransactionType.TRANSFER, TransactionType.SETTLEMENT -> MaterialTheme.colorScheme.secondaryContainer
-        TransactionType.EXPENSE, TransactionType.ADJUSTMENT -> MaterialTheme.colorScheme.surfaceVariant
+        DbTxnType.INCOME -> MaterialTheme.colorScheme.primaryContainer
+        DbTxnType.REFUND -> MaterialTheme.colorScheme.tertiaryContainer
+        DbTxnType.TRANSFER, DbTxnType.SETTLEMENT -> MaterialTheme.colorScheme.secondaryContainer
+        DbTxnType.EXPENSE, DbTxnType.ADJUSTMENT -> MaterialTheme.colorScheme.surfaceVariant
     }
 }
 
 @Composable
-private fun getCategoryIconColor(type: TransactionType): Color {
+private fun getDbCategoryIconColor(type: DbTxnType): Color {
     return when (type) {
-        TransactionType.INCOME -> MaterialTheme.colorScheme.onPrimaryContainer
-        TransactionType.REFUND -> MaterialTheme.colorScheme.onTertiaryContainer
-        TransactionType.TRANSFER, TransactionType.SETTLEMENT -> MaterialTheme.colorScheme.onSecondaryContainer
-        TransactionType.EXPENSE, TransactionType.ADJUSTMENT -> MaterialTheme.colorScheme.onSurfaceVariant
+        DbTxnType.INCOME -> MaterialTheme.colorScheme.onPrimaryContainer
+        DbTxnType.REFUND -> MaterialTheme.colorScheme.onTertiaryContainer
+        DbTxnType.TRANSFER, DbTxnType.SETTLEMENT -> MaterialTheme.colorScheme.onSecondaryContainer
+        DbTxnType.EXPENSE, DbTxnType.ADJUSTMENT -> MaterialTheme.colorScheme.onSurfaceVariant
     }
 }
 
-private fun getCategoryIcon(category: String, type: TransactionType): ImageVector {
+private fun getDbCategoryIcon(category: String, type: DbTxnType): ImageVector {
     return when (type) {
-        TransactionType.TRANSFER, TransactionType.SETTLEMENT -> Icons.Rounded.SwapHoriz
+        DbTxnType.TRANSFER, DbTxnType.SETTLEMENT -> Icons.Rounded.SwapHoriz
         else -> when (category.lowercase()) {
             "groceries" -> Icons.Rounded.ShoppingCart
             "dining" -> Icons.Rounded.Restaurant

@@ -28,7 +28,6 @@ import androidx.compose.material.icons.rounded.AccessTime
 import androidx.compose.material.icons.rounded.AccountBalance
 import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.CalendarToday
-import androidx.compose.material.icons.rounded.Category
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.EditNote
 import androidx.compose.material.icons.rounded.Person
@@ -54,7 +53,10 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -62,25 +64,34 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.patil.coconut_pfa.data.local.entity.AccountEntity
+import com.patil.coconut_pfa.data.local.entity.CategoryEntity
+import com.patil.coconut_pfa.data.local.entity.DbTxnType
 import com.patil.coconut_pfa.data.model.TransactionType
-import com.patil.coconut_pfa.data.repository.FakeData
 import com.patil.coconut_pfa.navigation.Screen
 import com.patil.coconut_pfa.ui.theme.Coconut_PfaTheme
+import com.patil.coconut_pfa.ui.viewmodel.AddTransactionUiState
+import com.patil.coconut_pfa.ui.viewmodel.AddTransactionViewModel
+import com.patil.coconut_pfa.util.KolkataDateTimeUtils
 import kotlinx.coroutines.launch
+import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AddTransactionScreen(
     onNavigate: (Screen) -> Unit,
     modifier: Modifier = Modifier,
+    viewModel: AddTransactionViewModel? = null
 ) {
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+
+    val uiState by viewModel?.uiState?.collectAsState() ?: remember {
+        mutableStateOf(AddTransactionUiState(isLoading = false))
+    }
 
     // Tab state (0: Expense, 1: Income, 2: Transfer, 3: Refund)
     var selectedTabItem by remember { mutableStateOf(0) }
@@ -91,17 +102,72 @@ fun AddTransactionScreen(
     var payee by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }
     var isSplitEnabled by remember { mutableStateOf(false) }
-    var selectedCategory by remember { mutableStateOf("Groceries") }
-    var selectedDateText by remember { mutableStateOf("Today, 12 Nov 2024") }
+    var selectedCategoryId by remember { mutableStateOf<String?>(null) }
+    var selectedCategoryName by remember { mutableStateOf("Groceries") }
+    var selectedOccurredAt by remember { mutableLongStateOf(System.currentTimeMillis()) }
 
-    // Account selectors
-    var fromAccount by remember { mutableStateOf(FakeData.accounts.firstOrNull() ?: FakeData.accounts[0]) }
-    var toAccount by remember { mutableStateOf(FakeData.accounts.getOrNull(1) ?: FakeData.accounts[0]) }
+    // Selected Accounts
+    var fromAccount by remember { mutableStateOf<AccountEntity?>(null) }
+    var toAccount by remember { mutableStateOf<AccountEntity?>(null) }
 
     // Dropdown expansion states
     var categoryDropdownExpanded by remember { mutableStateOf(false) }
+    var payeeDropdownExpanded by remember { mutableStateOf(false) }
     var fromAccountExpanded by remember { mutableStateOf(false) }
     var toAccountExpanded by remember { mutableStateOf(false) }
+
+    // Pre-populate logic when data is loaded from Room / ViewModel
+    var initialized by remember { mutableStateOf(false) }
+    LaunchedEffect(uiState.isLoading, uiState.accounts, uiState.categories, uiState.initialTxn) {
+        if (!uiState.isLoading && !initialized) {
+            val tx = uiState.initialTxn
+            val accounts = uiState.accounts
+            val categories = uiState.categories
+
+            if (accounts.isNotEmpty()) {
+                fromAccount = accounts.firstOrNull { it.id == tx?.accountId }
+                    ?: accounts.firstOrNull { it.id == uiState.lastUsedAccountId }
+                    ?: accounts.firstOrNull()
+
+                toAccount = accounts.firstOrNull { it.id == tx?.toAccountId }
+                    ?: accounts.getOrNull(1)
+                    ?: accounts.firstOrNull()
+            }
+
+            if (tx != null) {
+                // Editing or duplicating existing transaction
+                selectedTabItem = when (tx.type) {
+                    DbTxnType.EXPENSE -> 0
+                    DbTxnType.INCOME -> 1
+                    DbTxnType.TRANSFER -> 2
+                    DbTxnType.REFUND -> 3
+                    else -> 0
+                }
+                val amountDouble = tx.amountPaise / 100.0
+                rawAmountInput = if (tx.amountPaise % 100 == 0L) {
+                    (tx.amountPaise / 100).toString()
+                } else {
+                    String.format("%.2f", amountDouble)
+                }
+                payee = tx.payee ?: ""
+                note = tx.note ?: ""
+                selectedOccurredAt = tx.occurredAt
+
+                if (tx.categoryId != null) {
+                    val foundCat = categories.firstOrNull { it.id == tx.categoryId }
+                    selectedCategoryId = foundCat?.id ?: tx.categoryId
+                    selectedCategoryName = foundCat?.name ?: "General"
+                }
+            } else {
+                // New transaction - preset defaults
+                val defaultCat = categories.firstOrNull { it.id == uiState.lastUsedCategoryId }
+                    ?: categories.firstOrNull()
+                selectedCategoryId = defaultCat?.id
+                selectedCategoryName = defaultCat?.name ?: "Groceries"
+            }
+            initialized = true
+        }
+    }
 
     val currentType = when (selectedTabItem) {
         0 -> TransactionType.EXPENSE
@@ -111,12 +177,27 @@ fun AddTransactionScreen(
         else -> TransactionType.EXPENSE
     }
 
-    val availableCategories = remember(selectedTabItem) {
-        when (selectedTabItem) {
-            1 -> listOf("Salary", "Freelance", "Investment", "Bonus", "Gift", "Other Income")
-            2 -> listOf("Transfer", "Self Transfer", "Settlement", "Credit Card Bill")
-            3 -> listOf("Shopping Refund", "Cashback", "Reimbursement", "Other Refund")
-            else -> listOf("Groceries", "Dining", "Shopping", "Fuel", "Utilities", "Bills", "Rent", "Entertainment", "Health")
+    val availableCategories = remember(selectedTabItem, uiState.categories) {
+        if (uiState.categories.isNotEmpty()) {
+            uiState.categories
+        } else {
+            // Fallback default list if categories not loaded yet
+            when (selectedTabItem) {
+                1 -> listOf("Salary", "Freelance", "Investment", "Bonus", "Gift", "Other Income").map { CategoryEntity(id = it, name = it, kind = com.patil.coconut_pfa.data.local.entity.DbCategoryKind.INCOME, icon = "payments", colour = 0xFF4CAF50L) }
+                2 -> listOf("Transfer", "Self Transfer", "Settlement", "Credit Card Bill").map { CategoryEntity(id = it, name = it, kind = com.patil.coconut_pfa.data.local.entity.DbCategoryKind.EXPENSE, icon = "swap_horiz", colour = 0xFF1E88E5L) }
+                3 -> listOf("Shopping Refund", "Cashback", "Reimbursement", "Other Refund").map { CategoryEntity(id = it, name = it, kind = com.patil.coconut_pfa.data.local.entity.DbCategoryKind.INCOME, icon = "redeem", colour = 0xFF009688L) }
+                else -> listOf("Groceries", "Dining", "Shopping", "Fuel", "Utilities", "Bills", "Rent", "Entertainment", "Health").map { CategoryEntity(id = it, name = it, kind = com.patil.coconut_pfa.data.local.entity.DbCategoryKind.EXPENSE, icon = "shopping_cart", colour = 0xFFE91E63L) }
+            }
+        }
+    }
+
+    val selectedDateText = remember(selectedOccurredAt) {
+        val date = KolkataDateTimeUtils.epochMillisToLocalDate(selectedOccurredAt)
+        val today = KolkataDateTimeUtils.currentLocalDate()
+        when (date) {
+            today -> "Today, ${date.format(DateTimeFormatter.ofPattern("d MMM yyyy"))}"
+            today.minusDays(1) -> "Yesterday, ${date.format(DateTimeFormatter.ofPattern("d MMM yyyy"))}"
+            else -> date.format(DateTimeFormatter.ofPattern("EEE, d MMM yyyy"))
         }
     }
 
@@ -146,12 +227,12 @@ fun AddTransactionScreen(
                 }
 
                 Text(
-                    text = "Add Transaction",
+                    text = if (uiState.initialTxn != null) "Edit Transaction" else "Add Transaction",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
 
-                // "Scan" Button (UI action button)
+                // "Scan" Button (UI placeholder action)
                 OutlinedButton(
                     onClick = {
                         scope.launch {
@@ -181,11 +262,15 @@ fun AddTransactionScreen(
                         selected = selectedTabItem == index,
                         onClick = {
                             selectedTabItem = index
-                            selectedCategory = when (index) {
-                                1 -> "Salary"
-                                2 -> "Transfer"
-                                3 -> "Shopping Refund"
-                                else -> "Groceries"
+                            val matchingCat = when (index) {
+                                1 -> availableCategories.firstOrNull { it.name.equals("Salary", ignoreCase = true) } ?: availableCategories.firstOrNull()
+                                2 -> availableCategories.firstOrNull { it.name.equals("Transfer", ignoreCase = true) } ?: availableCategories.firstOrNull()
+                                3 -> availableCategories.firstOrNull { it.name.contains("Refund", ignoreCase = true) || it.name.contains("Cashback", ignoreCase = true) } ?: availableCategories.firstOrNull()
+                                else -> availableCategories.firstOrNull { it.name.equals("Groceries", ignoreCase = true) } ?: availableCategories.firstOrNull()
+                            }
+                            matchingCat?.let {
+                                selectedCategoryId = it.id
+                                selectedCategoryName = it.name
                             }
                         },
                         text = {
@@ -289,14 +374,14 @@ fun AddTransactionScreen(
                         Box(modifier = Modifier.weight(1f)) {
                             AccountPickerField(
                                 label = "From Account",
-                                accountName = fromAccount.name,
+                                accountName = fromAccount?.name ?: "Select Account",
                                 onClick = { fromAccountExpanded = true }
                             )
                             DropdownMenu(
                                 expanded = fromAccountExpanded,
                                 onDismissRequest = { fromAccountExpanded = false }
                             ) {
-                                FakeData.accounts.forEach { acc ->
+                                uiState.accounts.forEach { acc ->
                                     DropdownMenuItem(
                                         text = { Text(acc.name) },
                                         onClick = {
@@ -312,14 +397,14 @@ fun AddTransactionScreen(
                         Box(modifier = Modifier.weight(1f)) {
                             AccountPickerField(
                                 label = "To Account",
-                                accountName = toAccount.name,
+                                accountName = toAccount?.name ?: "Select Account",
                                 onClick = { toAccountExpanded = true }
                             )
                             DropdownMenu(
                                 expanded = toAccountExpanded,
                                 onDismissRequest = { toAccountExpanded = false }
                             ) {
-                                FakeData.accounts.forEach { acc ->
+                                uiState.accounts.forEach { acc ->
                                     DropdownMenuItem(
                                         text = { Text(acc.name) },
                                         onClick = {
@@ -336,14 +421,14 @@ fun AddTransactionScreen(
                     Box(modifier = Modifier.fillMaxWidth()) {
                         AccountPickerField(
                             label = "Account",
-                            accountName = fromAccount.name,
+                            accountName = fromAccount?.name ?: "Select Account",
                             onClick = { fromAccountExpanded = true }
                         )
                         DropdownMenu(
                             expanded = fromAccountExpanded,
                             onDismissRequest = { fromAccountExpanded = false }
                         ) {
-                            FakeData.accounts.forEach { acc ->
+                            uiState.accounts.forEach { acc ->
                                 DropdownMenuItem(
                                     text = { Text(acc.name) },
                                     onClick = {
@@ -381,9 +466,10 @@ fun AddTransactionScreen(
                             ) {
                                 availableCategories.forEach { cat ->
                                     DropdownMenuItem(
-                                        text = { Text(cat) },
+                                        text = { Text(cat.name) },
                                         onClick = {
-                                            selectedCategory = cat
+                                            selectedCategoryId = cat.id
+                                            selectedCategoryName = cat.name
                                             categoryDropdownExpanded = false
                                         }
                                     )
@@ -400,11 +486,15 @@ fun AddTransactionScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         availableCategories.take(6).forEach { cat ->
+                            val isSelected = selectedCategoryId == cat.id || selectedCategoryName == cat.name
                             FilterChip(
-                                selected = selectedCategory == cat,
-                                onClick = { selectedCategory = cat },
-                                label = { Text(cat) },
-                                leadingIcon = if (selectedCategory == cat) {
+                                selected = isSelected,
+                                onClick = {
+                                    selectedCategoryId = cat.id
+                                    selectedCategoryName = cat.name
+                                },
+                                label = { Text(cat.name) },
+                                leadingIcon = if (isSelected) {
                                     { Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
                                 } else null
                             )
@@ -412,17 +502,42 @@ fun AddTransactionScreen(
                     }
                 }
 
-                // Payee text field
-                OutlinedTextField(
-                    value = payee,
-                    onValueChange = { payee = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Payee / Merchant / Description") },
-                    placeholder = { Text("e.g. Starbucks, Supermarket, John") },
-                    leadingIcon = { Icon(Icons.Rounded.Person, contentDescription = null) },
-                    singleLine = true,
-                    shape = RoundedCornerShape(16.dp)
-                )
+                // Payee text field with suggestions dropdown
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    OutlinedTextField(
+                        value = payee,
+                        onValueChange = {
+                            payee = it
+                            payeeDropdownExpanded = uiState.distinctPayees.any { p -> p.contains(it, ignoreCase = true) }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Payee / Merchant / Description") },
+                        placeholder = { Text("e.g. Starbucks, Supermarket, John") },
+                        leadingIcon = { Icon(Icons.Rounded.Person, contentDescription = null) },
+                        singleLine = true,
+                        shape = RoundedCornerShape(16.dp)
+                    )
+
+                    if (payeeDropdownExpanded && uiState.distinctPayees.isNotEmpty()) {
+                        val matchingPayees = uiState.distinctPayees.filter { it.contains(payee, ignoreCase = true) }.take(5)
+                        if (matchingPayees.isNotEmpty()) {
+                            DropdownMenu(
+                                expanded = payeeDropdownExpanded,
+                                onDismissRequest = { payeeDropdownExpanded = false }
+                            ) {
+                                matchingPayees.forEach { suggestion ->
+                                    DropdownMenuItem(
+                                        text = { Text(suggestion) },
+                                        onClick = {
+                                            payee = suggestion
+                                            payeeDropdownExpanded = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
 
                 // Note text field
                 OutlinedTextField(
@@ -436,14 +551,14 @@ fun AddTransactionScreen(
                     shape = RoundedCornerShape(16.dp)
                 )
 
-                // Date & Time Picker Field (UI component)
+                // Date & Time Picker Field
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(16.dp))
                         .clickable {
                             scope.launch {
-                                snackbarHostState.showSnackbar("Date picker clicked (demo)")
+                                snackbarHostState.showSnackbar("Date: $selectedDateText")
                             }
                         },
                     shape = RoundedCornerShape(16.dp),
@@ -487,7 +602,7 @@ fun AddTransactionScreen(
                     }
                 }
 
-                // "Split with friends" Switch
+                // "Split with friends" Switch (Placeholder feature)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -532,12 +647,57 @@ fun AddTransactionScreen(
                     )
                 }
 
-                // "Save" Button
+                // "Save" Button with validation & DB call
                 Button(
                     onClick = {
+                        val amountDouble = rawAmountInput.toDoubleOrNull() ?: 0.0
+                        val amountPaise = (amountDouble * 100).toLong()
+
+                        if (amountPaise <= 0L) {
+                            scope.launch { snackbarHostState.showSnackbar("Please enter a valid amount greater than 0") }
+                            return@Button
+                        }
+                        if (fromAccount == null) {
+                            scope.launch { snackbarHostState.showSnackbar("Please select an account") }
+                            return@Button
+                        }
+                        val dbType = when (selectedTabItem) {
+                            0 -> DbTxnType.EXPENSE
+                            1 -> DbTxnType.INCOME
+                            2 -> DbTxnType.TRANSFER
+                            3 -> DbTxnType.REFUND
+                            else -> DbTxnType.EXPENSE
+                        }
+                        if (dbType == DbTxnType.TRANSFER) {
+                            if (toAccount == null || fromAccount?.id == toAccount?.id) {
+                                scope.launch { snackbarHostState.showSnackbar("From and To accounts must be different") }
+                                return@Button
+                            }
+                        } else {
+                            if (selectedCategoryId == null && selectedCategoryName.isBlank()) {
+                                scope.launch { snackbarHostState.showSnackbar("Please select a category") }
+                                return@Button
+                            }
+                        }
+
                         scope.launch {
-                            snackbarHostState.showSnackbar("Saved (demo)")
-                            onNavigate(Screen.Home)
+                            val success = viewModel?.saveTransaction(
+                                type = dbType,
+                                amountPaise = amountPaise,
+                                accountId = fromAccount?.id,
+                                toAccountId = toAccount?.id,
+                                categoryId = selectedCategoryId ?: selectedCategoryName,
+                                payee = payee,
+                                note = note,
+                                occurredAt = selectedOccurredAt
+                            ) ?: true
+
+                            if (success) {
+                                snackbarHostState.showSnackbar("Transaction saved successfully!")
+                                onNavigate(Screen.Transactions)
+                            } else {
+                                snackbarHostState.showSnackbar("Failed to save transaction. Check inputs.")
+                            }
                         }
                     },
                     modifier = Modifier

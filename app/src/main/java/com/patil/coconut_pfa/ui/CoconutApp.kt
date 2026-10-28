@@ -28,6 +28,7 @@ import com.patil.coconut_pfa.data.local.db.CoconutDatabase
 import com.patil.coconut_pfa.data.local.security.LockManager
 import com.patil.coconut_pfa.data.local.security.PinHasher
 import com.patil.coconut_pfa.data.repository.AccountRepository
+import com.patil.coconut_pfa.data.repository.CategoryRepository
 import com.patil.coconut_pfa.data.repository.NetWorthRepository
 import com.patil.coconut_pfa.data.repository.PersonLedgerRepository
 import com.patil.coconut_pfa.data.repository.SettingsRepository
@@ -59,7 +60,11 @@ import com.patil.coconut_pfa.ui.screens.TrashScreen
 import com.patil.coconut_pfa.ui.viewmodel.AccountDetailViewModel
 import com.patil.coconut_pfa.ui.viewmodel.AccountsViewModel
 import com.patil.coconut_pfa.ui.viewmodel.AddAccountViewModel
+import com.patil.coconut_pfa.ui.viewmodel.AddTransactionViewModel
+import com.patil.coconut_pfa.ui.viewmodel.TransactionsViewModel
+import com.patil.coconut_pfa.ui.viewmodel.TrashViewModel
 import com.patil.coconut_pfa.util.PrivacyManager
+import com.patil.coconut_pfa.worker.PurgeTrashWorker
 import kotlinx.coroutines.launch
 
 /**
@@ -82,6 +87,7 @@ fun CoconutApp(
         )
     }
     val transactionRepository = remember { TransactionRepository(database.txnDao()) }
+    val categoryRepository = remember { CategoryRepository(database.categoryDao()) }
     val netWorthRepository = remember { NetWorthRepository(database.netWorthSnapshotDao()) }
     val personLedgerRepository = remember { PersonLedgerRepository(database.personDao(), database.ledgerEntryDao()) }
 
@@ -94,6 +100,11 @@ fun CoconutApp(
     val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
     val hasColdStarted = remember { mutableStateOf(false) }
+
+    // Schedule WorkManager job for purging old trash
+    LaunchedEffect(Unit) {
+        PurgeTrashWorker.schedule(context)
+    }
 
     // Sync PrivacyMode default state & perform cold start lock once settings are loaded
     LaunchedEffect(userSettings.onboardingDone, userSettings.pinHash, userSettings.privacyModeDefault) {
@@ -233,7 +244,7 @@ fun CoconutApp(
                             navigateTo(destination)
                         },
                         onAddClick = {
-                            navigateTo(Screen.AddTransaction)
+                            navigateTo(Screen.AddTransaction())
                         }
                     )
                 }
@@ -241,7 +252,21 @@ fun CoconutApp(
                 val screenModifier = Modifier.padding(innerPadding)
                 when (val dest = currentDestination) {
                     Screen.Home -> HomeScreen(onNavigate = navigateTo, modifier = screenModifier)
-                    Screen.Transactions -> TransactionsScreen(onNavigate = navigateTo, modifier = screenModifier)
+                    Screen.Transactions -> {
+                        val transactionsViewModel: TransactionsViewModel = viewModel(
+                            factory = TransactionsViewModel.Factory(
+                                transactionRepository = transactionRepository,
+                                accountRepository = accountRepository,
+                                categoryRepository = categoryRepository,
+                                settingsRepository = settingsRepository
+                            )
+                        )
+                        TransactionsScreen(
+                            onNavigate = navigateTo,
+                            modifier = screenModifier,
+                            viewModel = transactionsViewModel
+                        )
+                    }
                     Screen.Payments -> PaymentsScreen(onNavigate = navigateTo, modifier = screenModifier)
                     Screen.Accounts -> {
                         val accountsViewModel: AccountsViewModel = viewModel(
@@ -259,7 +284,25 @@ fun CoconutApp(
                             modifier = screenModifier
                         )
                     }
-                    Screen.AddTransaction -> AddTransactionScreen(onNavigate = navigateTo, modifier = screenModifier)
+                    is Screen.AddTransaction -> {
+                        val addTransactionViewModel: AddTransactionViewModel = viewModel(
+                            key = "add_txn_${dest.txnId ?: dest.duplicateTxnId ?: "new"}",
+                            factory = AddTransactionViewModel.Factory(
+                                txnId = dest.txnId,
+                                duplicateTxnId = dest.duplicateTxnId,
+                                initialDateMillis = dest.initialDateMillis,
+                                accountRepository = accountRepository,
+                                categoryRepository = categoryRepository,
+                                transactionRepository = transactionRepository,
+                                settingsRepository = settingsRepository
+                            )
+                        )
+                        AddTransactionScreen(
+                            onNavigate = navigateTo,
+                            modifier = screenModifier,
+                            viewModel = addTransactionViewModel
+                        )
+                    }
                     Screen.Goals -> GoalsScreen(onNavigate = navigateTo, modifier = screenModifier)
                     Screen.Subscriptions -> SubscriptionsScreen(onNavigate = navigateTo, modifier = screenModifier)
                     Screen.SplitAndIOUs -> SplitAndIOUsScreen(onNavigate = navigateTo, modifier = screenModifier)
@@ -309,7 +352,20 @@ fun CoconutApp(
                     Screen.AddBill -> AddBillScreen(onNavigate = navigateTo, modifier = screenModifier)
                     Screen.ImportStatement -> ImportStatementScreen(onNavigate = navigateTo, modifier = screenModifier)
                     Screen.ReceiptScan -> ReceiptScanScreen(onNavigate = navigateTo, modifier = screenModifier)
-                    Screen.Trash -> TrashScreen(onNavigate = navigateTo, modifier = screenModifier)
+                    Screen.Trash -> {
+                        val trashViewModel: TrashViewModel = viewModel(
+                            factory = TrashViewModel.Factory(
+                                transactionRepository = transactionRepository,
+                                accountRepository = accountRepository,
+                                categoryRepository = categoryRepository
+                            )
+                        )
+                        TrashScreen(
+                            onNavigate = navigateTo,
+                            modifier = screenModifier,
+                            viewModel = trashViewModel
+                        )
+                    }
                     Screen.ParserTest -> ParserTestScreen(onNavigate = navigateTo, modifier = screenModifier)
                     Screen.Onboarding -> OnboardingScreen(
                         onNavigate = navigateTo,

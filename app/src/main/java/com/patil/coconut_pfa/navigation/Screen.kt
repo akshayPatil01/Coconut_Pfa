@@ -30,8 +30,12 @@ sealed interface Screen {
     }
 
     @Serializable
-    data object AddTransaction : Screen {
-        override val title: String = "Add Transaction"
+    data class AddTransaction(
+        val txnId: String? = null,
+        val duplicateTxnId: String? = null,
+        val initialDateMillis: Long? = null
+    ) : Screen {
+        override val title: String = if (txnId != null) "Edit Transaction" else "Add Transaction"
     }
 
     @Serializable

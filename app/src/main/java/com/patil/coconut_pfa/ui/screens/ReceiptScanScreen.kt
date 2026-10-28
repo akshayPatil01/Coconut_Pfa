@@ -201,7 +201,7 @@ fun ReceiptScanScreen(
                     // Use Button -> Navigates to Add Transaction
                     Button(
                         onClick = {
-                            onNavigate(Screen.AddTransaction)
+                            onNavigate(Screen.AddTransaction())
                         },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(14.dp),

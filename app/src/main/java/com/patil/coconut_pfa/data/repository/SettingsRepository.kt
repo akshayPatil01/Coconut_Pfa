@@ -21,4 +21,6 @@ class SettingsRepository(
     suspend fun setLastBackupAt(timestamp: Long?) = userSettingsDataStore.updateLastBackupAt(timestamp)
     suspend fun setBackupKeep(keepCount: Int) = userSettingsDataStore.updateBackupKeep(keepCount)
     suspend fun setOnboardingDone(done: Boolean) = userSettingsDataStore.updateOnboardingDone(done)
+    suspend fun setLastUsedAccount(accountId: String?) = userSettingsDataStore.updateLastUsedAccount(accountId)
+    suspend fun setLastUsedCategory(categoryId: String?) = userSettingsDataStore.updateLastUsedCategory(categoryId)
 }

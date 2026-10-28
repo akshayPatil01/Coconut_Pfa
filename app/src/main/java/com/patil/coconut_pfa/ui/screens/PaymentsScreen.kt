@@ -287,7 +287,7 @@ private fun UpcomingTabContent(
                 )
             }
             items(overdueItems, key = { it.id }) { item ->
-                DueItemRow(item = item, onPayClick = { onNavigate(Screen.AddTransaction) })
+                DueItemRow(item = item, onPayClick = { onNavigate(Screen.AddTransaction()) })
             }
         }
 
@@ -300,7 +300,7 @@ private fun UpcomingTabContent(
                 )
             }
             items(thisWeekItems, key = { it.id }) { item ->
-                DueItemRow(item = item, onPayClick = { onNavigate(Screen.AddTransaction) })
+                DueItemRow(item = item, onPayClick = { onNavigate(Screen.AddTransaction()) })
             }
         }
 
@@ -313,7 +313,7 @@ private fun UpcomingTabContent(
                 )
             }
             items(laterItems, key = { it.id }) { item ->
-                DueItemRow(item = item, onPayClick = { onNavigate(Screen.AddTransaction) })
+                DueItemRow(item = item, onPayClick = { onNavigate(Screen.AddTransaction()) })
             }
         }
     }
@@ -430,7 +430,7 @@ private fun CardsTabContent(
         items(cards, key = { it.id }) { card ->
             CreditCardBillCard(
                 card = card,
-                onRecordPaymentClick = { onNavigate(Screen.AddTransaction) }
+                onRecordPaymentClick = { onNavigate(Screen.AddTransaction()) }
             )
         }
     }

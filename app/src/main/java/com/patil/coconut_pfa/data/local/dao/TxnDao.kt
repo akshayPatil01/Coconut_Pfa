@@ -37,4 +37,10 @@ interface TxnDao {
 
     @Query("UPDATE transactions SET deletedAt = NULL, updatedAt = :updatedAt WHERE id = :id")
     suspend fun restore(id: String, updatedAt: Long = System.currentTimeMillis())
+
+    @Query("SELECT DISTINCT payee FROM transactions WHERE payee IS NOT NULL AND payee != '' AND deletedAt IS NULL ORDER BY payee ASC")
+    fun getDistinctPayeesFlow(): Flow<List<String>>
+
+    @Query("DELETE FROM transactions WHERE deletedAt IS NOT NULL AND deletedAt < :cutoffMillis")
+    suspend fun purgeOldTrash(cutoffMillis: Long)
 }

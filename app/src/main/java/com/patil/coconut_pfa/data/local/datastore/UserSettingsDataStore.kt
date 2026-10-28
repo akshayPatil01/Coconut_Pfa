@@ -27,7 +27,9 @@ data class UserSettings(
     val backupEnabled: Boolean = false,
     val lastBackupAt: Long? = null,
     val backupKeep: Int = 7,
-    val onboardingDone: Boolean = false
+    val onboardingDone: Boolean = false,
+    val lastUsedAccountId: String? = null,
+    val lastUsedCategoryId: String? = null
 )
 
 class UserSettingsDataStore(private val context: Context) {
@@ -46,6 +48,8 @@ class UserSettingsDataStore(private val context: Context) {
         val LAST_BACKUP_AT = longPreferencesKey("last_backup_at")
         val BACKUP_KEEP = intPreferencesKey("backup_keep")
         val ONBOARDING_DONE = booleanPreferencesKey("onboarding_done")
+        val LAST_USED_ACCOUNT_ID = stringPreferencesKey("last_used_account_id")
+        val LAST_USED_CATEGORY_ID = stringPreferencesKey("last_used_category_id")
     }
 
     val settingsFlow: Flow<UserSettings> = context.settingsDataStore.data.map { prefs ->
@@ -62,7 +66,9 @@ class UserSettingsDataStore(private val context: Context) {
             backupEnabled = prefs[Keys.BACKUP_ENABLED] ?: false,
             lastBackupAt = prefs[Keys.LAST_BACKUP_AT],
             backupKeep = prefs[Keys.BACKUP_KEEP] ?: 7,
-            onboardingDone = prefs[Keys.ONBOARDING_DONE] ?: false
+            onboardingDone = prefs[Keys.ONBOARDING_DONE] ?: false,
+            lastUsedAccountId = prefs[Keys.LAST_USED_ACCOUNT_ID],
+            lastUsedCategoryId = prefs[Keys.LAST_USED_CATEGORY_ID]
         )
     }
 
@@ -117,5 +123,17 @@ class UserSettingsDataStore(private val context: Context) {
 
     suspend fun updateOnboardingDone(done: Boolean) {
         context.settingsDataStore.edit { it[Keys.ONBOARDING_DONE] = done }
+    }
+
+    suspend fun updateLastUsedAccount(accountId: String?) {
+        context.settingsDataStore.edit { prefs ->
+            if (accountId != null) prefs[Keys.LAST_USED_ACCOUNT_ID] = accountId else prefs.remove(Keys.LAST_USED_ACCOUNT_ID)
+        }
+    }
+
+    suspend fun updateLastUsedCategory(categoryId: String?) {
+        context.settingsDataStore.edit { prefs ->
+            if (categoryId != null) prefs[Keys.LAST_USED_CATEGORY_ID] = categoryId else prefs.remove(Keys.LAST_USED_CATEGORY_ID)
+        }
     }
 }
