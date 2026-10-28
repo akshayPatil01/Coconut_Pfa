@@ -67,6 +67,7 @@ import com.patil.coconut_pfa.ui.viewmodel.AddTransactionViewModel
 import com.patil.coconut_pfa.ui.viewmodel.TransactionsViewModel
 import com.patil.coconut_pfa.ui.viewmodel.TrashViewModel
 import com.patil.coconut_pfa.util.PrivacyManager
+import com.patil.coconut_pfa.worker.BillReminderWorker
 import com.patil.coconut_pfa.worker.PurgeTrashWorker
 import kotlinx.coroutines.launch
 
@@ -76,6 +77,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun CoconutApp(
     modifier: Modifier = Modifier,
+    navigateToPaymentsSignal: Boolean = false,
+    onHandledNavigateToPayments: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val database = remember { CoconutDatabase.getInstance(context) }
@@ -115,9 +118,13 @@ fun CoconutApp(
     val scope = rememberCoroutineScope()
     val hasColdStarted = remember { mutableStateOf(false) }
 
-    // Schedule WorkManager job for purging old trash
+    // Schedule WorkManager job for purging old trash & bill reminders
     LaunchedEffect(Unit) {
         PurgeTrashWorker.schedule(context)
+    }
+
+    LaunchedEffect(userSettings.reminderHour) {
+        BillReminderWorker.schedule(context, userSettings.reminderHour)
     }
 
     // Sync PrivacyMode default state & perform cold start lock once settings are loaded
@@ -165,6 +172,13 @@ fun CoconutApp(
                 backStack.remove(destination)
                 backStack.add(destination)
             }
+        }
+    }
+
+    LaunchedEffect(navigateToPaymentsSignal, isLocked, userSettings.onboardingDone) {
+        if (navigateToPaymentsSignal && !isLocked && userSettings.onboardingDone) {
+            navigateTo(Screen.Payments)
+            onHandledNavigateToPayments()
         }
     }
 

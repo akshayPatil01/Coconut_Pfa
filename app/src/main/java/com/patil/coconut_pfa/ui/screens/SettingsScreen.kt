@@ -1,5 +1,10 @@
 package com.patil.coconut_pfa.ui.screens
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -26,9 +31,9 @@ import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
-import androidx.compose.material.icons.rounded.Fingerprint
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.QrCodeScanner
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Security
@@ -47,7 +52,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -66,12 +70,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import com.patil.coconut_pfa.data.local.datastore.UserSettings
 import com.patil.coconut_pfa.navigation.Screen
-import com.patil.coconut_pfa.ui.components.SectionHeader
 import com.patil.coconut_pfa.ui.theme.Coconut_PfaTheme
 import com.patil.coconut_pfa.util.PrivacyManager
 import kotlinx.coroutines.launch
@@ -86,8 +91,11 @@ fun SettingsScreen(
     onUpdatePrivacyByDefault: (Boolean) -> Unit = {},
     onUpdateSalaryStartDay: (Int) -> Unit = {},
     onUpdateSmsEnabled: (Boolean) -> Unit = {},
+    onUpdateReminderHour: (Int) -> Unit = {},
+    onUpdateDefaultReminderDays: (Int) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     val isPrivacyEnabled by PrivacyManager.isPrivacyEnabled.collectAsState()
@@ -106,21 +114,63 @@ fun SettingsScreen(
         else -> 60
     }
 
-    // Setting State Variables from userSettings
+    fun hourToLabel(hour: Int): String = when (hour) {
+        8 -> "08:00 AM"
+        9 -> "09:00 AM"
+        10 -> "10:00 AM"
+        12 -> "12:00 PM"
+        18 -> "06:00 PM"
+        20 -> "08:00 PM"
+        21 -> "09:00 PM"
+        else -> String.format("%02d:00", hour)
+    }
+
+    fun labelToHour(label: String): Int = when (label) {
+        "08:00 AM" -> 8
+        "09:00 AM" -> 9
+        "10:00 AM" -> 10
+        "12:00 PM" -> 12
+        "06:00 PM" -> 18
+        "08:00 PM" -> 20
+        "09:00 PM" -> 21
+        else -> 9
+    }
+
     var pinLockEnabled by remember(userSettings.pinHash) { mutableStateOf(userSettings.pinHash != null) }
     var fingerprintEnabled by remember(userSettings.biometricEnabled) { mutableStateOf(userSettings.biometricEnabled) }
     var autoLockTimeout by remember(userSettings.autoLockSeconds) { mutableStateOf(secondsToTimeoutLabel(userSettings.autoLockSeconds)) }
     var privacyByDefault by remember(userSettings.privacyModeDefault) { mutableStateOf(userSettings.privacyModeDefault) }
 
     var salaryStartDay by remember(userSettings.salaryCycleStartDay) { mutableIntStateOf(userSettings.salaryCycleStartDay) }
-
     var smsAutoDetectEnabled by remember(userSettings.smsEnabled) { mutableStateOf(userSettings.smsEnabled) }
 
-    var reminderTime by remember { mutableStateOf("09:00 PM") }
-    var reminderDaysBefore by remember { mutableIntStateOf(3) }
+    var reminderTimeLabel by remember(userSettings.reminderHour) { mutableStateOf(hourToLabel(userSettings.reminderHour)) }
+    var reminderDaysBefore by remember(userSettings.defaultReminderDays) { mutableIntStateOf(userSettings.defaultReminderDays) }
 
     var showCategoriesDialog by remember { mutableStateOf(false) }
     var showDebugMenu by remember { mutableStateOf(false) }
+    var showPermissionRationaleDialog by remember { mutableStateOf(false) }
+
+    var hasNotificationPermission by remember {
+        mutableStateOf(
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+            } else {
+                true
+            }
+        )
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        hasNotificationPermission = isGranted
+        if (isGranted) {
+            scope.launch { snackbarHostState.showSnackbar("Notification permission granted! Bill reminders enabled.") }
+        } else {
+            scope.launch { snackbarHostState.showSnackbar("Notification permission is required to post bill reminders.") }
+        }
+    }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -245,18 +295,68 @@ fun SettingsScreen(
             // SECTION 5: REMINDERS
             item {
                 SettingsCategoryCard(title = "Bill Reminders", icon = Icons.Rounded.Alarm) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotificationPermission) {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f)),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Notifications,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "Notification Permission Needed",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "Coconut PFA requires notification permission to alert you about bills due in N days, due today, and overdue payments.\n\nPrivacy Note: Payment amounts are NEVER included in notifications.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Button(
+                                    onClick = { showPermissionRationaleDialog = true },
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Text("Grant Notification Permission")
+                                }
+                            }
+                        }
+                    }
+
                     SettingsDropdownRow(
                         title = "Daily Reminder Time",
-                        currentValue = reminderTime,
-                        options = listOf("08:00 AM", "12:00 PM", "06:00 PM", "09:00 PM"),
-                        onOptionSelected = { reminderTime = it }
+                        currentValue = reminderTimeLabel,
+                        options = listOf("08:00 AM", "09:00 AM", "10:00 AM", "12:00 PM", "06:00 PM", "08:00 PM", "09:00 PM"),
+                        onOptionSelected = { selected ->
+                            reminderTimeLabel = selected
+                            val hour = labelToHour(selected)
+                            onUpdateReminderHour(hour)
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotificationPermission) {
+                                showPermissionRationaleDialog = true
+                            }
+                        }
                     )
                     SettingsDropdownRow(
                         title = "Default Days Before Due",
                         currentValue = "$reminderDaysBefore days before",
-                        options = listOf("1 day before", "2 days before", "3 days before", "7 days before"),
+                        options = listOf("1 day before", "2 days before", "3 days before", "7 days before", "14 days before"),
                         onOptionSelected = { selected ->
-                            reminderDaysBefore = selected.take(1).toIntOrNull() ?: 3
+                            val days = selected.split(" ").firstOrNull()?.toIntOrNull() ?: 3
+                            reminderDaysBefore = days
+                            onUpdateDefaultReminderDays(days)
                         }
                     )
                 }
@@ -403,6 +503,37 @@ fun SettingsScreen(
                 }
             }
         }
+    }
+
+    // Permission Rationale Dialog (explains WHY before requesting POST_NOTIFICATIONS)
+    if (showPermissionRationaleDialog) {
+        AlertDialog(
+            onDismissRequest = { showPermissionRationaleDialog = false },
+            title = { Text("Enable Bill Reminders", fontWeight = FontWeight.Bold) },
+            text = {
+                Text(
+                    "Coconut PFA uses daily notifications at your set reminder time to alert you about upcoming bills, due today items, and overdue payments.\n\n" +
+                    "Privacy Guarantee: For your complete privacy, notification text only displays the bill name and due date — NEVER the amount."
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showPermissionRationaleDialog = false
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                    }
+                ) {
+                    Text("Grant Permission")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPermissionRationaleDialog = false }) {
+                    Text("Not Now")
+                }
+            }
+        )
     }
 
     // Categories Dialog
