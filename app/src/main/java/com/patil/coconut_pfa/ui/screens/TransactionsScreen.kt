@@ -41,11 +41,11 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
@@ -81,10 +81,43 @@ import com.patil.coconut_pfa.navigation.Screen
 import com.patil.coconut_pfa.ui.components.AmountText
 import com.patil.coconut_pfa.ui.components.EmptyState
 import com.patil.coconut_pfa.ui.theme.Coconut_PfaTheme
+import com.patil.coconut_pfa.ui.theme.GradientOrangeCoralStart
+import com.patil.coconut_pfa.ui.theme.PastelCoral
+import com.patil.coconut_pfa.ui.theme.PastelEmerald
+import com.patil.coconut_pfa.ui.theme.PastelPurple
+import com.patil.coconut_pfa.ui.theme.PastelSkyBlue
 import com.patil.coconut_pfa.ui.viewmodel.DayGroupedTransactions
 import com.patil.coconut_pfa.ui.viewmodel.TransactionsUiState
 import com.patil.coconut_pfa.ui.viewmodel.TransactionsViewModel
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+@Composable
+fun PillChip(
+    text: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier.clickable { onClick() },
+        shape = RoundedCornerShape(50),
+        color = if (isSelected) GradientOrangeCoralStart else MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+    ) {
+        Box(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -136,7 +169,13 @@ fun TransactionsScreen(
                         }
                     },
                     singleLine = true,
-                    shape = RoundedCornerShape(16.dp)
+                    shape = RoundedCornerShape(24.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = MaterialTheme.colorScheme.surface,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                        focusedBorderColor = GradientOrangeCoralStart,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
                 )
             }
 
@@ -149,10 +188,10 @@ fun TransactionsScreen(
                 // 1. Cycle Filter Chip
                 item {
                     Box {
-                        FilterChip(
-                            selected = uiState.selectedCycle != "All Time",
+                        PillChip(
+                            isSelected = uiState.selectedCycle != "All Time",
                             onClick = { cycleDropdownExpanded = true },
-                            label = { Text(uiState.selectedCycle) }
+                            text = uiState.selectedCycle
                         )
                         DropdownMenu(
                             expanded = cycleDropdownExpanded,
@@ -174,10 +213,10 @@ fun TransactionsScreen(
                 // 2. Type Filter Chip
                 item {
                     Box {
-                        FilterChip(
-                            selected = uiState.selectedType != null,
+                        PillChip(
+                            isSelected = uiState.selectedType != null,
                             onClick = { typeDropdownExpanded = true },
-                            label = { Text(uiState.selectedType?.name ?: "Type: All") }
+                            text = uiState.selectedType?.name ?: "Type: All"
                         )
                         DropdownMenu(
                             expanded = typeDropdownExpanded,
@@ -209,10 +248,10 @@ fun TransactionsScreen(
                         val selectedCatName = uiState.selectedCategory?.let { catId ->
                             uiState.categoryMap[catId]?.name ?: catId
                         } ?: "Category: All"
-                        FilterChip(
-                            selected = uiState.selectedCategory != null,
+                        PillChip(
+                            isSelected = uiState.selectedCategory != null,
                             onClick = { categoryDropdownExpanded = true },
-                            label = { Text(selectedCatName) }
+                            text = selectedCatName
                         )
                         DropdownMenu(
                             expanded = categoryDropdownExpanded,
@@ -244,10 +283,10 @@ fun TransactionsScreen(
                         val selectedAccName = uiState.selectedAccount?.let { accId ->
                             uiState.accountMap[accId]?.name ?: accId
                         } ?: "Account: All"
-                        FilterChip(
-                            selected = uiState.selectedAccount != null,
+                        PillChip(
+                            isSelected = uiState.selectedAccount != null,
                             onClick = { accountDropdownExpanded = true },
-                            label = { Text(selectedAccName) }
+                            text = selectedAccName
                         )
                         DropdownMenu(
                             expanded = accountDropdownExpanded,
@@ -276,10 +315,10 @@ fun TransactionsScreen(
                 // 5. Source Filter Chip
                 item {
                     Box {
-                        FilterChip(
-                            selected = uiState.selectedSource != null,
+                        PillChip(
+                            isSelected = uiState.selectedSource != null,
                             onClick = { sourceDropdownExpanded = true },
-                            label = { Text(uiState.selectedSource?.name ?: "Source: All") }
+                            text = uiState.selectedSource?.name ?: "Source: All"
                         )
                         DropdownMenu(
                             expanded = sourceDropdownExpanded,
@@ -404,7 +443,7 @@ private fun SwipeableTransactionItem(
 
     SwipeToDismissBox(
         state = dismissState,
-        modifier = modifier.clip(RoundedCornerShape(16.dp)),
+        modifier = modifier.clip(RoundedCornerShape(20.dp)),
         backgroundContent = {
             val direction = dismissState.dismissDirection
             val color = when (direction) {
@@ -415,7 +454,7 @@ private fun SwipeableTransactionItem(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(color, shape = RoundedCornerShape(16.dp))
+                    .background(color, shape = RoundedCornerShape(20.dp))
                     .padding(horizontal = 20.dp),
                 contentAlignment = if (direction == SwipeToDismissBoxValue.StartToEnd) Alignment.CenterStart else Alignment.CenterEnd
             ) {
@@ -620,16 +659,20 @@ private fun TransactionEntityItemRow(
     val amountColor = if (isPositive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
 
     val categoryName = category?.name ?: tx.categoryId ?: "General"
+    
+    val timeString = remember(tx.occurredAt) {
+        SimpleDateFormat("hh:mm a", Locale.getDefault()).format(Date(tx.occurredAt))
+    }
 
     Card(
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Row(
             modifier = Modifier
@@ -637,13 +680,13 @@ private fun TransactionEntityItemRow(
                 .padding(14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Category Icon inside colored circle
+            // Category Icon inside colored rounded box
             Box(
                 modifier = Modifier
-                    .size(42.dp)
+                    .size(48.dp)
                     .background(
                         color = getDbCategoryContainerColor(tx.type),
-                        shape = CircleShape
+                        shape = RoundedCornerShape(14.dp)
                     ),
                 contentAlignment = Alignment.Center
             ) {
@@ -651,7 +694,7 @@ private fun TransactionEntityItemRow(
                     imageVector = getDbCategoryIcon(categoryName, tx.type),
                     contentDescription = categoryName,
                     tint = getDbCategoryIconColor(tx.type),
-                    modifier = Modifier.size(22.dp)
+                    modifier = Modifier.size(24.dp)
                 )
             }
 
@@ -695,7 +738,7 @@ private fun TransactionEntityItemRow(
                 }
             }
 
-            // Amount Text
+            // Amount Text & Time
             Column(horizontalAlignment = Alignment.End) {
                 val prefix = if (isPositive) "+ " else ""
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -716,7 +759,7 @@ private fun TransactionEntityItemRow(
                 }
 
                 Text(
-                    text = categoryName,
+                    text = timeString,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.outline
                 )
@@ -728,20 +771,20 @@ private fun TransactionEntityItemRow(
 @Composable
 private fun getDbCategoryContainerColor(type: DbTxnType): Color {
     return when (type) {
-        DbTxnType.INCOME -> MaterialTheme.colorScheme.primaryContainer
-        DbTxnType.REFUND -> MaterialTheme.colorScheme.tertiaryContainer
-        DbTxnType.TRANSFER, DbTxnType.SETTLEMENT -> MaterialTheme.colorScheme.secondaryContainer
-        DbTxnType.EXPENSE, DbTxnType.ADJUSTMENT -> MaterialTheme.colorScheme.surfaceVariant
+        DbTxnType.INCOME -> PastelEmerald
+        DbTxnType.REFUND -> PastelSkyBlue
+        DbTxnType.TRANSFER, DbTxnType.SETTLEMENT -> PastelPurple
+        DbTxnType.EXPENSE, DbTxnType.ADJUSTMENT -> PastelCoral
     }
 }
 
 @Composable
 private fun getDbCategoryIconColor(type: DbTxnType): Color {
     return when (type) {
-        DbTxnType.INCOME -> MaterialTheme.colorScheme.onPrimaryContainer
-        DbTxnType.REFUND -> MaterialTheme.colorScheme.onTertiaryContainer
-        DbTxnType.TRANSFER, DbTxnType.SETTLEMENT -> MaterialTheme.colorScheme.onSecondaryContainer
-        DbTxnType.EXPENSE, DbTxnType.ADJUSTMENT -> MaterialTheme.colorScheme.onSurfaceVariant
+        DbTxnType.INCOME -> Color(0xFF064E3B) // Dark Emerald
+        DbTxnType.REFUND -> Color(0xFF0C4A6E) // Dark Sky
+        DbTxnType.TRANSFER, DbTxnType.SETTLEMENT -> Color(0xFF4C1D95) // Dark Purple
+        DbTxnType.EXPENSE, DbTxnType.ADJUSTMENT -> Color(0xFF7F1D1D) // Dark Red
     }
 }
 

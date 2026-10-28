@@ -36,6 +36,7 @@ import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.QrCodeScanner
@@ -80,6 +81,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.patil.coconut_pfa.data.local.datastore.ThemeMode
 import com.patil.coconut_pfa.data.local.datastore.UserSettings
 import com.patil.coconut_pfa.data.local.datastore.UserSettingsDataStore
 import com.patil.coconut_pfa.data.local.security.BackupPassphraseManager
@@ -105,6 +107,7 @@ fun SettingsScreen(
     onUpdateReminderHour: (Int) -> Unit = {},
     onUpdateDefaultReminderDays: (Int) -> Unit = {},
     onUpdateShowAmountOnWidget: (Boolean) -> Unit = {},
+    onUpdateThemeMode: (ThemeMode) -> Unit = {},
     onGenerateFakeTransactions: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -292,6 +295,43 @@ fun SettingsScreen(
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )
+                }
+            }
+
+            // SECTION 0: APPEARANCE
+            item {
+                SettingsCategoryCard(title = "App Appearance", icon = Icons.Rounded.LightMode) {
+                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        Text(
+                            text = "Theme Mode",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            ThemeOptionChip(
+                                text = "System",
+                                selected = userSettings.themeMode == ThemeMode.SYSTEM,
+                                onClick = { onUpdateThemeMode(ThemeMode.SYSTEM) },
+                                modifier = Modifier.weight(1f)
+                            )
+                            ThemeOptionChip(
+                                text = "Light",
+                                selected = userSettings.themeMode == ThemeMode.LIGHT,
+                                onClick = { onUpdateThemeMode(ThemeMode.LIGHT) },
+                                modifier = Modifier.weight(1f)
+                            )
+                            ThemeOptionChip(
+                                text = "Dark",
+                                selected = userSettings.themeMode == ThemeMode.DARK,
+                                onClick = { onUpdateThemeMode(ThemeMode.DARK) },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
                 }
             }
 
@@ -886,10 +926,10 @@ fun SettingsScreen(
                                 val backup = driveBackupsList!![index]
                                 val sizeKb = backup.size / 1024
                                 val dateStr = try {
-                                    val parser = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.getDefault())
+                                    val parser = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US)
                                     parser.timeZone = java.util.TimeZone.getTimeZone("UTC")
                                     val date = parser.parse(backup.createdTime) ?: java.util.Date(backup.createdTime.toLongOrNull() ?: System.currentTimeMillis())
-                                    java.text.SimpleDateFormat("dd MMM yyyy, hh:mm a", java.util.Locale.getDefault()).format(date)
+                                    java.text.SimpleDateFormat("dd MMM yyyy, hh:mm a", java.util.Locale.US).format(date)
                                 } catch (_: Exception) {
                                     backup.name
                                 }
@@ -1063,7 +1103,7 @@ fun SettingsScreen(
             title = { Text("Confirm Data Restore") },
             text = {
                 Column {
-                    Text("Backup created on: ${java.text.SimpleDateFormat("dd MMM yyyy, hh:mm a", java.util.Locale.getDefault()).format(java.util.Date(s.createdAt))}", fontWeight = FontWeight.Bold)
+                    Text("Backup created on: ${java.text.SimpleDateFormat("dd MMM yyyy, hh:mm a", java.util.Locale.US).format(java.util.Date(s.createdAt))}", fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(8.dp))
                     Text("• Accounts: ${s.accountCount}")
                     Text("• Transactions: ${s.transactionCount}")
@@ -1317,6 +1357,34 @@ private fun CategoriesDialog(onDismiss: () -> Unit) {
             TextButton(onClick = onDismiss) { Text("Close") }
         }
     )
+}
+
+@Composable
+private fun ThemeOptionChip(
+    text: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(12.dp),
+        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        border = if (selected) androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
+        modifier = modifier
+    ) {
+        androidx.compose.foundation.layout.Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.padding(vertical = 10.dp)
+        ) {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
 }
 
 @Preview(showBackground = true)

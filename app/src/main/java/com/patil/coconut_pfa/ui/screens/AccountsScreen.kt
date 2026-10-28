@@ -1,6 +1,6 @@
 package com.patil.coconut_pfa.ui.screens
 
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -60,14 +60,21 @@ import com.patil.coconut_pfa.navigation.Screen
 import com.patil.coconut_pfa.ui.components.AmountText
 import com.patil.coconut_pfa.ui.components.SparklineGraph
 import com.patil.coconut_pfa.ui.theme.Coconut_PfaTheme
+import com.patil.coconut_pfa.ui.theme.ExpenseRed
+import com.patil.coconut_pfa.ui.theme.IncomeGreen
+import com.patil.coconut_pfa.ui.theme.PastelCoral
+import com.patil.coconut_pfa.ui.theme.PastelEmerald
+import com.patil.coconut_pfa.ui.theme.PastelPurple
+import com.patil.coconut_pfa.ui.theme.PastelSkyBlue
+import com.patil.coconut_pfa.ui.theme.PastelWarmAmber
 import com.patil.coconut_pfa.ui.viewmodel.AccountsScreenUiState
 import com.patil.coconut_pfa.ui.viewmodel.AccountsViewModel
 
 @Composable
 fun AccountsScreen(
     onNavigate: (Screen) -> Unit,
-    accountsViewModel: AccountsViewModel? = null,
     modifier: Modifier = Modifier,
+    accountsViewModel: AccountsViewModel? = null,
 ) {
     val uiState by accountsViewModel?.uiState?.collectAsState() ?: remember { mutableStateOf(AccountsScreenUiState()) }
     var showArchived by remember { mutableStateOf(false) }
@@ -94,7 +101,8 @@ fun AccountsScreen(
                 icon = { Icon(Icons.Rounded.Add, contentDescription = "Add Account") },
                 text = { Text("Add Account") },
                 containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                shape = RoundedCornerShape(16.dp)
             )
         }
     ) { innerPadding ->
@@ -131,7 +139,7 @@ fun AccountsScreen(
                     AccountItemCard(
                         account = account,
                         onAccountClick = { onNavigate(Screen.AccountDetail(account.id)) },
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 5.dp)
                     )
                 }
             }
@@ -145,7 +153,8 @@ fun AccountsScreen(
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp)
                             .clickable { showArchived = !showArchived },
-                        shape = RoundedCornerShape(14.dp)
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                     ) {
                         Row(
                             modifier = Modifier
@@ -184,7 +193,7 @@ fun AccountsScreen(
                             account = account,
                             onAccountClick = { onNavigate(Screen.AccountDetail(account.id)) },
                             isArchived = true,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 5.dp)
                         )
                     }
                 }
@@ -208,80 +217,115 @@ private fun NetWorthDetailCard(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer
+            containerColor = MaterialTheme.colorScheme.surface
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
     ) {
         Column(
             modifier = Modifier.padding(20.dp)
         ) {
-            Text(
-                text = "Net Worth",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Total Net Worth",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                ) {
+                    Text(
+                        text = "Real-time",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                    )
+                }
+            }
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             AmountText(
                 amountInPaise = netWorth,
                 style = MaterialTheme.typography.headlineLarge,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
+                color = MaterialTheme.colorScheme.onSurface
             )
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             // Sparkline Graph
             SparklineGraph(
                 dataPoints = sparklinePoints,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(50.dp),
+                    .height(52.dp),
                 lineColor = MaterialTheme.colorScheme.primary,
-                fillColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
+                fillColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
             )
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             // Assets vs Liabilities Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Column {
-                    Text(
-                        text = "Assets",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                    )
-                    AmountText(
-                        amountInPaise = assets,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF2E7D32)
-                    )
+                // Assets pill
+                Surface(
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(16.dp),
+                    color = IncomeGreen.copy(alpha = 0.1f),
+                    border = BorderStroke(1.dp, IncomeGreen.copy(alpha = 0.2f))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp)
+                    ) {
+                        Text(
+                            text = "Assets",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        AmountText(
+                            amountInPaise = assets,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = IncomeGreen
+                        )
+                    }
                 }
 
-                Box(
-                    modifier = Modifier
-                        .height(30.dp)
-                        .width(1.dp)
-                        .background(MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.2f))
-                )
-
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        text = "Liabilities",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                    )
-                    AmountText(
-                        amountInPaise = liabilities,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.error
-                    )
+                // Liabilities pill
+                Surface(
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(16.dp),
+                    color = ExpenseRed.copy(alpha = 0.1f),
+                    border = BorderStroke(1.dp, ExpenseRed.copy(alpha = 0.2f))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp)
+                    ) {
+                        Text(
+                            text = "Liabilities",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        AmountText(
+                            amountInPaise = liabilities,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = ExpenseRed
+                        )
+                    }
                 }
             }
         }
@@ -298,29 +342,42 @@ private fun AccountGroupHeader(
     typeIcon: ImageVector,
 ) {
     Surface(
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-        modifier = Modifier.fillMaxWidth()
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 10.dp),
+                .padding(horizontal = 14.dp, vertical = 10.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = typeIcon,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .background(
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                            shape = CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = typeIcon,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(10.dp))
                 Text(
                     text = title,
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
 
@@ -328,7 +385,7 @@ private fun AccountGroupHeader(
                 amountInPaise = groupTotal,
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurface
             )
         }
     }
@@ -348,10 +405,11 @@ private fun AccountItemCard(
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onAccountClick),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (isArchived) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f) else MaterialTheme.colorScheme.surface
+            containerColor = if (isArchived) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f) else MaterialTheme.colorScheme.surface
         ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
         elevation = CardDefaults.cardElevation(defaultElevation = if (isArchived) 0.dp else 1.dp)
     ) {
         Column(
@@ -365,9 +423,9 @@ private fun AccountItemCard(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
-                            .size(40.dp)
+                            .size(44.dp)
                             .background(
-                                color = getAccountTypeContainerColor(account.type),
+                                color = getAccountTypeBadgeColor(account.type),
                                 shape = CircleShape
                             ),
                         contentAlignment = Alignment.Center
@@ -375,8 +433,8 @@ private fun AccountItemCard(
                         Icon(
                             imageVector = getAccountTypeIcon(account.type),
                             contentDescription = account.type.displayName,
-                            tint = getAccountTypeIconColor(account.type),
-                            modifier = Modifier.size(20.dp)
+                            tint = Color(0xFF1E293B),
+                            modifier = Modifier.size(22.dp)
                         )
                     }
 
@@ -387,7 +445,7 @@ private fun AccountItemCard(
                             Text(
                                 text = account.name,
                                 style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = FontWeight.SemiBold
+                                fontWeight = FontWeight.Bold
                             )
                             if (isArchived) {
                                 Spacer(modifier = Modifier.width(6.dp))
@@ -408,7 +466,7 @@ private fun AccountItemCard(
                         val subText = buildString {
                             account.bankName?.let { append(it) }
                             account.accountNumberLast4?.let {
-                                if (isNotEmpty()) append(" •• ")
+                                if (isNotEmpty()) append(" •••• ")
                                 append(it)
                             }
                         }
@@ -428,13 +486,13 @@ private fun AccountItemCard(
                     Text(
                         text = if (account.type == AccountType.LOAN) "Outstanding" else "Balance",
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.outline
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     AmountText(
                         amountInPaise = account.balanceInPaise,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = if (account.balanceInPaise < 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+                        color = if (account.balanceInPaise < 0) ExpenseRed else MaterialTheme.colorScheme.onSurface
                     )
                 }
             }
@@ -443,7 +501,7 @@ private fun AccountItemCard(
             if (account.type == AccountType.CREDIT_CARD && (account.unbilledAmountInPaise > 0 || account.dueAmountInPaise > 0)) {
                 Spacer(modifier = Modifier.height(10.dp))
                 Surface(
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(12.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -474,14 +532,15 @@ private fun AccountItemCard(
                                 Icon(
                                     imageVector = Icons.Rounded.Event,
                                     contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(14.dp)
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
                                     text = "Due: ${account.dueDate}",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.primary
                                 )
                             }
                         }
@@ -490,8 +549,8 @@ private fun AccountItemCard(
             } else if (account.type == AccountType.LOAN && account.dueAmountInPaise > 0) {
                 Spacer(modifier = Modifier.height(10.dp))
                 Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
+                    shape = RoundedCornerShape(12.dp),
+                    color = ExpenseRed.copy(alpha = 0.1f),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
@@ -505,13 +564,13 @@ private fun AccountItemCard(
                             Text(
                                 text = "EMI Due: ",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onErrorContainer
+                                color = ExpenseRed
                             )
                             AmountText(
                                 amountInPaise = account.dueAmountInPaise,
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onErrorContainer
+                                color = ExpenseRed
                             )
                         }
 
@@ -519,8 +578,8 @@ private fun AccountItemCard(
                             Text(
                                 text = "Due: $dueDate",
                                 style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onErrorContainer
+                                fontWeight = FontWeight.Bold,
+                                color = ExpenseRed
                             )
                         }
                     }
@@ -554,28 +613,15 @@ private fun getAccountTypeIcon(type: AccountType): ImageVector {
 }
 
 @Composable
-private fun getAccountTypeContainerColor(type: AccountType): Color {
+private fun getAccountTypeBadgeColor(type: AccountType): Color {
     return when (type) {
-        AccountType.BANK -> MaterialTheme.colorScheme.primaryContainer
-        AccountType.CREDIT_CARD -> MaterialTheme.colorScheme.tertiaryContainer
-        AccountType.CASH -> MaterialTheme.colorScheme.secondaryContainer
-        AccountType.WALLET -> MaterialTheme.colorScheme.surfaceVariant
-        AccountType.LOAN -> MaterialTheme.colorScheme.errorContainer
-        AccountType.INVESTMENT -> MaterialTheme.colorScheme.primaryContainer
-        AccountType.FIXED_DEPOSIT -> MaterialTheme.colorScheme.secondaryContainer
-    }
-}
-
-@Composable
-private fun getAccountTypeIconColor(type: AccountType): Color {
-    return when (type) {
-        AccountType.BANK -> MaterialTheme.colorScheme.onPrimaryContainer
-        AccountType.CREDIT_CARD -> MaterialTheme.colorScheme.onTertiaryContainer
-        AccountType.CASH -> MaterialTheme.colorScheme.onSecondaryContainer
-        AccountType.WALLET -> MaterialTheme.colorScheme.onSurfaceVariant
-        AccountType.LOAN -> MaterialTheme.colorScheme.onErrorContainer
-        AccountType.INVESTMENT -> MaterialTheme.colorScheme.onPrimaryContainer
-        AccountType.FIXED_DEPOSIT -> MaterialTheme.colorScheme.onSecondaryContainer
+        AccountType.BANK -> PastelSkyBlue
+        AccountType.CREDIT_CARD -> PastelCoral
+        AccountType.CASH -> PastelEmerald
+        AccountType.WALLET -> PastelPurple
+        AccountType.LOAN -> PastelWarmAmber
+        AccountType.INVESTMENT -> PastelEmerald
+        AccountType.FIXED_DEPOSIT -> PastelPurple
     }
 }
 

@@ -1,6 +1,13 @@
 package com.patil.coconut_pfa.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.DrawerValue
@@ -258,332 +265,371 @@ fun CoconutApp(
 
     val isFullScreenOverlay = !userSettings.onboardingDone || isLocked || currentDestination == Screen.Onboarding || currentDestination == Screen.LockScreen
 
-    if (isFullScreenOverlay) {
-        when {
-            !userSettings.onboardingDone || currentDestination == Screen.Onboarding -> {
-                OnboardingScreen(
-                    onNavigate = navigateTo,
-                    onCompleteOnboarding = { pin, bio, day, b, c, ca, l, fd ->
-                        handleCompleteOnboarding(pin, bio, day, b, c, ca, l, fd)
-                    },
-                    modifier = modifier
-                )
-            }
-            isLocked || currentDestination == Screen.LockScreen -> {
-                LockScreen(
-                    onNavigate = navigateTo,
-                    pinHash = userSettings.pinHash,
-                    pinSalt = userSettings.pinSalt,
-                    biometricEnabled = userSettings.biometricEnabled,
-                    onUnlock = { LockManager.unlock() },
-                    onWipeAndReset = { handleWipeAndReset() },
-                    modifier = modifier
-                )
-            }
-        }
-    } else {
-        ModalNavigationDrawer(
-            drawerState = drawerState,
-            drawerContent = {
-                CoconutNavigationDrawer(
-                    currentDestination = currentDestination,
-                    onNavigate = { destination ->
-                        scope.launch { drawerState.close() }
-                        navigateTo(destination)
-                    }
-                )
-            },
-            gesturesEnabled = true
-        ) {
-            Scaffold(
-                modifier = modifier.fillMaxSize(),
-                topBar = {
-                    CoconutTopBar(
-                        title = currentDestination.title,
-                        onMenuClick = {
-                            scope.launch {
-                                if (drawerState.isClosed) drawerState.open() else drawerState.close()
-                            }
-                        },
-                        onSettingsClick = {
-                            navigateTo(Screen.Settings)
-                        },
-                    )
-                },
-                bottomBar = {
-                    CoconutBottomBar(
-                        currentDestination = currentDestination,
-                        onNavigateToTab = { destination ->
-                            navigateTo(destination)
-                        },
-                        onAddClick = {
-                            navigateTo(Screen.AddTransaction())
-                        }
-                    )
-                }
-            ) { innerPadding ->
-                val screenModifier = Modifier.padding(innerPadding)
-                when (val dest = currentDestination) {
-                    Screen.Home -> {
-                        val homeViewModel: HomeViewModel = viewModel(
-                            factory = HomeViewModel.Factory(
-                                accountRepository = accountRepository,
-                                transactionRepository = transactionRepository,
-                                netWorthRepository = netWorthRepository,
-                                personLedgerRepository = personLedgerRepository,
-                                billRepository = billRepository,
-                                smsRepository = smsRepository,
-                                categoryRepository = categoryRepository,
-                                settingsRepository = settingsRepository
-                            )
-                        )
-                        HomeScreen(
-                            onNavigate = navigateTo,
-                            viewModel = homeViewModel,
-                            modifier = screenModifier
-                        )
-                    }
-                    is Screen.Transactions -> {
-                        val transactionsViewModel: TransactionsViewModel = viewModel(
-                            key = "txn_${dest.initialCategory}_${dest.initialCycle}_${dest.initialStartDateMillis}",
-                            factory = TransactionsViewModel.Factory(
-                                transactionRepository = transactionRepository,
-                                accountRepository = accountRepository,
-                                categoryRepository = categoryRepository,
-                                settingsRepository = settingsRepository,
-                                initialCategory = dest.initialCategory,
-                                initialCycle = dest.initialCycle,
-                                initialStartDateMillis = dest.initialStartDateMillis,
-                                initialEndDateMillis = dest.initialEndDateMillis
-                            )
-                        )
-                        TransactionsScreen(
-                            onNavigate = navigateTo,
-                            modifier = screenModifier,
-                            viewModel = transactionsViewModel
-                        )
-                    }
-                    Screen.Payments -> {
-                        val paymentsViewModel: PaymentsViewModel = viewModel(
-                            factory = PaymentsViewModel.Factory(
-                                billRepository = billRepository,
-                                accountRepository = accountRepository,
-                                categoryRepository = categoryRepository,
-                                transactionRepository = transactionRepository,
-                                personLedgerRepository = personLedgerRepository
-                            )
-                        )
-                        PaymentsScreen(
-                            onNavigate = navigateTo,
-                            modifier = screenModifier,
-                            viewModel = paymentsViewModel
-                        )
-                    }
-                    Screen.Accounts -> {
-                        val accountsViewModel: AccountsViewModel = viewModel(
-                            factory = AccountsViewModel.Factory(
-                                accountRepository = accountRepository,
-                                transactionRepository = transactionRepository,
-                                netWorthRepository = netWorthRepository,
-                                personLedgerRepository = personLedgerRepository,
-                                settingsRepository = settingsRepository
-                            )
-                        )
-                        AccountsScreen(
-                            onNavigate = navigateTo,
-                            accountsViewModel = accountsViewModel,
-                            modifier = screenModifier
-                        )
-                    }
-                    is Screen.AddTransaction -> {
-                        val addTransactionViewModel: AddTransactionViewModel = viewModel(
-                            key = "add_txn_${dest.txnId ?: dest.duplicateTxnId ?: dest.billOccurrenceId ?: "new"}",
-                            factory = AddTransactionViewModel.Factory(
-                                txnId = dest.txnId,
-                                duplicateTxnId = dest.duplicateTxnId,
-                                initialDateMillis = dest.initialDateMillis,
-                                billOccurrenceId = dest.billOccurrenceId,
-                                accountRepository = accountRepository,
-                                categoryRepository = categoryRepository,
-                                transactionRepository = transactionRepository,
-                                settingsRepository = settingsRepository,
-                                billRepository = billRepository,
-                                personLedgerRepository = personLedgerRepository
-                            )
-                        )
-                        AddTransactionScreen(
-                            onNavigate = navigateTo,
-                            modifier = screenModifier,
-                            viewModel = addTransactionViewModel,
-                            initialAmountPaise = dest.initialAmountPaise,
-                            initialPayee = dest.initialPayee,
-                            initialDateMillisArg = dest.initialDateMillis,
-                            scanSource = dest.scanSource
-                        )
-                    }
-                    Screen.Goals -> {
-                        val goalsViewModel: GoalsViewModel = viewModel(
-                            factory = GoalsViewModel.Factory(
-                                goalRepository = goalRepository,
-                                goalContributionDao = database.goalContributionDao(),
-                                settingsRepository = settingsRepository
-                            )
-                        )
-                        GoalsScreen(onNavigate = navigateTo, modifier = screenModifier, viewModel = goalsViewModel)
-                    }
-                    Screen.Subscriptions -> {
-                        val subscriptionsViewModel: SubscriptionsViewModel = viewModel(
-                            factory = SubscriptionsViewModel.Factory(billRepository = billRepository)
-                        )
-                        SubscriptionsScreen(onNavigate = navigateTo, modifier = screenModifier, viewModel = subscriptionsViewModel)
-                    }
-                    Screen.SplitAndIOUs -> {
-                        val splitAndIOUsViewModel: SplitAndIOUsViewModel = viewModel(
-                            factory = SplitAndIOUsViewModel.Factory(
-                                personLedgerRepository = personLedgerRepository,
-                                accountRepository = accountRepository,
-                                transactionRepository = transactionRepository
-                            )
-                        )
-                        SplitAndIOUsScreen(onNavigate = navigateTo, modifier = screenModifier, viewModel = splitAndIOUsViewModel)
-                    }
-                    Screen.Reports -> {
-                        val reportsViewModel: ReportsViewModel = viewModel(
-                            factory = ReportsViewModel.Factory(
-                                transactionRepository = transactionRepository,
-                                categoryRepository = categoryRepository,
-                                settingsRepository = settingsRepository
-                            )
-                        )
-                        ReportsScreen(
-                            onNavigate = navigateTo,
-                            viewModel = reportsViewModel,
-                            modifier = screenModifier
-                        )
-                    }
-                    Screen.Settings -> SettingsScreen(
-                        onNavigate = navigateTo,
-                        userSettings = userSettings,
-                        onUpdateBiometricEnabled = { enabled -> scope.launch { settingsRepository.setBiometricEnabled(enabled) } },
-                        onUpdateAutoLockSeconds = { seconds -> scope.launch { settingsRepository.setAutoLockSeconds(seconds) } },
-                        onUpdatePrivacyByDefault = { enabled -> scope.launch { settingsRepository.setPrivacyModeDefault(enabled) } },
-                        onUpdateSalaryStartDay = { day -> scope.launch { settingsRepository.setSalaryCycleStartDay(day) } },
-                        onUpdateSmsEnabled = { enabled -> scope.launch { settingsRepository.setSmsEnabled(enabled) } },
-                        onUpdateShowAmountOnWidget = { enabled -> scope.launch { settingsRepository.setShowAmountOnWidget(enabled) } },
-                        onGenerateFakeTransactions = {
-                            scope.launch {
-                                val txns = (1..10000).map { i ->
-                                    com.patil.coconut_pfa.data.local.entity.TxnEntity(
-                                        id = "fake_txn_$i",
-                                        type = if (i % 5 == 0) com.patil.coconut_pfa.data.local.entity.DbTxnType.INCOME else com.patil.coconut_pfa.data.local.entity.DbTxnType.EXPENSE,
-                                        amountPaise = (100..50000L).random(),
-                                        accountId = "acc_1",
-                                        categoryId = "cat_exp_groceries",
-                                        payee = "Merchant $i",
-                                        note = "Fake txn #$i",
-                                        occurredAt = System.currentTimeMillis() - (i.toLong() * 60 * 1000L),
-                                        source = com.patil.coconut_pfa.data.local.entity.DbTxnSource.MANUAL
-                                    )
-                                }
-                                transactionRepository.saveTransactions(txns)
-                            }
-                        },
-                        modifier = screenModifier
-                    )
-                    Screen.ReviewInbox -> {
-                        val reviewInboxViewModel: ReviewInboxViewModel = viewModel(
-                            factory = ReviewInboxViewModel.Factory(
-                                smsRepository = smsRepository,
-                                accountRepository = accountRepository,
-                                categoryRepository = categoryRepository,
-                                transactionRepository = transactionRepository
-                            )
-                        )
-                        ReviewInboxScreen(
-                            onNavigate = navigateTo,
-                            viewModel = reviewInboxViewModel,
-                            modifier = screenModifier
-                        )
-                    }
-                    is Screen.AccountDetail -> {
-                        val accountDetailViewModel: AccountDetailViewModel = viewModel(
-                            key = "account_detail_${dest.accountId}",
-                            factory = AccountDetailViewModel.Factory(
-                                accountId = dest.accountId,
-                                accountRepository = accountRepository,
-                                transactionRepository = transactionRepository
-                            )
-                        )
-                        AccountDetailScreen(
-                            accountId = dest.accountId,
-                            onNavigate = navigateTo,
-                            modifier = screenModifier,
-                            viewModel = accountDetailViewModel
-                        )
-                    }
-                    is Screen.AddAccount -> {
-                        val addAccountViewModel: AddAccountViewModel = viewModel(
-                            key = "add_account_${dest.accountId ?: "new"}",
-                            factory = AddAccountViewModel.Factory(
-                                accountId = dest.accountId,
-                                accountRepository = accountRepository
-                            )
-                        )
-                        AddAccountScreen(
-                            onNavigate = navigateTo,
-                            accountId = dest.accountId,
-                            modifier = screenModifier,
-                            viewModel = addAccountViewModel
-                        )
-                    }
-                    is Screen.AddBill -> {
-                        val addBillViewModel: AddBillViewModel = viewModel(
-                            factory = AddBillViewModel.Factory(
-                                billRepository = billRepository,
-                                accountRepository = accountRepository,
-                                categoryRepository = categoryRepository
-                            )
-                        )
-                        AddBillScreen(
-                            onNavigate = navigateTo,
-                            initialKind = dest.initialKind,
-                            modifier = screenModifier,
-                            viewModel = addBillViewModel
-                        )
-                    }
-                    Screen.ImportStatement -> ImportStatementScreen(onNavigate = navigateTo, modifier = screenModifier)
-                    Screen.ReceiptScan -> ReceiptScanScreen(onNavigate = navigateTo, modifier = screenModifier)
-                    Screen.Trash -> {
-                        val trashViewModel: TrashViewModel = viewModel(
-                            factory = TrashViewModel.Factory(
-                                transactionRepository = transactionRepository,
-                                accountRepository = accountRepository,
-                                categoryRepository = categoryRepository
-                            )
-                        )
-                        TrashScreen(
-                            onNavigate = navigateTo,
-                            modifier = screenModifier,
-                            viewModel = trashViewModel
-                        )
-                    }
-                    Screen.ParserTest -> ParserTestScreen(onNavigate = navigateTo, modifier = screenModifier)
-                    Screen.Onboarding -> OnboardingScreen(
+    com.patil.coconut_pfa.ui.theme.Coconut_PfaTheme(themeMode = userSettings.themeMode) {
+        if (isFullScreenOverlay) {
+            when {
+                !userSettings.onboardingDone || currentDestination == Screen.Onboarding -> {
+                    OnboardingScreen(
                         onNavigate = navigateTo,
                         onCompleteOnboarding = { pin, bio, day, b, c, ca, l, fd ->
                             handleCompleteOnboarding(pin, bio, day, b, c, ca, l, fd)
                         },
-                        modifier = screenModifier
+                        modifier = modifier
                     )
-                    Screen.LockScreen -> LockScreen(
+                }
+                isLocked || currentDestination == Screen.LockScreen -> {
+                    LockScreen(
                         onNavigate = navigateTo,
                         pinHash = userSettings.pinHash,
                         pinSalt = userSettings.pinSalt,
                         biometricEnabled = userSettings.biometricEnabled,
                         onUnlock = { LockManager.unlock() },
                         onWipeAndReset = { handleWipeAndReset() },
-                        modifier = screenModifier
+                        modifier = modifier
                     )
+                }
+            }
+        } else {
+            ModalNavigationDrawer(
+                drawerState = drawerState,
+                drawerContent = {
+                    CoconutNavigationDrawer(
+                        currentDestination = currentDestination,
+                        onNavigate = { destination ->
+                            scope.launch { drawerState.close() }
+                            navigateTo(destination)
+                        }
+                    )
+                },
+                gesturesEnabled = true
+            ) {
+                Scaffold(
+                    modifier = modifier.fillMaxSize(),
+                    topBar = {
+                        CoconutTopBar(
+                            title = currentDestination.title,
+                            onMenuClick = {
+                                scope.launch {
+                                    if (drawerState.isClosed) drawerState.open() else drawerState.close()
+                                }
+                            },
+                            onSettingsClick = {
+                                navigateTo(Screen.Settings)
+                            },
+                            themeMode = userSettings.themeMode,
+                            onToggleTheme = {
+                                val nextMode = when (userSettings.themeMode) {
+                                    com.patil.coconut_pfa.data.local.datastore.ThemeMode.LIGHT -> com.patil.coconut_pfa.data.local.datastore.ThemeMode.DARK
+                                    com.patil.coconut_pfa.data.local.datastore.ThemeMode.DARK -> com.patil.coconut_pfa.data.local.datastore.ThemeMode.LIGHT
+                                    com.patil.coconut_pfa.data.local.datastore.ThemeMode.SYSTEM -> com.patil.coconut_pfa.data.local.datastore.ThemeMode.DARK
+                                }
+                                scope.launch { settingsRepository.setThemeMode(nextMode) }
+                            }
+                        )
+                    },
+                    bottomBar = {
+                        CoconutBottomBar(
+                            currentDestination = currentDestination,
+                            onNavigateToTab = { destination ->
+                                navigateTo(destination)
+                            },
+                            onAddClick = {
+                                navigateTo(Screen.AddTransaction())
+                            }
+                        )
+                    }
+                ) { innerPadding ->
+                    AnimatedContent(
+                        targetState = currentDestination,
+                        transitionSpec = {
+                            val mainTabs = listOf(
+                                Screen.Home::class,
+                                Screen.Transactions::class,
+                                Screen.Payments::class,
+                                Screen.Accounts::class,
+                                Screen.Reports::class
+                            )
+                            val isTargetMain = mainTabs.any { it.isInstance(targetState) }
+                            val isInitialMain = mainTabs.any { it.isInstance(initialState) }
+
+                            if (isTargetMain && isInitialMain) {
+                                // Fast crossfade for main tab navigation
+                                fadeIn(animationSpec = tween(100)) togetherWith fadeOut(animationSpec = tween(80))
+                            } else {
+                                // Smooth horizontal slide for detail/editing screens
+                                (fadeIn(animationSpec = tween(180, easing = androidx.compose.animation.core.FastOutSlowInEasing)) + 
+                                 slideInHorizontally(animationSpec = tween(180), initialOffsetX = { 30 })) togetherWith
+                                (fadeOut(animationSpec = tween(150)) + 
+                                 slideOutHorizontally(animationSpec = tween(150), targetOffsetX = { -30 }))
+                            }
+                        },
+                        label = "ScreenTransition"
+                    ) { dest ->
+                        val screenModifier = Modifier.padding(innerPadding)
+                        when (dest) {
+                            Screen.Home -> {
+                                val homeViewModel: HomeViewModel = viewModel(
+                                    factory = HomeViewModel.Factory(
+                                        accountRepository = accountRepository,
+                                        transactionRepository = transactionRepository,
+                                        netWorthRepository = netWorthRepository,
+                                        personLedgerRepository = personLedgerRepository,
+                                        billRepository = billRepository,
+                                        smsRepository = smsRepository,
+                                        categoryRepository = categoryRepository,
+                                        settingsRepository = settingsRepository
+                                    )
+                                )
+                                HomeScreen(
+                                    onNavigate = navigateTo,
+                                    viewModel = homeViewModel,
+                                    modifier = screenModifier
+                                )
+                            }
+                            is Screen.Transactions -> {
+                                val transactionsViewModel: TransactionsViewModel = viewModel(
+                                    key = "txn_${dest.initialCategory}_${dest.initialCycle}_${dest.initialStartDateMillis}",
+                                    factory = TransactionsViewModel.Factory(
+                                        transactionRepository = transactionRepository,
+                                        accountRepository = accountRepository,
+                                        categoryRepository = categoryRepository,
+                                        settingsRepository = settingsRepository,
+                                        initialCategory = dest.initialCategory,
+                                        initialCycle = dest.initialCycle,
+                                        initialStartDateMillis = dest.initialStartDateMillis,
+                                        initialEndDateMillis = dest.initialEndDateMillis
+                                    )
+                                )
+                                TransactionsScreen(
+                                    onNavigate = navigateTo,
+                                    modifier = screenModifier,
+                                    viewModel = transactionsViewModel
+                                )
+                            }
+                            Screen.Payments -> {
+                                val paymentsViewModel: PaymentsViewModel = viewModel(
+                                    factory = PaymentsViewModel.Factory(
+                                        billRepository = billRepository,
+                                        accountRepository = accountRepository,
+                                        categoryRepository = categoryRepository,
+                                        transactionRepository = transactionRepository,
+                                        personLedgerRepository = personLedgerRepository
+                                    )
+                                )
+                                PaymentsScreen(
+                                    onNavigate = navigateTo,
+                                    modifier = screenModifier,
+                                    viewModel = paymentsViewModel
+                                )
+                            }
+                            Screen.Accounts -> {
+                                val accountsViewModel: AccountsViewModel = viewModel(
+                                    factory = AccountsViewModel.Factory(
+                                        accountRepository = accountRepository,
+                                        transactionRepository = transactionRepository,
+                                        netWorthRepository = netWorthRepository,
+                                        personLedgerRepository = personLedgerRepository,
+                                        settingsRepository = settingsRepository
+                                    )
+                                )
+                                AccountsScreen(
+                                    onNavigate = navigateTo,
+                                    accountsViewModel = accountsViewModel,
+                                    modifier = screenModifier
+                                )
+                            }
+                            is Screen.AddTransaction -> {
+                                val addTransactionViewModel: AddTransactionViewModel = viewModel(
+                                    key = "add_txn_${dest.txnId ?: dest.duplicateTxnId ?: dest.billOccurrenceId ?: "new"}",
+                                    factory = AddTransactionViewModel.Factory(
+                                        txnId = dest.txnId,
+                                        duplicateTxnId = dest.duplicateTxnId,
+                                        initialDateMillis = dest.initialDateMillis,
+                                        billOccurrenceId = dest.billOccurrenceId,
+                                        accountRepository = accountRepository,
+                                        categoryRepository = categoryRepository,
+                                        transactionRepository = transactionRepository,
+                                        settingsRepository = settingsRepository,
+                                        billRepository = billRepository,
+                                        personLedgerRepository = personLedgerRepository
+                                    )
+                                )
+                                AddTransactionScreen(
+                                    onNavigate = navigateTo,
+                                    modifier = screenModifier,
+                                    viewModel = addTransactionViewModel,
+                                    initialAmountPaise = dest.initialAmountPaise,
+                                    initialPayee = dest.initialPayee,
+                                    initialDateMillisArg = dest.initialDateMillis,
+                                    scanSource = dest.scanSource
+                                )
+                            }
+                            Screen.Goals -> {
+                                val goalsViewModel: GoalsViewModel = viewModel(
+                                    factory = GoalsViewModel.Factory(
+                                        goalRepository = goalRepository,
+                                        goalContributionDao = database.goalContributionDao(),
+                                        settingsRepository = settingsRepository
+                                    )
+                                )
+                                GoalsScreen(onNavigate = navigateTo, modifier = screenModifier, viewModel = goalsViewModel)
+                            }
+                            Screen.Subscriptions -> {
+                                val subscriptionsViewModel: SubscriptionsViewModel = viewModel(
+                                    factory = SubscriptionsViewModel.Factory(billRepository = billRepository)
+                                )
+                                SubscriptionsScreen(onNavigate = navigateTo, modifier = screenModifier, viewModel = subscriptionsViewModel)
+                            }
+                            Screen.SplitAndIOUs -> {
+                                val splitAndIOUsViewModel: SplitAndIOUsViewModel = viewModel(
+                                    factory = SplitAndIOUsViewModel.Factory(
+                                        personLedgerRepository = personLedgerRepository,
+                                        accountRepository = accountRepository,
+                                        transactionRepository = transactionRepository
+                                    )
+                                )
+                                SplitAndIOUsScreen(onNavigate = navigateTo, modifier = screenModifier, viewModel = splitAndIOUsViewModel)
+                            }
+                            Screen.Reports -> {
+                                val reportsViewModel: ReportsViewModel = viewModel(
+                                    factory = ReportsViewModel.Factory(
+                                        transactionRepository = transactionRepository,
+                                        categoryRepository = categoryRepository,
+                                        settingsRepository = settingsRepository
+                                    )
+                                )
+                                ReportsScreen(
+                                    onNavigate = navigateTo,
+                                    viewModel = reportsViewModel,
+                                    modifier = screenModifier
+                                )
+                            }
+                            Screen.Settings -> SettingsScreen(
+                                onNavigate = navigateTo,
+                                userSettings = userSettings,
+                                onUpdateBiometricEnabled = { enabled -> scope.launch { settingsRepository.setBiometricEnabled(enabled) } },
+                                onUpdateAutoLockSeconds = { seconds -> scope.launch { settingsRepository.setAutoLockSeconds(seconds) } },
+                                onUpdatePrivacyByDefault = { enabled -> scope.launch { settingsRepository.setPrivacyModeDefault(enabled) } },
+                                onUpdateSalaryStartDay = { day -> scope.launch { settingsRepository.setSalaryCycleStartDay(day) } },
+                                onUpdateSmsEnabled = { enabled -> scope.launch { settingsRepository.setSmsEnabled(enabled) } },
+                                onUpdateShowAmountOnWidget = { enabled -> scope.launch { settingsRepository.setShowAmountOnWidget(enabled) } },
+                                onUpdateThemeMode = { themeMode -> scope.launch { settingsRepository.setThemeMode(themeMode) } },
+                                onGenerateFakeTransactions = {
+                                    scope.launch {
+                                        val txns = (1..10000).map { i ->
+                                            com.patil.coconut_pfa.data.local.entity.TxnEntity(
+                                                id = "fake_txn_$i",
+                                                type = if (i % 5 == 0) com.patil.coconut_pfa.data.local.entity.DbTxnType.INCOME else com.patil.coconut_pfa.data.local.entity.DbTxnType.EXPENSE,
+                                                amountPaise = (100..50000L).random(),
+                                                accountId = "acc_1",
+                                                categoryId = "cat_exp_groceries",
+                                                payee = "Merchant $i",
+                                                note = "Fake txn #$i",
+                                                occurredAt = System.currentTimeMillis() - (i.toLong() * 60 * 1000L),
+                                                source = com.patil.coconut_pfa.data.local.entity.DbTxnSource.MANUAL
+                                            )
+                                        }
+                                        transactionRepository.saveTransactions(txns)
+                                    }
+                                },
+                                modifier = screenModifier
+                            )
+                            Screen.ReviewInbox -> {
+                                val reviewInboxViewModel: ReviewInboxViewModel = viewModel(
+                                    factory = ReviewInboxViewModel.Factory(
+                                        smsRepository = smsRepository,
+                                        accountRepository = accountRepository,
+                                        categoryRepository = categoryRepository,
+                                        transactionRepository = transactionRepository
+                                    )
+                                )
+                                ReviewInboxScreen(
+                                    onNavigate = navigateTo,
+                                    viewModel = reviewInboxViewModel,
+                                    modifier = screenModifier
+                                )
+                            }
+                            is Screen.AccountDetail -> {
+                                val accountDetailViewModel: AccountDetailViewModel = viewModel(
+                                    key = "account_detail_${dest.accountId}",
+                                    factory = AccountDetailViewModel.Factory(
+                                        accountId = dest.accountId,
+                                        accountRepository = accountRepository,
+                                        transactionRepository = transactionRepository
+                                    )
+                                )
+                                AccountDetailScreen(
+                                    accountId = dest.accountId,
+                                    onNavigate = navigateTo,
+                                    modifier = screenModifier,
+                                    viewModel = accountDetailViewModel
+                                )
+                            }
+                            is Screen.AddAccount -> {
+                                val addAccountViewModel: AddAccountViewModel = viewModel(
+                                    key = "add_account_${dest.accountId ?: "new"}",
+                                    factory = AddAccountViewModel.Factory(
+                                        accountId = dest.accountId,
+                                        accountRepository = accountRepository
+                                    )
+                                )
+                                AddAccountScreen(
+                                    onNavigate = navigateTo,
+                                    accountId = dest.accountId,
+                                    modifier = screenModifier,
+                                    viewModel = addAccountViewModel
+                                )
+                            }
+                            is Screen.AddBill -> {
+                                val addBillViewModel: AddBillViewModel = viewModel(
+                                    factory = AddBillViewModel.Factory(
+                                        billRepository = billRepository,
+                                        accountRepository = accountRepository,
+                                        categoryRepository = categoryRepository
+                                    )
+                                )
+                                AddBillScreen(
+                                    onNavigate = navigateTo,
+                                    initialKind = dest.initialKind,
+                                    modifier = screenModifier,
+                                    viewModel = addBillViewModel
+                                )
+                            }
+                            Screen.ImportStatement -> ImportStatementScreen(onNavigate = navigateTo, modifier = screenModifier)
+                            Screen.ReceiptScan -> ReceiptScanScreen(onNavigate = navigateTo, modifier = screenModifier)
+                            Screen.Trash -> {
+                                val trashViewModel: TrashViewModel = viewModel(
+                                    factory = TrashViewModel.Factory(
+                                        transactionRepository = transactionRepository,
+                                        accountRepository = accountRepository,
+                                        categoryRepository = categoryRepository
+                                    )
+                                )
+                                TrashScreen(
+                                    onNavigate = navigateTo,
+                                    modifier = screenModifier,
+                                    viewModel = trashViewModel
+                                )
+                            }
+                            Screen.ParserTest -> ParserTestScreen(onNavigate = navigateTo, modifier = screenModifier)
+                            Screen.Onboarding -> OnboardingScreen(
+                                onNavigate = navigateTo,
+                                onCompleteOnboarding = { pin, bio, day, b, c, ca, l, fd ->
+                                    handleCompleteOnboarding(pin, bio, day, b, c, ca, l, fd)
+                                },
+                                modifier = screenModifier
+                            )
+                            Screen.LockScreen -> LockScreen(
+                                onNavigate = navigateTo,
+                                pinHash = userSettings.pinHash,
+                                pinSalt = userSettings.pinSalt,
+                                biometricEnabled = userSettings.biometricEnabled,
+                                onUnlock = { LockManager.unlock() },
+                                onWipeAndReset = { handleWipeAndReset() },
+                                modifier = screenModifier
+                            )
+                        }
+                    }
                 }
             }
         }

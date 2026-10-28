@@ -14,6 +14,12 @@ import kotlinx.coroutines.flow.map
 
 val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "user_settings")
 
+enum class ThemeMode {
+    SYSTEM,
+    LIGHT,
+    DARK
+}
+
 data class UserSettings(
     val salaryCycleStartDay: Int = 1,
     val pinHash: String? = null,
@@ -33,7 +39,8 @@ data class UserSettings(
     val lastSmsCatchupTimestamp: Long = 0L,
     val googleAccountEmail: String? = null,
     val lastBackupStatus: String? = null,
-    val showAmountOnWidget: Boolean = false
+    val showAmountOnWidget: Boolean = false,
+    val themeMode: ThemeMode = ThemeMode.SYSTEM
 )
 
 class UserSettingsDataStore(private val context: Context) {
@@ -58,6 +65,7 @@ class UserSettingsDataStore(private val context: Context) {
         val GOOGLE_ACCOUNT_EMAIL = stringPreferencesKey("google_account_email")
         val LAST_BACKUP_STATUS = stringPreferencesKey("last_backup_status")
         val SHOW_AMOUNT_ON_WIDGET = booleanPreferencesKey("show_amount_on_widget")
+        val THEME_MODE = stringPreferencesKey("theme_mode")
     }
 
     val settingsFlow: Flow<UserSettings> = context.settingsDataStore.data.map { prefs ->
@@ -80,7 +88,10 @@ class UserSettingsDataStore(private val context: Context) {
             lastSmsCatchupTimestamp = prefs[Keys.LAST_SMS_CATCHUP_TIMESTAMP] ?: 0L,
             googleAccountEmail = prefs[Keys.GOOGLE_ACCOUNT_EMAIL],
             lastBackupStatus = prefs[Keys.LAST_BACKUP_STATUS],
-            showAmountOnWidget = prefs[Keys.SHOW_AMOUNT_ON_WIDGET] ?: false
+            showAmountOnWidget = prefs[Keys.SHOW_AMOUNT_ON_WIDGET] ?: false,
+            themeMode = prefs[Keys.THEME_MODE]?.let { mode ->
+                runCatching { ThemeMode.valueOf(mode) }.getOrNull()
+            } ?: ThemeMode.SYSTEM
         )
     }
 
@@ -167,5 +178,9 @@ class UserSettingsDataStore(private val context: Context) {
 
     suspend fun updateShowAmountOnWidget(enabled: Boolean) {
         context.settingsDataStore.edit { it[Keys.SHOW_AMOUNT_ON_WIDGET] = enabled }
+    }
+
+    suspend fun updateThemeMode(themeMode: ThemeMode) {
+        context.settingsDataStore.edit { it[Keys.THEME_MODE] = themeMode.name }
     }
 }

@@ -1,6 +1,5 @@
 package com.patil.coconut_pfa.ui.theme
 
-import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
@@ -9,43 +8,69 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import com.patil.coconut_pfa.data.local.datastore.ThemeMode
 
 private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80
+    primary = Emerald80,
+    onPrimary = Color(0xFF003732),
+    primaryContainer = EmeraldPrimaryContainerDark,
+    onPrimaryContainer = Color(0xFFB0F2EA),
+    secondary = SlateSecondary80,
+    onSecondary = Color(0xFF1E293B),
+    secondaryContainer = SlateSecondaryContainerDark,
+    onSecondaryContainer = Color(0xFFE2E8F0),
+    tertiary = AmberTertiary80,
+    onTertiary = Color(0xFF451A03),
+    tertiaryContainer = AmberTertiaryContainerDark,
+    onTertiaryContainer = Color(0xFFFDE68A),
+    background = DarkBackground,
+    onBackground = DarkOnBackground,
+    surface = DarkSurface,
+    onSurface = DarkOnSurface,
+    surfaceVariant = DarkSurfaceVariant,
+    onSurfaceVariant = DarkOnSurfaceVariant
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
-
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
+    primary = Emerald40,
     onPrimary = Color.White,
+    primaryContainer = EmeraldPrimaryContainerLight,
+    onPrimaryContainer = Color(0xFF042F2C),
+    secondary = SlateSecondary40,
     onSecondary = Color.White,
+    secondaryContainer = SlateSecondaryContainerLight,
+    onSecondaryContainer = Color(0xFF0F172A),
+    tertiary = AmberTertiary40,
     onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
+    tertiaryContainer = AmberTertiaryContainerLight,
+    onTertiaryContainer = Color(0xFF451A03),
+    background = LightBackground,
+    onBackground = LightOnBackground,
+    surface = LightSurface,
+    onSurface = LightOnSurface,
+    surfaceVariant = LightSurfaceVariant,
+    onSurfaceVariant = LightOnSurfaceVariant
 )
 
 @Composable
 fun Coconut_PfaTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    // Dynamic color is available on Android 12+
-    dynamicColor: Boolean = true,
+    themeMode: ThemeMode = ThemeMode.SYSTEM,
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
+    val darkTheme = when (themeMode) {
+        ThemeMode.SYSTEM -> isSystemInDarkTheme()
+        ThemeMode.LIGHT -> false
+        ThemeMode.DARK -> true
+    }
+
     val colorScheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
-
         darkTheme -> DarkColorScheme
         else -> LightColorScheme
     }

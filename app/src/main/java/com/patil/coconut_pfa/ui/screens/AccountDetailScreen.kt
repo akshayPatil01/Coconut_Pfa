@@ -1,5 +1,6 @@
 package com.patil.coconut_pfa.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,7 +17,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.AccountBalance
@@ -33,7 +33,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -49,7 +48,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.patil.coconut_pfa.data.local.entity.TxnEntity
@@ -57,9 +55,12 @@ import com.patil.coconut_pfa.data.model.Account
 import com.patil.coconut_pfa.data.model.AccountType
 import com.patil.coconut_pfa.data.model.EmiScheduleItem
 import com.patil.coconut_pfa.navigation.Screen
+import com.patil.coconut_pfa.ui.components.AmountInputField
 import com.patil.coconut_pfa.ui.components.AmountText
 import com.patil.coconut_pfa.ui.components.SectionHeader
 import com.patil.coconut_pfa.ui.theme.Coconut_PfaTheme
+import com.patil.coconut_pfa.ui.theme.ExpenseRed
+import com.patil.coconut_pfa.ui.theme.IncomeGreen
 import com.patil.coconut_pfa.ui.viewmodel.AccountDetailScreenUiState
 import com.patil.coconut_pfa.ui.viewmodel.AccountDetailViewModel
 import kotlin.math.abs
@@ -174,7 +175,9 @@ fun AccountDetailScreen(
                     item(key = "no_tx") {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
                         ) {
                             Text(
                                 text = "No recent transactions found for this account.",
@@ -230,9 +233,10 @@ private fun AccountBalanceHeaderCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer
+            containerColor = MaterialTheme.colorScheme.surface
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
     ) {
         Column(
             modifier = Modifier.padding(20.dp)
@@ -246,20 +250,21 @@ private fun AccountBalanceHeaderCard(
                     Text(
                         text = if (account.type == AccountType.LOAN) "Outstanding Loan Balance" else "Current Balance",
                         style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     AmountText(
                         amountInPaise = account.balanceInPaise,
                         style = MaterialTheme.typography.headlineLarge,
                         fontWeight = FontWeight.Bold,
-                        color = if (account.balanceInPaise < 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onPrimaryContainer
+                        color = if (account.balanceInPaise < 0) ExpenseRed else MaterialTheme.colorScheme.onSurface
                     )
                 }
 
                 OutlinedButton(
                     onClick = onReconcileClick,
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(14.dp)
                 ) {
                     Text("Reconcile")
                 }
@@ -269,13 +274,14 @@ private fun AccountBalanceHeaderCard(
                 Spacer(modifier = Modifier.height(12.dp))
                 Surface(
                     shape = CircleShape,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.1f)
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
                 ) {
                     Text(
-                        text = "${account.bankName ?: ""} •• ${account.accountNumberLast4 ?: ""}".trim(),
+                        text = "${account.bankName ?: ""} •••• ${account.accountNumberLast4 ?: ""}".trim(),
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)
                     )
                 }
             }
@@ -297,7 +303,8 @@ private fun TypeSpecificPanel(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
     ) {
         Column(
             modifier = Modifier.padding(18.dp)
@@ -396,7 +403,7 @@ private fun LoanPanel(account: Account) {
 @Composable
 private fun EmiScheduleRow(item: EmiScheduleItem) {
     Surface(
-        shape = RoundedCornerShape(10.dp),
+        shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -411,7 +418,7 @@ private fun EmiScheduleRow(item: EmiScheduleItem) {
                 Icon(
                     imageVector = if (item.isPaid) Icons.Rounded.CheckCircle else Icons.Rounded.Pending,
                     contentDescription = null,
-                    tint = if (item.isPaid) Color(0xFF2E7D32) else MaterialTheme.colorScheme.onSurfaceVariant,
+                    tint = if (item.isPaid) IncomeGreen else MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(16.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -487,7 +494,7 @@ private fun InvestmentPanel(
                     amountInPaise = account.currentValueInPaise,
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF2E7D32)
+                    color = IncomeGreen
                 )
             }
 
@@ -534,8 +541,8 @@ private fun DetailItem(
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
             color = when {
-                isError -> MaterialTheme.colorScheme.error
-                isGreen -> Color(0xFF2E7D32)
+                isError -> ExpenseRed
+                isGreen -> IncomeGreen
                 else -> MaterialTheme.colorScheme.onSurface
             }
         )
@@ -562,8 +569,9 @@ private fun DetailTextItem(label: String, value: String) {
 private fun AccountTransactionEntityRow(tx: TxnEntity) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Row(
@@ -633,12 +641,11 @@ private fun ReconcileDialog(
                     text = "Enter the actual current balance as shown in your bank/card statement.",
                     style = MaterialTheme.typography.bodySmall
                 )
-                OutlinedTextField(
+                AmountInputField(
                     value = textValue,
                     onValueChange = { textValue = it },
-                    label = { Text("Real Balance (₹)") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true
+                    label = "Real Balance",
+                    placeholder = "0.00"
                 )
             }
         },
@@ -675,12 +682,11 @@ private fun UpdateValueDialog(
                     text = "Enter the updated total market value of your portfolio.",
                     style = MaterialTheme.typography.bodySmall
                 )
-                OutlinedTextField(
+                AmountInputField(
                     value = textValue,
                     onValueChange = { textValue = it },
-                    label = { Text("Market Value (₹)") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true
+                    label = "Market Value",
+                    placeholder = "0.00"
                 )
             }
         },
