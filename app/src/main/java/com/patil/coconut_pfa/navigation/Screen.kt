@@ -39,7 +39,10 @@ sealed interface Screen {
         val txnId: String? = null,
         val duplicateTxnId: String? = null,
         val initialDateMillis: Long? = null,
-        val billOccurrenceId: String? = null
+        val billOccurrenceId: String? = null,
+        val initialAmountPaise: Long? = null,
+        val initialPayee: String? = null,
+        val scanSource: Boolean = false
     ) : Screen {
         override val title: String = if (txnId != null) "Edit Transaction" else "Add Transaction"
     }

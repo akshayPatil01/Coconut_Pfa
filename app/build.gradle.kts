@@ -90,6 +90,7 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.play.services.auth)
     implementation(libs.play.services.location)
+    implementation(libs.mlkit.text.recognition)
     implementation(libs.retrofit)
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

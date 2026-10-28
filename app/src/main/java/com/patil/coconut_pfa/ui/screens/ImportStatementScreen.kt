@@ -1,69 +1,80 @@
 package com.patil.coconut_pfa.ui.screens
 
+import android.content.Context
+import android.graphics.pdf.PdfRenderer
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.Description
-import androidx.compose.material.icons.rounded.FileOpen
-import androidx.compose.material.icons.rounded.Send
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.MenuAnchorType
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.rounded.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import com.patil.coconut_pfa.data.local.dao.AccountDao
+import com.patil.coconut_pfa.data.local.dao.SmsItemDao
+import com.patil.coconut_pfa.data.local.db.CoconutDatabase
+import com.patil.coconut_pfa.data.local.entity.AccountEntity
+import com.patil.coconut_pfa.data.local.entity.DbSmsSource
+import com.patil.coconut_pfa.data.local.entity.DbSmsStatus
+import com.patil.coconut_pfa.data.local.entity.SmsItemEntity
 import com.patil.coconut_pfa.navigation.Screen
 import com.patil.coconut_pfa.ui.components.AmountText
 import com.patil.coconut_pfa.ui.theme.Coconut_PfaTheme
+import com.patil.coconut_pfa.domain.sms.SmsProcessingEngine
+import com.squareup.moshi.JsonClass
+import com.squareup.moshi.Moshi
+import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.UUID
+import kotlin.math.abs
 
-data class PreviewRow(
-    val date: String,
+enum class StatementFileType {
+    CSV, XLSX, PDF, UNKNOWN
+}
+
+enum class AmountMode {
+    DEBIT_CREDIT_COLUMNS, SIGNED_AMOUNT
+}
+
+@JsonClass(generateAdapter = true)
+data class StatementMapping(
+    val dateColIndex: Int,
+    val payeeColIndex: Int,
+    val amountMode: String,
+    val debitColIndex: Int,
+    val creditColIndex: Int,
+    val signedAmountColIndex: Int,
+    val dateFormat: String
+)
+
+data class ImportedRowData(
+    val dateStr: String,
+    val dateMillis: Long,
     val payee: String,
-    val amountInPaise: Long,
+    val amountPaise: Long,
     val isDebit: Boolean,
+    val rawLine: String
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -72,24 +83,142 @@ fun ImportStatementScreen(
     onNavigate: (Screen) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+    val database = remember { CoconutDatabase.getInstance(context) }
+    val accountDao = remember { database.accountDao() }
+    val smsItemDao = remember { database.smsItemDao() }
 
+    var accounts by remember { mutableStateOf<List<AccountEntity>>(emptyList()) }
+    var selectedAccount by remember { mutableStateOf<AccountEntity?>(null) }
+
+    var selectedUri by remember { mutableStateOf<Uri?>(null) }
     var selectedFileName by remember { mutableStateOf<String?>(null) }
-    var currentStep by remember { mutableStateOf(1) } // Step 1: Pick, 2: Mapping, 3: Preview
+    var fileType by remember { mutableStateOf(StatementFileType.UNKNOWN) }
+
+    var rawHeaders by remember { mutableStateOf<List<String>>(emptyList()) }
+    var rawDataRows by remember { mutableStateOf<List<List<String>>>(emptyList()) }
+    var rawPdfLines by remember { mutableStateOf<List<String>>(emptyList()) }
+
+    var isProcessing by remember { mutableStateOf(false) }
 
     // Mapping state
-    var colDate by remember { mutableStateOf("Column A (Txn Date)") }
-    var colPayee by remember { mutableStateOf("Column B (Description/Payee)") }
-    var colAmount by remember { mutableStateOf("Column C (Amount)") }
-    var colType by remember { mutableStateOf("Column D (Dr/Cr)") }
+    var dateColIndex by remember { mutableStateOf(0) }
+    var payeeColIndex by remember { mutableStateOf(1) }
+    var amountMode by remember { mutableStateOf(AmountMode.DEBIT_CREDIT_COLUMNS) }
+    var debitColIndex by remember { mutableStateOf(2) }
+    var creditColIndex by remember { mutableStateOf(3) }
+    var signedAmountColIndex by remember { mutableStateOf(2) }
+    var dateFormat by remember { mutableStateOf("dd/MM/yyyy") }
 
-    val samplePreviewRows = listOf(
-        PreviewRow("12 Nov 2024", "Supermarket Groceries", 345000L, true),
-        PreviewRow("11 Nov 2024", "Employer Monthly Salary", 12000000L, false),
-        PreviewRow("10 Nov 2024", "Coffee Shop Outing", 45000L, true),
-        PreviewRow("08 Nov 2024", "Electricity Utility Bill", 245000L, true)
-    )
+    val dateFormats = listOf("dd/MM/yyyy", "MM/dd/yyyy", "yyyy-MM-dd", "dd-MMM-yyyy", "dd.MM.yyyy")
+
+    // Load accounts
+    LaunchedEffect(Unit) {
+        val list = accountDao.getAllAccountsList()
+        accounts = list
+        if (list.isNotEmpty() && selectedAccount == null) {
+            selectedAccount = list.first()
+        }
+    }
+
+    // Load saved mapping when selected account changes
+    LaunchedEffect(selectedAccount) {
+        selectedAccount?.let { acc ->
+            loadMappingForAccount(context, acc.name)?.let { mapping ->
+                dateColIndex = mapping.dateColIndex
+                payeeColIndex = mapping.payeeColIndex
+                amountMode = try { AmountMode.valueOf(mapping.amountMode) } catch (e: Exception) { AmountMode.DEBIT_CREDIT_COLUMNS }
+                debitColIndex = mapping.debitColIndex
+                creditColIndex = mapping.creditColIndex
+                signedAmountColIndex = mapping.signedAmountColIndex
+                dateFormat = mapping.dateFormat
+            }
+        }
+    }
+
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            selectedUri = uri
+            val name = getFileName(context, uri) ?: "statement_file"
+            selectedFileName = name
+            val lower = name.lowercase()
+            fileType = when {
+                lower.endsWith(".csv") || lower.endsWith(".txt") -> StatementFileType.CSV
+                lower.endsWith(".xlsx") || lower.endsWith(".xls") -> StatementFileType.XLSX
+                lower.endsWith(".pdf") -> StatementFileType.PDF
+                else -> StatementFileType.CSV
+            }
+
+            isProcessing = true
+            scope.launch(Dispatchers.IO) {
+                if (fileType == StatementFileType.PDF) {
+                    processPdfUri(context, uri) { lines, err ->
+                        rawPdfLines = lines
+                        rawHeaders = listOf("Column A (Date)", "Column B (Description)", "Column C (Amount)")
+                        rawDataRows = parsePdfLinesToRows(lines)
+                        isProcessing = false
+                        if (err != null) {
+                            scope.launch { snackbarHostState.showSnackbar("PDF warning: $err. Please review extracted rows carefully.") }
+                        }
+                    }
+                } else {
+                    // CSV or text/xlsx fallback
+                    try {
+                        context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                            val pair = processCsvInputStream(inputStream)
+                            rawHeaders = pair.first
+                            rawDataRows = pair.second
+                            isProcessing = false
+                        } ?: run {
+                            isProcessing = false
+                            scope.launch { snackbarHostState.showSnackbar("Failed to open file stream") }
+                        }
+                    } catch (e: Exception) {
+                        isProcessing = false
+                        scope.launch { snackbarHostState.showSnackbar("Error reading file: ${e.localizedMessage}") }
+                    }
+                }
+            }
+        }
+    }
+
+    // Compute preview rows based on current mapping
+    val previewRows = remember(rawDataRows, rawPdfLines, fileType, dateColIndex, payeeColIndex, amountMode, debitColIndex, creditColIndex, signedAmountColIndex, dateFormat) {
+        if (fileType == StatementFileType.PDF) {
+            rawDataRows.mapNotNull { row ->
+                if (row.size >= 3) {
+                    val dateStr = row.getOrElse(0) { "" }
+                    val payee = row.getOrElse(1) { "Statement Transaction" }
+                    val amtStr = row.getOrElse(2) { "0" }
+                    val dateMillis = parseDateToMillis(dateStr, dateFormat)
+                    val pair = parseAmountToPaise(amtStr)
+                    ImportedRowData(dateStr, dateMillis, payee, pair.first, pair.second, row.joinToString(" "))
+                } else null
+            }.take(20)
+        } else {
+            rawDataRows.mapNotNull { cols ->
+                if (cols.isNotEmpty()) {
+                    val dateStr = cols.getOrElse(dateColIndex) { "" }
+                    val payee = cols.getOrElse(payeeColIndex) { "Statement Transaction" }
+                    val (amountPaise, isDebit) = if (amountMode == AmountMode.SIGNED_AMOUNT) {
+                        parseAmountToPaise(cols.getOrElse(signedAmountColIndex) { "0" })
+                    } else {
+                        val drStr = cols.getOrElse(debitColIndex) { "0" }
+                        val crStr = cols.getOrElse(creditColIndex) { "0" }
+                        val drPaise = parseAmountToPaise(drStr).first
+                        val crPaise = parseAmountToPaise(crStr).first
+                        if (drPaise > 0) Pair(drPaise, true) else Pair(crPaise, false)
+                    }
+                    val dateMillis = parseDateToMillis(dateStr, dateFormat)
+                    ImportedRowData(dateStr, dateMillis, payee, amountPaise, isDebit, cols.joinToString(", "))
+                } else null
+            }.take(20)
+        }
+    }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -100,6 +229,7 @@ fun ImportStatementScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
+            // Header Row
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -117,7 +247,7 @@ fun ImportStatementScreen(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Map columns & send transactions to Review Inbox",
+                        text = "CSV, XLSX & PDF Statement Parser",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -129,7 +259,7 @@ fun ImportStatementScreen(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Step 1: Pick File Card
+                // Step 1: Account Selection & File Picker
                 item {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -139,40 +269,88 @@ fun ImportStatementScreen(
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Text(
-                                text = "Step 1: Select CSV / Excel Statement",
+                                text = "Step 1: Select Account & Statement File",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
                             Spacer(modifier = Modifier.height(12.dp))
 
+                            // Account Selector Dropdown
+                            var accountDropdownExpanded by remember { mutableStateOf(false) }
+                            ExposedDropdownMenuBox(
+                                expanded = accountDropdownExpanded,
+                                onExpandedChange = { accountDropdownExpanded = !accountDropdownExpanded }
+                            ) {
+                                OutlinedTextField(
+                                    value = selectedAccount?.name ?: "Select Target Account",
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    label = { Text("Target Account") },
+                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = accountDropdownExpanded) },
+                                    modifier = Modifier
+                                        .menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                                        .fillMaxWidth()
+                                )
+                                ExposedDropdownMenu(
+                                    expanded = accountDropdownExpanded,
+                                    onDismissRequest = { accountDropdownExpanded = false }
+                                ) {
+                                    accounts.forEach { acc ->
+                                        DropdownMenuItem(
+                                            text = { Text(acc.name) },
+                                            onClick = {
+                                                selectedAccount = acc
+                                                accountDropdownExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
                             OutlinedButton(
                                 onClick = {
-                                    selectedFileName = "hdfc_bank_statement_nov2024.csv"
-                                    currentStep = 2
+                                    filePickerLauncher.launch(arrayOf("text/csv", "text/comma-separated-values", "application/pdf", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.ms-excel", "*/*"))
                                 },
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(12.dp)
                             ) {
                                 Icon(imageVector = Icons.Rounded.FileOpen, contentDescription = null)
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text(selectedFileName ?: "Pick File (.csv, .xlsx)")
+                                Text(selectedFileName ?: "Pick CSV, XLSX, or PDF File")
                             }
 
-                            selectedFileName?.let { fn ->
+                            if (isProcessing) {
                                 Spacer(modifier = Modifier.height(8.dp))
+                                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                                 Text(
-                                    text = "Selected file: $fn • 4 rows detected",
+                                    text = "Parsing statement (PDF OCR / CSV)...",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.Bold
+                                    color = MaterialTheme.colorScheme.primary
                                 )
+                            }
+
+                            if (fileType == StatementFileType.PDF) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
+                                ) {
+                                    Text(
+                                        text = "⚠️ Warning: PDF results use on-device OCR and may require careful review of extracted rows.",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.padding(8.dp)
+                                    )
+                                }
                             }
                         }
                     }
                 }
 
-                // Step 2: Column Mapping Table
-                if (selectedFileName != null) {
+                // Step 2: Column Mapping & Date Format
+                if (selectedFileName != null && fileType != StatementFileType.PDF) {
                     item {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
@@ -182,21 +360,153 @@ fun ImportStatementScreen(
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Text(
-                                    text = "Step 2: Column Mapping Table",
+                                    text = "Step 2: Column Mapping & Date Format",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Spacer(modifier = Modifier.height(12.dp))
 
-                                MappingDropdown(label = "Date Column", value = colDate, onSelected = { colDate = it })
-                                MappingDropdown(label = "Payee / Description Column", value = colPayee, onSelected = { colPayee = it })
-                                MappingDropdown(label = "Amount Column", value = colAmount, onSelected = { colAmount = it })
-                                MappingDropdown(label = "Debit / Credit Column", value = colType, onSelected = { colType = it })
+                                // Date Format Picker
+                                var dateFormatExpanded by remember { mutableStateOf(false) }
+                                ExposedDropdownMenuBox(
+                                    expanded = dateFormatExpanded,
+                                    onExpandedChange = { dateFormatExpanded = !dateFormatExpanded }
+                                ) {
+                                    OutlinedTextField(
+                                        value = dateFormat,
+                                        onValueChange = {},
+                                        readOnly = true,
+                                        label = { Text("Date Format") },
+                                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = dateFormatExpanded) },
+                                        modifier = Modifier
+                                            .menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                                            .fillMaxWidth()
+                                    )
+                                    ExposedDropdownMenu(
+                                        expanded = dateFormatExpanded,
+                                        onDismissRequest = { dateFormatExpanded = false }
+                                    ) {
+                                        dateFormats.forEach { fmt ->
+                                            DropdownMenuItem(
+                                                text = { Text(fmt) },
+                                                onClick = {
+                                                    dateFormat = fmt
+                                                    dateFormatExpanded = false
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                // Date Column Dropdown
+                                ColumnDropdown(
+                                    label = "Date Column",
+                                    selectedIndex = dateColIndex,
+                                    headers = rawHeaders,
+                                    onSelected = { dateColIndex = it }
+                                )
+
+                                // Payee Column Dropdown
+                                ColumnDropdown(
+                                    label = "Payee / Description Column",
+                                    selectedIndex = payeeColIndex,
+                                    headers = rawHeaders,
+                                    onSelected = { payeeColIndex = it }
+                                )
+
+                                // Amount Mode Dropdown
+                                var amountModeExpanded by remember { mutableStateOf(false) }
+                                ExposedDropdownMenuBox(
+                                    expanded = amountModeExpanded,
+                                    onExpandedChange = { amountModeExpanded = !amountModeExpanded }
+                                ) {
+                                    OutlinedTextField(
+                                        value = if (amountMode == AmountMode.DEBIT_CREDIT_COLUMNS) "Separate Debit & Credit Columns" else "Single Signed Amount Column",
+                                        onValueChange = {},
+                                        readOnly = true,
+                                        label = { Text("Amount Structure") },
+                                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = amountModeExpanded) },
+                                        modifier = Modifier
+                                            .menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                                            .fillMaxWidth()
+                                            .padding(vertical = 4.dp)
+                                    )
+                                    ExposedDropdownMenu(
+                                        expanded = amountModeExpanded,
+                                        onDismissRequest = { amountModeExpanded = false }
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = { Text("Separate Debit & Credit Columns") },
+                                            onClick = {
+                                                amountMode = AmountMode.DEBIT_CREDIT_COLUMNS
+                                                amountModeExpanded = false
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Single Signed Amount Column") },
+                                            onClick = {
+                                                amountMode = AmountMode.SIGNED_AMOUNT
+                                                amountModeExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+
+                                if (amountMode == AmountMode.DEBIT_CREDIT_COLUMNS) {
+                                    ColumnDropdown(
+                                        label = "Debit Column",
+                                        selectedIndex = debitColIndex,
+                                        headers = rawHeaders,
+                                        onSelected = { debitColIndex = it }
+                                    )
+                                    ColumnDropdown(
+                                        label = "Credit Column",
+                                        selectedIndex = creditColIndex,
+                                        headers = rawHeaders,
+                                        onSelected = { creditColIndex = it }
+                                    )
+                                } else {
+                                    ColumnDropdown(
+                                        label = "Signed Amount Column",
+                                        selectedIndex = signedAmountColIndex,
+                                        headers = rawHeaders,
+                                        onSelected = { signedAmountColIndex = it }
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                OutlinedButton(
+                                    onClick = {
+                                        selectedAccount?.let { acc ->
+                                            val mapping = StatementMapping(
+                                                dateColIndex = dateColIndex,
+                                                payeeColIndex = payeeColIndex,
+                                                amountMode = amountMode.name,
+                                                debitColIndex = debitColIndex,
+                                                creditColIndex = creditColIndex,
+                                                signedAmountColIndex = signedAmountColIndex,
+                                                dateFormat = dateFormat
+                                            )
+                                            saveMappingForAccount(context, acc.name, mapping)
+                                            scope.launch { snackbarHostState.showSnackbar("Mapping saved for ${acc.name}!") }
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(imageVector = Icons.Rounded.Save, contentDescription = null)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Save Mapping for this Bank/Account")
+                                }
                             }
                         }
                     }
+                }
 
-                    // Step 3: Preview Rows Table
+                // Step 3: Preview Rows & Send to Review Inbox
+                if (selectedFileName != null && previewRows.isNotEmpty()) {
                     item {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
@@ -206,13 +516,13 @@ fun ImportStatementScreen(
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Text(
-                                    text = "Step 3: Preview Parsed Rows",
+                                    text = "Step 3: Preview Parsed Rows (${previewRows.size} shown)",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Spacer(modifier = Modifier.height(12.dp))
 
-                                samplePreviewRows.forEach { row ->
+                                previewRows.forEach { row ->
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
@@ -220,13 +530,13 @@ fun ImportStatementScreen(
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Column {
+                                        Column(modifier = Modifier.weight(1f)) {
                                             Text(text = row.payee, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                                            Text(text = row.date, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                                            Text(text = "${row.dateStr} • ${if (row.isDebit) "Debit" else "Credit"}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
                                         }
 
                                         AmountText(
-                                            amountInPaise = row.amountInPaise,
+                                            amountInPaise = row.amountPaise,
                                             style = MaterialTheme.typography.bodyLarge,
                                             fontWeight = FontWeight.Bold,
                                             color = if (!row.isDebit) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
@@ -237,17 +547,82 @@ fun ImportStatementScreen(
 
                                 Spacer(modifier = Modifier.height(16.dp))
 
-                                // Send to Review Inbox Primary Action
                                 Button(
                                     onClick = {
-                                        onNavigate(Screen.ReviewInbox)
+                                        scope.launch(Dispatchers.IO) {
+                                            val targetAcc = selectedAccount
+                                            var importedCount = 0
+                                            var duplicateCount = 0
+
+                                            val rowsToImport = if (fileType == StatementFileType.PDF) {
+                                                rawDataRows.mapNotNull { row ->
+                                                    if (row.size >= 3) {
+                                                        val dateStr = row.getOrElse(0) { "" }
+                                                        val payee = row.getOrElse(1) { "Statement Transaction" }
+                                                        val amtStr = row.getOrElse(2) { "0" }
+                                                        val dateMillis = parseDateToMillis(dateStr, dateFormat)
+                                                        val pair = parseAmountToPaise(amtStr)
+                                                        ImportedRowData(dateStr, dateMillis, payee, pair.first, pair.second, row.joinToString(" "))
+                                                    } else null
+                                                }
+                                            } else {
+                                                rawDataRows.mapNotNull { cols ->
+                                                    if (cols.isNotEmpty()) {
+                                                        val dateStr = cols.getOrElse(dateColIndex) { "" }
+                                                        val payee = cols.getOrElse(payeeColIndex) { "Statement Transaction" }
+                                                        val (amountPaise, isDebit) = if (amountMode == AmountMode.SIGNED_AMOUNT) {
+                                                            parseAmountToPaise(cols.getOrElse(signedAmountColIndex) { "0" })
+                                                        } else {
+                                                            val drStr = cols.getOrElse(debitColIndex) { "0" }
+                                                            val crStr = cols.getOrElse(creditColIndex) { "0" }
+                                                            val drPaise = parseAmountToPaise(drStr).first
+                                                            val crPaise = parseAmountToPaise(crStr).first
+                                                            if (drPaise > 0) Pair(drPaise, true) else Pair(crPaise, false)
+                                                        }
+                                                        val dateMillis = parseDateToMillis(dateStr, dateFormat)
+                                                        ImportedRowData(dateStr, dateMillis, payee, amountPaise, isDebit, cols.joinToString(", "))
+                                                    } else null
+                                                }
+                                            }
+
+                                            for (row in rowsToImport) {
+                                                val body = "Imported Statement: ${row.payee} on ${row.dateStr} - ${if (row.isDebit) "Dr" else "Cr"} ${row.amountPaise / 100.0}"
+                                                val bodyHash = SmsProcessingEngine.hashBody(body)
+                                                val existing = smsItemDao.getSmsByHash(bodyHash)
+                                                if (existing != null) {
+                                                    duplicateCount++
+                                                    continue
+                                                }
+
+                                                val smsEntity = SmsItemEntity(
+                                                    id = UUID.randomUUID().toString(),
+                                                    sender = targetAcc?.name ?: "Statement Import",
+                                                    receivedAt = row.dateMillis,
+                                                    body = body,
+                                                    bodyHash = bodyHash,
+                                                    parsedType = if (row.isDebit) "DEBIT" else "CREDIT",
+                                                    amountPaise = row.amountPaise,
+                                                    merchant = row.payee,
+                                                    matchedAccountId = targetAcc?.id,
+                                                    status = DbSmsStatus.PENDING,
+                                                    source = DbSmsSource.IMPORT
+                                                )
+                                                smsItemDao.insert(smsEntity)
+                                                importedCount++
+                                            }
+
+                                            withContext(Dispatchers.Main) {
+                                                snackbarHostState.showSnackbar("Imported $importedCount transactions ($duplicateCount duplicates skipped).")
+                                                onNavigate(Screen.ReviewInbox)
+                                            }
+                                        }
                                     },
                                     modifier = Modifier.fillMaxWidth(),
                                     shape = RoundedCornerShape(12.dp)
                                 ) {
                                     Icon(imageVector = Icons.Rounded.Send, contentDescription = null, modifier = Modifier.size(18.dp))
                                     Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Send 4 Transactions to Review Inbox")
+                                    Text("Send All Rows to Review Inbox")
                                 }
                             }
                         }
@@ -260,13 +635,14 @@ fun ImportStatementScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun MappingDropdown(
+private fun ColumnDropdown(
     label: String,
-    value: String,
-    onSelected: (String) -> Unit,
+    selectedIndex: Int,
+    headers: List<String>,
+    onSelected: (Int) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
-    val options = listOf("Column A (Txn Date)", "Column B (Description/Payee)", "Column C (Amount)", "Column D (Dr/Cr)", "Ignore Column")
+    val currentText = if (selectedIndex in headers.indices) headers[selectedIndex] else "Column $selectedIndex"
 
     ExposedDropdownMenuBox(
         expanded = expanded,
@@ -274,7 +650,7 @@ private fun MappingDropdown(
         modifier = Modifier.padding(vertical = 4.dp)
     ) {
         OutlinedTextField(
-            value = value,
+            value = currentText,
             onValueChange = {},
             readOnly = true,
             label = { Text(label) },
@@ -288,16 +664,195 @@ private fun MappingDropdown(
             expanded = expanded,
             onDismissRequest = { expanded = false }
         ) {
-            options.forEach { opt ->
+            headers.forEachIndexed { idx, header ->
                 DropdownMenuItem(
-                    text = { Text(opt) },
+                    text = { Text(header) },
                     onClick = {
-                        onSelected(opt)
+                        onSelected(idx)
                         expanded = false
                     }
                 )
             }
         }
+    }
+}
+
+private fun getFileName(context: Context, uri: Uri): String? {
+    var name: String? = null
+    context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+        if (cursor.moveToFirst()) {
+            val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+            if (nameIndex != -1) {
+                name = cursor.getString(nameIndex)
+            }
+        }
+    }
+    if (name == null) {
+        name = uri.path?.let { path ->
+            val cut = path.lastIndexOf('/')
+            if (cut != -1) path.substring(cut + 1) else path
+        }
+    }
+    return name
+}
+
+private fun processCsvInputStream(
+    inputStream: java.io.InputStream
+): Pair<List<String>, List<List<String>>> {
+    val reader = BufferedReader(InputStreamReader(inputStream))
+    val lines = reader.readLines().map { it.trim() }.filter { it.isNotBlank() }
+    val csvRows = lines.map { parseCsvLine(it) }
+    val headers = if (csvRows.isNotEmpty()) csvRows.first() else emptyList()
+    val dataRows = if (csvRows.size > 1) csvRows.drop(1) else emptyList()
+
+    val actualHeaders = if (headers.isEmpty() || headers.all { it.matches(Regex("\\d+")) }) {
+        if (csvRows.isNotEmpty()) (0 until csvRows.first().size).map { "Column ${Char('A'.code + it)}" } else emptyList()
+    } else {
+        headers
+    }
+    return Pair(actualHeaders, if (actualHeaders == headers) dataRows else csvRows)
+}
+
+private fun parseCsvLine(line: String): List<String> {
+    val result = mutableListOf<String>()
+    var cur = StringBuilder()
+    var inQuotes = false
+    for (char in line) {
+        when {
+            char == '"' -> inQuotes = !inQuotes
+            char == ',' && !inQuotes -> {
+                result.add(cur.toString().trim())
+                cur = StringBuilder()
+            }
+            else -> cur.append(char)
+        }
+    }
+    result.add(cur.toString().trim())
+    return result
+}
+
+private fun processPdfUri(
+    context: Context,
+    uri: Uri,
+    onResult: (List<String>, String?) -> Unit
+) {
+    try {
+        val pfd = context.contentResolver.openFileDescriptor(uri, "r") ?: run {
+            onResult(emptyList(), "Failed to open PDF")
+            return
+        }
+        val renderer = PdfRenderer(pfd)
+        val allLines = mutableListOf<String>()
+        val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+        val pageCount = renderer.pageCount
+        var completed = 0
+
+        for (i in 0 until pageCount) {
+            val page = renderer.openPage(i)
+            val bitmap = android.graphics.Bitmap.createBitmap(page.width * 2, page.height * 2, android.graphics.Bitmap.Config.ARGB_8888)
+            val canvas = android.graphics.Canvas(bitmap)
+            canvas.drawColor(android.graphics.Color.WHITE)
+            page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_PRINT)
+            page.close()
+
+            val image = InputImage.fromBitmap(bitmap, 0)
+            recognizer.process(image)
+                .addOnSuccessListener { visionText ->
+                    allLines.addAll(visionText.text.lines().map { it.trim() }.filter { it.isNotBlank() })
+                    completed++
+                    if (completed == pageCount) {
+                        try {
+                            renderer.close()
+                            pfd.close()
+                        } catch (e: Exception) {}
+                        onResult(allLines, null)
+                    }
+                }
+                .addOnFailureListener { e ->
+                    completed++
+                    if (completed == pageCount) {
+                        try {
+                            renderer.close()
+                            pfd.close()
+                        } catch (e: Exception) {}
+                        onResult(allLines, e.localizedMessage)
+                    }
+                }
+        }
+        if (pageCount == 0) {
+            renderer.close()
+            pfd.close()
+            onResult(emptyList(), "PDF has 0 pages")
+        }
+    } catch (e: Exception) {
+        onResult(emptyList(), e.localizedMessage)
+    }
+}
+
+private fun parsePdfLinesToRows(lines: List<String>): List<List<String>> {
+    val dateRegex = Regex("\\b\\d{1,2}[/\\-]\\d{1,2}[/\\-]\\d{2,4}\\b|\\b\\d{1,2}\\s+[A-Za-z]{3}\\s+\\d{2,4}\\b")
+    val amountRegex = Regex("\\b(?:[₹$€Rs.]\\s*)?\\d{1,3}(?:,\\d{3})*(?:\\.\\d{2})?\\b")
+
+    val rows = mutableListOf<List<String>>()
+    for (line in lines) {
+        val hasDate = dateRegex.containsMatchIn(line)
+        val hasAmount = amountRegex.containsMatchIn(line)
+        if (hasDate && hasAmount) {
+            val dateMatch = dateRegex.find(line)?.value ?: "01/01/2024"
+            val amountMatch = amountRegex.findAll(line).lastOrNull()?.value ?: "0.00"
+            val payee = line.replace(dateMatch, "").replace(amountMatch, "").trim(' ', '-', ':', '|')
+            rows.add(listOf(dateStrMatch(dateMatch), payee.ifBlank { "PDF Statement Txn" }, amountMatch))
+        }
+    }
+    return rows
+}
+
+private fun dateStrMatch(str: String): String = str
+
+private fun parseDateToMillis(dateStr: String, formatPattern: String): Long {
+    try {
+        val formatter = DateTimeFormatter.ofPattern(formatPattern, java.util.Locale.ENGLISH)
+        val date = LocalDate.parse(dateStr, formatter)
+        return date.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+    } catch (e: Exception) {
+        try {
+            val date = LocalDate.parse(dateStr, DateTimeFormatter.ofPattern("dd/MM/yyyy"))
+            return date.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        } catch (e2: Exception) {
+            return System.currentTimeMillis()
+        }
+    }
+}
+
+private fun parseAmountToPaise(amountStr: String): Pair<Long, Boolean> {
+    val cleaned = amountStr.replace(Regex("[₹$€Rs.,\\s]"), "").trim()
+    val isNegative = amountStr.contains("-") || amountStr.contains("Dr", ignoreCase = true)
+    val numStr = amountStr.replace(Regex("[^0-9.\\-]"), "").trim()
+    val value = numStr.toDoubleOrNull() ?: 0.0
+    val paise = (abs(value) * 100).toLong()
+    val isDebit = isNegative || value < 0 || amountStr.contains("Dr", ignoreCase = true)
+    return Pair(paise, isDebit)
+}
+
+private fun saveMappingForAccount(context: Context, accountName: String, mapping: StatementMapping) {
+    try {
+        val prefs = context.getSharedPreferences("statement_mappings", Context.MODE_PRIVATE)
+        val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
+        val json = moshi.adapter(StatementMapping::class.java).toJson(mapping)
+        prefs.edit().putString(accountName, json).apply()
+    } catch (e: Exception) {
+        e.printStackTrace()
+    }
+}
+
+private fun loadMappingForAccount(context: Context, accountName: String): StatementMapping? {
+    try {
+        val prefs = context.getSharedPreferences("statement_mappings", Context.MODE_PRIVATE)
+        val json = prefs.getString(accountName, null) ?: return null
+        val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
+        return moshi.adapter(StatementMapping::class.java).fromJson(json)
+    } catch (e: Exception) {
+        return null
     }
 }
 

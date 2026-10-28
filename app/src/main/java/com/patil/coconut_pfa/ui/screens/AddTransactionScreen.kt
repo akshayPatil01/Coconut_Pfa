@@ -90,7 +90,11 @@ import java.time.format.DateTimeFormatter
 fun AddTransactionScreen(
     onNavigate: (Screen) -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: AddTransactionViewModel? = null
+    viewModel: AddTransactionViewModel? = null,
+    initialAmountPaise: Long? = null,
+    initialPayee: String? = null,
+    initialDateMillisArg: Long? = null,
+    scanSource: Boolean = false
 ) {
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -169,7 +173,25 @@ fun AddTransactionScreen(
                     selectedCategoryName = foundCat?.name ?: "General"
                 }
             } else {
-                // New transaction - preset defaults
+                // New transaction - preset defaults or scan pre-fill
+                if (initialAmountPaise != null && initialAmountPaise > 0L) {
+                    val amountDouble = initialAmountPaise / 100.0
+                    rawAmountInput = if (initialAmountPaise % 100 == 0L) {
+                        (initialAmountPaise / 100).toString()
+                    } else {
+                        String.format("%.2f", amountDouble)
+                    }
+                }
+                if (!initialPayee.isNullOrBlank()) {
+                    payee = initialPayee
+                }
+                if (initialDateMillisArg != null && initialDateMillisArg > 0L) {
+                    selectedOccurredAt = initialDateMillisArg
+                }
+                if (scanSource) {
+                    note = "Scanned Receipt"
+                }
+
                 val defaultCat = categories.firstOrNull { it.id == uiState.lastUsedCategoryId }
                     ?: categories.firstOrNull()
                 selectedCategoryId = defaultCat?.id
@@ -242,12 +264,10 @@ fun AddTransactionScreen(
                     fontWeight = FontWeight.Bold
                 )
 
-                // "Scan" Button (UI placeholder action)
+                // "Scan" Button
                 OutlinedButton(
                     onClick = {
-                        scope.launch {
-                            snackbarHostState.showSnackbar("Scan receipt / QR (demo feature)")
-                        }
+                        onNavigate(Screen.ReceiptScan)
                     },
                     shape = RoundedCornerShape(20.dp),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
@@ -809,7 +829,8 @@ fun AddTransactionScreen(
                                     categoryId = selectedCategoryId ?: selectedCategoryName,
                                     payee = payee,
                                     note = note,
-                                    occurredAt = selectedOccurredAt
+                                    occurredAt = selectedOccurredAt,
+                                    scanSource = scanSource
                                 ) ?: true
                             }
 

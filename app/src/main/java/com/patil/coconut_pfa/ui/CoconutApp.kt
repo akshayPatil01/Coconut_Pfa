@@ -409,7 +409,11 @@ fun CoconutApp(
                         AddTransactionScreen(
                             onNavigate = navigateTo,
                             modifier = screenModifier,
-                            viewModel = addTransactionViewModel
+                            viewModel = addTransactionViewModel,
+                            initialAmountPaise = dest.initialAmountPaise,
+                            initialPayee = dest.initialPayee,
+                            initialDateMillisArg = dest.initialDateMillis,
+                            scanSource = dest.scanSource
                         )
                     }
                     Screen.Goals -> {

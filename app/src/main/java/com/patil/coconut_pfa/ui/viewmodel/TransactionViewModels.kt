@@ -428,7 +428,8 @@ class AddTransactionViewModel(
         categoryId: String?,
         payee: String?,
         note: String?,
-        occurredAt: Long
+        occurredAt: Long,
+        scanSource: Boolean = false
     ): Boolean {
         if (amountPaise <= 0L) return false
         if (accountId == null) return false
@@ -461,7 +462,7 @@ class AddTransactionViewModel(
             payee = payee?.trim()?.ifEmpty { null },
             note = note?.trim()?.ifEmpty { null },
             occurredAt = occurredAt,
-            source = DbTxnSource.MANUAL
+            source = if (scanSource) DbTxnSource.SCAN else DbTxnSource.MANUAL
         )
 
         transactionRepository.saveTransaction(txn)
