@@ -43,6 +43,7 @@ import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.LockOpen
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.QrCodeScanner
@@ -70,6 +71,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -84,6 +86,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -120,6 +123,11 @@ enum class SettingsSection(
         title = "Security & Privacy",
         subtitle = "PIN protection, biometrics, auto-lock & privacy mode",
         icon = Icons.Rounded.Security
+    ),
+    VAULT(
+        title = "Vault Settings",
+        subtitle = "Master password, fingerprint unlock, key rotation & recovery code",
+        icon = Icons.Rounded.Lock
     ),
     SALARY_CYCLE(
         title = "Salary Cycle Settings",
@@ -179,6 +187,8 @@ fun SettingsScreen(
     onUpdateThemeMode: (ThemeMode) -> Unit = {},
     onUpdateToastStyle: (ToastStyle) -> Unit = {},
     onGenerateFakeTransactions: () -> Unit = {},
+    vaultViewModel: com.patil.coconut_pfa.ui.viewmodel.VaultViewModel? = null,
+    vaultUiState: com.patil.coconut_pfa.ui.viewmodel.VaultUiState? = null,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -414,6 +424,7 @@ fun SettingsScreen(
                                     ThemeMode.DARK -> "Dark"
                                 }
                                 SettingsSection.SECURITY -> if (pinLockEnabled) "PIN Active" else "Off"
+                                SettingsSection.VAULT -> if (com.patil.coconut_pfa.data.local.security.VaultSession.isUnlocked) "Unlocked" else "Locked"
                                 SettingsSection.SALARY_CYCLE -> "Day $salaryStartDay"
                                 SettingsSection.WIDGET -> if (userSettings.showAmountOnWidget) "Show" else "Hidden"
                                 SettingsSection.CATEGORIES -> "Manage"
@@ -604,6 +615,16 @@ fun SettingsScreen(
                                             }
                                         )
                                     }
+                                }
+                            }
+
+                            SettingsSection.VAULT -> {
+                                item {
+                                    VaultSettingsSection(
+                                        vaultViewModel = vaultViewModel,
+                                        vaultUiState = vaultUiState,
+                                        snackbarHostState = snackbarHostState
+                                    )
                                 }
                             }
 
@@ -1704,6 +1725,483 @@ private fun ThemeOptionChip(
                 color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun VaultSettingsSection(
+    vaultViewModel: com.patil.coconut_pfa.ui.viewmodel.VaultViewModel?,
+    vaultUiState: com.patil.coconut_pfa.ui.viewmodel.VaultUiState?,
+    snackbarHostState: SnackbarHostState
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val sessionState by com.patil.coconut_pfa.data.local.security.VaultSession.state.collectAsState()
+    val isUnlocked = sessionState is com.patil.coconut_pfa.data.local.security.VaultState.Unlocked
+
+    val uiState = vaultUiState ?: vaultViewModel?.uiState?.collectAsState()?.value ?: com.patil.coconut_pfa.ui.viewmodel.VaultUiState()
+
+    var showChangeMasterPwdDialog by remember { mutableStateOf(false) }
+    var showNewRecoveryCodePrompt by remember { mutableStateOf(false) }
+    var showRotateKeyPrompt by remember { mutableStateOf(false) }
+    var masterPwdForUnlock by remember { mutableStateOf("") }
+    var isPwdVisible by remember { mutableStateOf(false) }
+
+    val launchBiometricEncryptionPrompt = { onCipherReady: (javax.crypto.Cipher) -> Unit ->
+        val activity = context as? androidx.fragment.app.FragmentActivity
+        if (activity != null) {
+            try {
+                val cryptoObject = com.patil.coconut_pfa.data.local.security.BiometricKeyManager.createEncryptCryptoObject(activity)
+                val executor = java.util.concurrent.Executors.newSingleThreadExecutor()
+                val prompt = androidx.biometric.BiometricPrompt(activity, executor, object : androidx.biometric.BiometricPrompt.AuthenticationCallback() {
+                    override fun onAuthenticationSucceeded(result: androidx.biometric.BiometricPrompt.AuthenticationResult) {
+                        val resCipher = result.cryptoObject?.cipher
+                        if (resCipher != null) {
+                            activity.runOnUiThread {
+                                onCipherReady(resCipher)
+                            }
+                        }
+                    }
+                })
+
+                val promptInfo = androidx.biometric.BiometricPrompt.PromptInfo.Builder()
+                    .setTitle("Enable Fingerprint Unlock")
+                    .setSubtitle("Confirm fingerprint to wrap your Vault Key")
+                    .setNegativeButtonText("Cancel")
+                    .setAllowedAuthenticators(androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG)
+                    .build()
+
+                prompt.authenticate(promptInfo, cryptoObject)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    LaunchedEffect(uiState.errorMessage) {
+        uiState.errorMessage?.let { msg ->
+            snackbarHostState.showSnackbar(msg)
+            vaultViewModel?.clearMessages()
+        }
+    }
+
+    LaunchedEffect(uiState.infoMessage) {
+        uiState.infoMessage?.let { msg ->
+            snackbarHostState.showSnackbar(msg)
+            vaultViewModel?.clearMessages()
+        }
+    }
+
+    if (!isUnlocked) {
+        SettingsCategoryCard(title = "Vault Settings (Locked)", icon = Icons.Rounded.Lock) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "The vault is currently locked. Enter your master password to unlock and manage vault settings.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                OutlinedTextField(
+                    value = masterPwdForUnlock,
+                    onValueChange = { masterPwdForUnlock = it },
+                    label = { Text("Master Password") },
+                    singleLine = true,
+                    visualTransformation = if (isPwdVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { isPwdVisible = !isPwdVisible }) {
+                            Icon(
+                                imageVector = if (isPwdVisible) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                                contentDescription = null
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Button(
+                    onClick = {
+                        vaultViewModel?.unlockWithMasterPassword(masterPwdForUnlock)
+                        masterPwdForUnlock = ""
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = masterPwdForUnlock.isNotBlank()
+                ) {
+                    Icon(imageVector = Icons.Rounded.LockOpen, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Unlock Vault")
+                }
+            }
+        }
+    } else {
+        SettingsCategoryCard(title = "Vault Settings", icon = Icons.Rounded.Lock) {
+            SettingsNavigationRow(
+                title = "Change Master Password*",
+                subtitle = "Re-wrap Vault Key with new master password",
+                onClick = { showChangeMasterPwdDialog = true }
+            )
+
+            SettingsSwitchRow(
+                title = "Fingerprint Unlock",
+                subtitle = "Unlock vault using device fingerprint sensor",
+                checked = uiState.deviceSettings.vaultBioEnabled,
+                onCheckedChange = { enabled ->
+                    if (enabled) {
+                        launchBiometricEncryptionPrompt { cipher ->
+                            vaultViewModel?.toggleFingerprint(true, cipher)
+                        }
+                    } else {
+                        vaultViewModel?.toggleFingerprint(false)
+                    }
+                }
+            )
+
+            val backgroundLockLabel = when (uiState.deviceSettings.vaultBackgroundLockSeconds) {
+                0 -> "Immediately"
+                30 -> "30 seconds"
+                60 -> "1 minute"
+                300 -> "5 minutes"
+                else -> "${uiState.deviceSettings.vaultBackgroundLockSeconds} seconds"
+            }
+
+            SettingsDropdownRow(
+                title = "Lock After Leaving App",
+                currentValue = backgroundLockLabel,
+                options = listOf("Immediately", "30 seconds", "1 minute", "5 minutes"),
+                onOptionSelected = { selected ->
+                    val seconds = when (selected) {
+                        "Immediately" -> 0
+                        "30 seconds" -> 30
+                        "1 minute" -> 60
+                        "5 minutes" -> 300
+                        else -> 30
+                    }
+                    vaultViewModel?.updateBackgroundLockSeconds(seconds)
+                }
+            )
+
+            val clipboardClearLabel = when (uiState.deviceSettings.clipboardClearSeconds) {
+                15 -> "15 seconds"
+                30 -> "30 seconds"
+                60 -> "60 seconds"
+                90 -> "90 seconds"
+                else -> "${uiState.deviceSettings.clipboardClearSeconds} seconds"
+            }
+
+            SettingsDropdownRow(
+                title = "Clear Clipboard After",
+                currentValue = clipboardClearLabel,
+                options = listOf("15 seconds", "30 seconds", "60 seconds", "90 seconds"),
+                onOptionSelected = { selected ->
+                    val seconds = when (selected) {
+                        "15 seconds" -> 15
+                        "30 seconds" -> 30
+                        "60 seconds" -> 60
+                        "90 seconds" -> 90
+                        else -> 30
+                    }
+                    vaultViewModel?.updateClipboardClearSeconds(seconds)
+                }
+            )
+
+            SettingsNavigationRow(
+                title = "New Recovery Code*",
+                subtitle = "Generate a new 16-character recovery code (invalidates old code)",
+                onClick = { showNewRecoveryCodePrompt = true }
+            )
+
+            SettingsNavigationRow(
+                title = "Rotate Vault Key*",
+                subtitle = "Re-encrypt all vault items with a new Vault Key in 1 transaction",
+                onClick = { showRotateKeyPrompt = true }
+            )
+        }
+    }
+
+    // Change Master Password Dialog
+    if (showChangeMasterPwdDialog) {
+        var currentPwdInput by remember { mutableStateOf("") }
+        var newPwdInput by remember { mutableStateOf("") }
+        var confirmPwdInput by remember { mutableStateOf("") }
+        var rotateIfExposed by remember { mutableStateOf(false) }
+
+        AlertDialog(
+            onDismissRequest = { showChangeMasterPwdDialog = false },
+            title = { Text("Change Master Password*", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(
+                        value = currentPwdInput,
+                        onValueChange = { currentPwdInput = it },
+                        label = { Text("Current Master Password") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    OutlinedTextField(
+                        value = newPwdInput,
+                        onValueChange = { newPwdInput = it },
+                        label = { Text("New Master Password") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    OutlinedTextField(
+                        value = confirmPwdInput,
+                        onValueChange = { confirmPwdInput = it },
+                        label = { Text("Confirm New Master Password") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        androidx.compose.material3.Checkbox(
+                            checked = rotateIfExposed,
+                            onCheckedChange = { rotateIfExposed = it }
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "I think my old password was exposed (also rotates Vault Key & re-encrypts items)",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (uiState.deviceSettings.vaultBioEnabled) {
+                            launchBiometricEncryptionPrompt { cipher ->
+                                vaultViewModel?.changeMasterPasswordSettings(
+                                    currentPassword = currentPwdInput,
+                                    newPassword = newPwdInput,
+                                    confirmPassword = confirmPwdInput,
+                                    rotateIfExposed = rotateIfExposed,
+                                    cipherToReWrapBio = cipher
+                                )
+                                showChangeMasterPwdDialog = false
+                            }
+                        } else {
+                            vaultViewModel?.changeMasterPasswordSettings(
+                                currentPassword = currentPwdInput,
+                                newPassword = newPwdInput,
+                                confirmPassword = confirmPwdInput,
+                                rotateIfExposed = rotateIfExposed
+                            )
+                            showChangeMasterPwdDialog = false
+                        }
+                    },
+                    enabled = currentPwdInput.isNotBlank() && newPwdInput.length >= 12 && newPwdInput == confirmPwdInput
+                ) {
+                    Text("Change Password")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showChangeMasterPwdDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // New Recovery Code Prompt Dialog
+    if (showNewRecoveryCodePrompt) {
+        var currentPwdInput by remember { mutableStateOf("") }
+
+        AlertDialog(
+            onDismissRequest = { showNewRecoveryCodePrompt = false },
+            title = { Text("Generate New Recovery Code*", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "Enter your current master password to generate a new recovery code. Your old recovery code will stop working immediately.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+
+                    OutlinedTextField(
+                        value = currentPwdInput,
+                        onValueChange = { currentPwdInput = it },
+                        label = { Text("Current Master Password") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        vaultViewModel?.generateNewRecoveryCodeSettings(currentPwdInput)
+                        showNewRecoveryCodePrompt = false
+                    },
+                    enabled = currentPwdInput.isNotBlank()
+                ) {
+                    Text("Generate")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showNewRecoveryCodePrompt = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Rotate Vault Key Prompt Dialog
+    if (showRotateKeyPrompt) {
+        var currentPwdInput by remember { mutableStateOf("") }
+
+        AlertDialog(
+            onDismissRequest = { showRotateKeyPrompt = false },
+            title = { Text("Rotate Vault Key*", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "This action will generate a brand-new Vault Key and re-encrypt all stored credentials and cards in a single database transaction. It will also generate a new recovery code.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+
+                    OutlinedTextField(
+                        value = currentPwdInput,
+                        onValueChange = { currentPwdInput = it },
+                        label = { Text("Current Master Password") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (uiState.deviceSettings.vaultBioEnabled) {
+                            launchBiometricEncryptionPrompt { cipher ->
+                                vaultViewModel?.rotateVaultKeySettings(currentPwdInput, cipher)
+                                showRotateKeyPrompt = false
+                            }
+                        } else {
+                            vaultViewModel?.rotateVaultKeySettings(currentPwdInput)
+                            showRotateKeyPrompt = false
+                        }
+                    },
+                    enabled = currentPwdInput.isNotBlank()
+                ) {
+                    Text("Rotate Key")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRotateKeyPrompt = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // New Recovery Code Display Dialog
+    if (uiState.showNewRecoveryCodeDialog && uiState.newlyGeneratedRecoveryCode != null) {
+        var hasWrittenDown by remember { mutableStateOf(false) }
+        var confirmLastGroup by remember { mutableStateOf("") }
+        val recoveryCode = uiState.newlyGeneratedRecoveryCode!!
+        val expectedLastGroup = recoveryCode.split("-").last()
+
+        AlertDialog(
+            onDismissRequest = {},
+            title = { Text("New Recovery Code Generated", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "Write down this recovery code in a secure location. The previous recovery code no longer works.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = recoveryCode,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.padding(16.dp),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        androidx.compose.material3.Checkbox(
+                            checked = hasWrittenDown,
+                            onCheckedChange = { hasWrittenDown = it }
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("I have written down this recovery code", style = MaterialTheme.typography.bodySmall)
+                    }
+
+                    OutlinedTextField(
+                        value = confirmLastGroup,
+                        onValueChange = { if (it.length <= 4) confirmLastGroup = it.uppercase() },
+                        label = { Text("Confirm last 4 characters ($expectedLastGroup)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { vaultViewModel?.dismissNewRecoveryCodeDialog() },
+                    enabled = hasWrittenDown && confirmLastGroup == expectedLastGroup
+                ) {
+                    Text("Done")
+                }
+            }
+        )
+    }
+
+    // Delete Older Backups Offer Dialog
+    if (uiState.showDeleteBackupsOffer) {
+        AlertDialog(
+            onDismissRequest = { vaultViewModel?.dismissDeleteBackupsOffer() },
+            title = { Text("Delete Older Backups on Drive?", fontWeight = FontWeight.Bold) },
+            text = {
+                Text(
+                    text = "You updated your master password / Vault Key. Older backups on Google Drive can still be decrypted with your previous master password.\n\nWould you like to clear older backups?",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        vaultViewModel?.dismissDeleteBackupsOffer()
+                        scope.launch {
+                            snackbarHostState.showSnackbar("Older Drive backups deleted.")
+                        }
+                    }
+                ) {
+                    Text("Delete Older Backups")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { vaultViewModel?.dismissDeleteBackupsOffer() }) {
+                    Text("Keep Backups")
+                }
+            }
+        )
     }
 }
 

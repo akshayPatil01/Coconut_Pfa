@@ -58,7 +58,11 @@ data class VaultUiState(
     val failedAttempts: Int = 0,
     val lockoutRemainingSeconds: Int = 0,
     val showRecoveryMode: Boolean = false,
-    val deviceSettings: VaultDeviceSettings = VaultDeviceSettings()
+    val deviceSettings: VaultDeviceSettings = VaultDeviceSettings(),
+    val showNewRecoveryCodeDialog: Boolean = false,
+    val newlyGeneratedRecoveryCode: String? = null,
+    val showDeleteBackupsOffer: Boolean = false,
+    val isSettingsProcessing: Boolean = false
 )
 
 class VaultViewModel(
@@ -480,6 +484,180 @@ class VaultViewModel(
                 }
             }
         }
+    }
+
+    fun changeMasterPasswordSettings(
+        currentPassword: String,
+        newPassword: String,
+        confirmPassword: String,
+        rotateIfExposed: Boolean,
+        cipherToReWrapBio: Cipher? = null
+    ) {
+        if (newPassword != confirmPassword) {
+            _uiState.value = _uiState.value.copy(errorMessage = "New passwords do not match")
+            return
+        }
+        if (newPassword.length < 12) {
+            _uiState.value = _uiState.value.copy(errorMessage = "Master password must be at least 12 characters")
+            return
+        }
+
+        _uiState.value = _uiState.value.copy(isSettingsProcessing = true, errorMessage = null)
+
+        viewModelScope.launch(Dispatchers.Default) {
+            try {
+                val newRecoveryCode = vaultRepository.changeMasterPassword(
+                    currentPassword = currentPassword,
+                    newPassword = newPassword,
+                    rotateIfExposed = rotateIfExposed
+                )
+
+                if (cipherToReWrapBio != null && VaultSession.isUnlocked) {
+                    try {
+                        val vk = VaultSession.requireVk()
+                        val b64Blob = BiometricKeyManager.encryptVkWithCryptoObject(cipherToReWrapBio, vk)
+                        vaultDataStore.setVkByBiometric(b64Blob)
+                        vaultDataStore.setVaultBioEnabled(true)
+                        vk.fill(0)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+
+                withContext(Dispatchers.Main) {
+                    _uiState.value = _uiState.value.copy(
+                        isSettingsProcessing = false,
+                        errorMessage = null,
+                        infoMessage = if (rotateIfExposed) "Master password changed and Vault Key rotated." else "Master password changed successfully.",
+                        newlyGeneratedRecoveryCode = newRecoveryCode,
+                        showNewRecoveryCodeDialog = newRecoveryCode != null,
+                        showDeleteBackupsOffer = rotateIfExposed
+                    )
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    _uiState.value = _uiState.value.copy(
+                        isSettingsProcessing = false,
+                        errorMessage = e.message ?: "Failed to change master password"
+                    )
+                }
+            }
+        }
+    }
+
+    fun generateNewRecoveryCodeSettings(currentPassword: String) {
+        _uiState.value = _uiState.value.copy(isSettingsProcessing = true, errorMessage = null)
+
+        viewModelScope.launch(Dispatchers.Default) {
+            try {
+                val newCode = vaultRepository.generateNewRecoveryCode(currentPassword)
+                withContext(Dispatchers.Main) {
+                    _uiState.value = _uiState.value.copy(
+                        isSettingsProcessing = false,
+                        errorMessage = null,
+                        infoMessage = "New recovery code generated successfully.",
+                        newlyGeneratedRecoveryCode = newCode,
+                        showNewRecoveryCodeDialog = true
+                    )
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    _uiState.value = _uiState.value.copy(
+                        isSettingsProcessing = false,
+                        errorMessage = e.message ?: "Failed to generate new recovery code"
+                    )
+                }
+            }
+        }
+    }
+
+    fun rotateVaultKeySettings(currentPassword: String, cipherToReWrapBio: Cipher? = null) {
+        _uiState.value = _uiState.value.copy(isSettingsProcessing = true, errorMessage = null)
+
+        viewModelScope.launch(Dispatchers.Default) {
+            try {
+                val newRecoveryCode = vaultRepository.rotateVaultKey(currentPassword = currentPassword)
+
+                if (cipherToReWrapBio != null && VaultSession.isUnlocked) {
+                    try {
+                        val vk = VaultSession.requireVk()
+                        val b64Blob = BiometricKeyManager.encryptVkWithCryptoObject(cipherToReWrapBio, vk)
+                        vaultDataStore.setVkByBiometric(b64Blob)
+                        vaultDataStore.setVaultBioEnabled(true)
+                        vk.fill(0)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+
+                withContext(Dispatchers.Main) {
+                    _uiState.value = _uiState.value.copy(
+                        isSettingsProcessing = false,
+                        errorMessage = null,
+                        infoMessage = "Vault Key rotated successfully.",
+                        newlyGeneratedRecoveryCode = newRecoveryCode,
+                        showNewRecoveryCodeDialog = true,
+                        showDeleteBackupsOffer = true
+                    )
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    _uiState.value = _uiState.value.copy(
+                        isSettingsProcessing = false,
+                        errorMessage = e.message ?: "Failed to rotate vault key"
+                    )
+                }
+            }
+        }
+    }
+
+    fun toggleFingerprint(enable: Boolean, cipher: Cipher? = null) {
+        viewModelScope.launch {
+            if (enable) {
+                if (cipher != null && VaultSession.isUnlocked) {
+                    try {
+                        val vk = VaultSession.requireVk()
+                        val b64Blob = BiometricKeyManager.encryptVkWithCryptoObject(cipher, vk)
+                        vaultDataStore.setVkByBiometric(b64Blob)
+                        vaultDataStore.setVaultBioEnabled(true)
+                        vk.fill(0)
+                        _uiState.value = _uiState.value.copy(infoMessage = "Fingerprint unlock enabled.")
+                    } catch (e: Exception) {
+                        _uiState.value = _uiState.value.copy(errorMessage = "Failed to enable fingerprint unlock: ${e.message}")
+                    }
+                }
+            } else {
+                BiometricKeyManager.deleteKey()
+                vaultDataStore.setVkByBiometric(null)
+                vaultDataStore.setVaultBioEnabled(false)
+                _uiState.value = _uiState.value.copy(infoMessage = "Fingerprint unlock disabled.")
+            }
+        }
+    }
+
+    fun updateBackgroundLockSeconds(seconds: Int) {
+        viewModelScope.launch {
+            vaultDataStore.setBackgroundLockSeconds(seconds)
+        }
+    }
+
+    fun updateClipboardClearSeconds(seconds: Int) {
+        viewModelScope.launch {
+            vaultDataStore.setClipboardClearSeconds(seconds)
+        }
+    }
+
+    fun dismissNewRecoveryCodeDialog() {
+        _uiState.value = _uiState.value.copy(
+            showNewRecoveryCodeDialog = false,
+            newlyGeneratedRecoveryCode = null
+        )
+    }
+
+    fun dismissDeleteBackupsOffer() {
+        _uiState.value = _uiState.value.copy(
+            showDeleteBackupsOffer = false
+        )
     }
 
     fun clearMessages() {

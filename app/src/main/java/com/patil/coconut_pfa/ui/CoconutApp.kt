@@ -135,7 +135,7 @@ fun CoconutApp(
     val settingsRepository = remember { SettingsRepository(userSettingsDataStore) }
 
     val vaultDataStore = remember { com.patil.coconut_pfa.data.local.datastore.VaultDataStore(context) }
-    val vaultRepository = remember { com.patil.coconut_pfa.data.repository.VaultRepository(database.vaultKeysetDao(), database.vaultItemDao()) }
+    val vaultRepository = remember { com.patil.coconut_pfa.data.repository.VaultRepository(database.vaultKeysetDao(), database.vaultItemDao(), database) }
     val vaultViewModel: com.patil.coconut_pfa.ui.viewmodel.VaultViewModel = viewModel(
         factory = com.patil.coconut_pfa.ui.viewmodel.VaultViewModel.Factory(vaultRepository, vaultDataStore)
     )
@@ -535,6 +535,8 @@ fun CoconutApp(
                             Screen.Settings -> SettingsScreen(
                                 onNavigate = navigateTo,
                                 userSettings = userSettings,
+                                vaultViewModel = vaultViewModel,
+                                vaultUiState = vaultUiState,
                                 onUpdateBiometricEnabled = { enabled -> scope.launch { settingsRepository.setBiometricEnabled(enabled) } },
                                 onUpdateAutoLockSeconds = { seconds -> scope.launch { settingsRepository.setAutoLockSeconds(seconds) } },
                                 onUpdatePrivacyByDefault = { enabled -> scope.launch { settingsRepository.setPrivacyModeDefault(enabled) } },

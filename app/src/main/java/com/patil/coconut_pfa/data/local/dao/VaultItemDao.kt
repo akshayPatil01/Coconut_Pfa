@@ -13,6 +13,9 @@ interface VaultItemDao {
     @Query("SELECT * FROM vault_items WHERE deletedAt IS NULL ORDER BY favourite DESC, updatedAt DESC")
     fun getAllItems(): Flow<List<VaultItem>>
 
+    @Query("SELECT * FROM vault_items")
+    suspend fun getAllRawItems(): List<VaultItem>
+
     @Query("SELECT * FROM vault_items WHERE id = :id LIMIT 1")
     suspend fun getItemById(id: String): VaultItem?
 
