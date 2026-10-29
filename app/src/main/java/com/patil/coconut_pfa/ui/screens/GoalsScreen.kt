@@ -1,10 +1,13 @@
 package com.patil.coconut_pfa.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -18,30 +21,29 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Payments
 import androidx.compose.material.icons.rounded.Savings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
-import com.patil.coconut_pfa.ui.components.GradientButton
-import com.patil.coconut_pfa.ui.components.GradientFloatingActionButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -59,20 +61,34 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.patil.coconut_pfa.data.local.entity.GoalEntity
 import com.patil.coconut_pfa.data.model.Goal
 import com.patil.coconut_pfa.data.model.GoalContribution
-import com.patil.coconut_pfa.data.repository.FakeData
 import com.patil.coconut_pfa.navigation.Screen
-import com.patil.coconut_pfa.ui.components.CoconutExposedDropdownMenu
+import com.patil.coconut_pfa.ui.components.AmountInputField
 import com.patil.coconut_pfa.ui.components.AmountText
+import com.patil.coconut_pfa.ui.components.CoconutExposedDropdownMenu
+import com.patil.coconut_pfa.ui.components.DatePickerField
+import com.patil.coconut_pfa.ui.components.GradientButton
+import com.patil.coconut_pfa.ui.components.GradientFloatingActionButton
 import com.patil.coconut_pfa.ui.theme.Coconut_PfaTheme
+import com.patil.coconut_pfa.ui.theme.IncomeGreen
 import com.patil.coconut_pfa.ui.viewmodel.GoalsUiState
 import com.patil.coconut_pfa.ui.viewmodel.GoalsViewModel
+import com.patil.coconut_pfa.util.KolkataDateTimeUtils
 import com.patil.coconut_pfa.util.MoneyFormatter
+import java.time.LocalDate
+import java.time.temporal.ChronoUnit
+
+private val GOAL_CATEGORY_OPTIONS = listOf(
+    "Savings", "Travel", "Emergency Fund", "Vehicle", "Home", "Gadget", "Investment", "Other"
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -107,13 +123,18 @@ fun GoalsScreen(
 
     var selectedGoalForDetail by remember { mutableStateOf<Goal?>(null) }
     var selectedGoalForContribution by remember { mutableStateOf<Goal?>(null) }
-    var showAddGoalDialog by remember { mutableStateOf(false) }
+    var goalToEdit by remember { mutableStateOf<GoalEntity?>(null) }
+    var showAddGoalSheet by remember { mutableStateOf(false) }
+    var goalToDelete by remember { mutableStateOf<GoalEntity?>(null) }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
         floatingActionButton = {
             GradientFloatingActionButton(
-                onClick = { showAddGoalDialog = true }
+                onClick = {
+                    goalToEdit = null
+                    showAddGoalSheet = true
+                }
             ) {
                 Icon(
                     imageVector = Icons.Rounded.Add,
@@ -129,7 +150,7 @@ fun GoalsScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Header Summary Card
+            // Charcoal Black Hero Overview Card
             item {
                 GoalSummaryCard(goals = goalsList)
             }
@@ -147,7 +168,19 @@ fun GoalsScreen(
                 GoalCard(
                     goal = goal,
                     onClick = { selectedGoalForDetail = goal },
-                    onAddContribution = { selectedGoalForContribution = goal }
+                    onAddContribution = { selectedGoalForContribution = goal },
+                    onEditGoal = {
+                        val entity = uiState.goals.find { it.goal.id == goal.id }?.goal
+                            ?: GoalEntity(
+                                id = goal.id,
+                                name = goal.title,
+                                targetPaise = goal.targetAmountInPaise,
+                                targetDate = goal.targetDate,
+                                icon = goal.category
+                            )
+                        goalToEdit = entity
+                        showAddGoalSheet = true
+                    }
                 )
             }
         }
@@ -161,14 +194,28 @@ fun GoalsScreen(
             onAddContributionClick = {
                 selectedGoalForContribution = goal
                 selectedGoalForDetail = null
+            },
+            onEditGoalClick = {
+                val entity = uiState.goals.find { it.goal.id == goal.id }?.goal
+                    ?: GoalEntity(
+                        id = goal.id,
+                        name = goal.title,
+                        targetPaise = goal.targetAmountInPaise,
+                        targetDate = goal.targetDate,
+                        icon = goal.category
+                    )
+                goalToEdit = entity
+                selectedGoalForDetail = null
+                showAddGoalSheet = true
             }
         )
     }
 
-    // Add Contribution Dialog
+    // Add Contribution Bottom Sheet
     selectedGoalForContribution?.let { goal ->
-        AddContributionDialog(
+        AddContributionBottomSheet(
             goal = goal,
+            availableAccountNames = uiState.accounts.map { it.name }.ifEmpty { listOf("Bank Account", "Cash") },
             onDismiss = { selectedGoalForContribution = null },
             onSaveContribution = { amountInPaise, _, note ->
                 viewModel?.addContribution(
@@ -181,25 +228,63 @@ fun GoalsScreen(
         )
     }
 
-    // Add New Goal Dialog
-    if (showAddGoalDialog) {
-        AddGoalDialog(
-            onDismiss = { showAddGoalDialog = false },
-            onSaveGoal = { title, targetPaise, targetDate, _, category ->
+    // Add / Edit Goal Bottom Sheet
+    if (showAddGoalSheet) {
+        AddEditGoalBottomSheet(
+            goalToEdit = goalToEdit,
+            onDismiss = {
+                showAddGoalSheet = false
+                goalToEdit = null
+            },
+            onSaveGoal = { id, title, targetPaise, targetDate, initialPaise, category ->
                 viewModel?.saveGoal(
+                    id = id,
                     name = title,
                     targetPaise = targetPaise,
                     targetDate = targetDate,
-                    icon = category
+                    icon = category,
+                    initialAmountPaise = initialPaise
                 )
-                showAddGoalDialog = false
+                showAddGoalSheet = false
+                goalToEdit = null
+            },
+            onDeleteGoal = { entity ->
+                goalToDelete = entity
+                showAddGoalSheet = false
+                goalToEdit = null
+            }
+        )
+    }
+
+    // Delete Goal Confirmation Dialog
+    goalToDelete?.let { entity ->
+        AlertDialog(
+            onDismissRequest = { goalToDelete = null },
+            title = { Text("Delete Goal", fontWeight = FontWeight.Bold) },
+            text = { Text("Are you sure you want to delete '${entity.name}' and all its logged contributions? This action cannot be undone.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel?.deleteGoal(entity)
+                        goalToDelete = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { goalToDelete = null }) {
+                    Text("Cancel")
+                }
             }
         )
     }
 }
 
-private fun selectedGoalContributionDone() {}
-
+/**
+ * Hero summary card styled in Charcoal Black matching the Total Net Worth card on the Accounts tab.
+ */
 @Composable
 private fun GoalSummaryCard(
     goals: List<Goal>,
@@ -208,122 +293,161 @@ private fun GoalSummaryCard(
     val totalTarget = goals.sumOf { it.targetAmountInPaise }
     val totalCurrent = goals.sumOf { it.currentAmountInPaise }
     val totalPerCycle = goals.sumOf { it.perCycleNeededInPaise }
-    val overallProgress = if (totalTarget > 0) (totalCurrent.toFloat() / totalTarget.toFloat()) else 0f
+    val overallProgress = if (totalTarget > 0) (totalCurrent.toFloat() / totalTarget.toFloat()).coerceIn(0f, 1f) else 0f
 
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+    val cardBgColor = Color(0xFF121518)
+    val labelTextColor = Color(0xFF9EA3A8)
+    val primaryTextColor = Color.White
+
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .shadow(
+                elevation = 8.dp,
+                shape = RoundedCornerShape(24.dp),
+                ambientColor = Color.Black.copy(alpha = 0.5f)
+            ),
+        shape = RoundedCornerShape(24.dp),
+        color = cardBgColor,
+        border = BorderStroke(
+            width = 1.dp,
+            brush = Brush.horizontalGradient(
+                colors = listOf(
+                    Color(0xFF262A30),
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
+                    Color(0xFF262A30)
+                )
+            )
         )
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primary),
-                        contentAlignment = Alignment.Center
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            Color(0xFF1B1E22),
+                            cardBgColor
+                        )
+                    )
+                )
+        ) {
+            Column(modifier = Modifier.padding(20.dp)) {
+                // Header Row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Savings,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                text = "Goals Overview",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = primaryTextColor
+                            )
+                            Text(
+                                text = "${goals.size} active targets",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = labelTextColor
+                            )
+                        }
+                    }
+
+                    Surface(
+                        shape = CircleShape,
+                        color = Color(0xFF12392B)
                     ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Savings,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(20.dp)
+                        Text(
+                            text = "${(overallProgress * 100).toInt()}% Saved",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = IncomeGreen,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                         )
                     }
-                    Spacer(modifier = Modifier.width(10.dp))
+                }
+
+                Spacer(modifier = Modifier.height(18.dp))
+
+                // Progress Bar
+                LinearProgressIndicator(
+                    progress = { overallProgress },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp)
+                        .clip(CircleShape),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = Color(0xFF262A30)
+                )
+
+                Spacer(modifier = Modifier.height(18.dp))
+
+                // Saved vs Target vs Per Cycle Row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
                     Column {
                         Text(
-                            text = "Goals Overview",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
+                            text = "Total Saved",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = labelTextColor
                         )
-                        Text(
-                            text = "${goals.size} active targets",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        Spacer(modifier = Modifier.height(2.dp))
+                        AmountText(
+                            amountInPaise = totalCurrent,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = primaryTextColor
                         )
                     }
-                }
 
-                Surface(
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                ) {
-                    Text(
-                        text = "${(overallProgress * 100).toInt()}% Saved",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                    )
-                }
-            }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "Total Target",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = labelTextColor
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        AmountText(
+                            amountInPaise = totalTarget,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = primaryTextColor
+                        )
+                    }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            LinearProgressIndicator(
-                progress = { overallProgress },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(8.dp)
-                    .clip(CircleShape),
-                color = MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.surfaceVariant
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column {
-                    Text(
-                        text = "Total Saved",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    AmountText(
-                        amountInPaise = totalCurrent,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = "Total Target",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    AmountText(
-                        amountInPaise = totalTarget,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        text = "Per Cycle Needed",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = "≈ ${MoneyFormatter.format(totalPerCycle)}",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.tertiary
-                    )
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = "Per Cycle Needed",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = labelTextColor
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "≈ ${MoneyFormatter.format(totalPerCycle)}",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.tertiary
+                        )
+                    }
                 }
             }
         }
@@ -335,6 +459,7 @@ private fun GoalCard(
     goal: Goal,
     onClick: () -> Unit,
     onAddContribution: () -> Unit,
+    onEditGoal: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Card(
@@ -346,7 +471,7 @@ private fun GoalCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            // Header: Title, Category & Arrow
+            // Header: Title, Category & Edit Action
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -382,11 +507,21 @@ private fun GoalCard(
                     }
                 }
 
-                Icon(
-                    imageVector = Icons.Rounded.ChevronRight,
-                    contentDescription = "Details",
-                    tint = MaterialTheme.colorScheme.outline
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onEditGoal) {
+                        Icon(
+                            imageVector = Icons.Rounded.Edit,
+                            contentDescription = "Edit Goal",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.Rounded.ChevronRight,
+                        contentDescription = "Details",
+                        tint = MaterialTheme.colorScheme.outline
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(14.dp))
@@ -505,6 +640,7 @@ private fun GoalDetailBottomSheet(
     goal: Goal,
     onDismiss: () -> Unit,
     onAddContributionClick: () -> Unit,
+    onEditGoalClick: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -536,17 +672,32 @@ private fun GoalDetailBottomSheet(
                     )
                 }
 
-                Button(
-                    onClick = onAddContributionClick,
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Add,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Contribute")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = onEditGoalClick,
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Edit,
+                            contentDescription = "Edit",
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Edit")
+                    }
+
+                    Button(
+                        onClick = onAddContributionClick,
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Add,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Contribute")
+                    }
                 }
             }
 
@@ -632,7 +783,7 @@ private fun GoalDetailBottomSheet(
                                         fontWeight = FontWeight.SemiBold
                                     )
                                     Text(
-                                        text = "${item.date}${if (item.note != null) " • ${item.note}" else ""}",
+                                        text = "${item.date}${if (!item.note.isNull_or_blank_safe()) " • ${item.note}" else ""}",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -654,163 +805,308 @@ private fun GoalDetailBottomSheet(
     }
 }
 
+private fun String?.isNull_or_blank_safe(): Boolean {
+    return this == null || this.trim().isEmpty()
+}
+
+/**
+ * Themed Bottom Sheet for Creating or Editing a Goal.
+ */
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+private fun AddEditGoalBottomSheet(
+    goalToEdit: GoalEntity? = null,
+    onDismiss: () -> Unit,
+    onSaveGoal: (id: String?, title: String, targetPaise: Long, targetDate: String, initialPaise: Long, category: String) -> Unit,
+    onDeleteGoal: ((GoalEntity) -> Unit)? = null
+) {
+    val isEditMode = goalToEdit != null
+    var title by remember { mutableStateOf(goalToEdit?.name ?: "") }
+    var targetAmountText by remember {
+        mutableStateOf(
+            if (goalToEdit != null) (goalToEdit.targetPaise / 100.0).toString() else ""
+        )
+    }
+    var initialAmountText by remember { mutableStateOf("") }
+    var targetDate by remember {
+        mutableStateOf(
+            goalToEdit?.targetDate?.ifEmpty { KolkataDateTimeUtils.currentLocalDate().plusMonths(6).format(KolkataDateTimeUtils.DATE_FORMATTER) }
+                ?: KolkataDateTimeUtils.currentLocalDate().plusMonths(6).format(KolkataDateTimeUtils.DATE_FORMATTER)
+        )
+    }
+    var selectedCategory by remember { mutableStateOf(goalToEdit?.icon ?: "Savings") }
+
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = if (isEditMode) "Edit Goal" else "Create New Goal",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+
+                if (isEditMode && goalToEdit != null && onDeleteGoal != null) {
+                    IconButton(
+                        onClick = { onDeleteGoal(goalToEdit) }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Delete,
+                            contentDescription = "Delete Goal",
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+            }
+
+            // Title Field
+            OutlinedTextField(
+                value = title,
+                onValueChange = { title = it },
+                label = { Text("Goal Title") },
+                placeholder = { Text("e.g., Emergency Fund, New Bike") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp)
+            )
+
+            // Target Amount Field with Indian Currency formatting
+            AmountInputField(
+                value = targetAmountText,
+                onValueChange = { targetAmountText = it },
+                label = "Target Amount"
+            )
+
+            // Initial Saved Amount (Only for Create Goal)
+            if (!isEditMode) {
+                AmountInputField(
+                    value = initialAmountText,
+                    onValueChange = { initialAmountText = it },
+                    label = "Initial Saved Amount (Optional)"
+                )
+            }
+
+            // Target Date Selector using DatePickerField
+            DatePickerField(
+                value = targetDate,
+                onDateSelected = { selectedDate ->
+                    targetDate = selectedDate
+                },
+                label = "Target Date"
+            )
+
+            // Category Choice Chips
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text = "Category",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    GOAL_CATEGORY_OPTIONS.forEach { categoryName ->
+                        val isSelected = selectedCategory == categoryName
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = { selectedCategory = categoryName },
+                            label = { Text(categoryName) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                    }
+                }
+            }
+
+            // Auto-Calculated Needed Per Month/Cycle Live Preview Card
+            val targetPaise = MoneyFormatter.parseToPaise(targetAmountText)
+            val initialPaise = MoneyFormatter.parseToPaise(initialAmountText)
+            val remainingPaise = (targetPaise - initialPaise).coerceAtLeast(0L)
+
+            if (targetPaise > 0) {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "Estimated Remaining",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            AmountText(
+                                amountInPaise = remainingPaise,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(
+                                text = "Target Date",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = targetDate,
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // Action Buttons
+            GradientButton(
+                onClick = {
+                    if (title.isNotBlank() && targetPaise > 0) {
+                        onSaveGoal(
+                            goalToEdit?.id,
+                            title,
+                            targetPaise,
+                            targetDate,
+                            initialPaise,
+                            selectedCategory
+                        )
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = if (isEditMode) "Save Changes" else "Create Goal",
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+    }
+}
+
+/**
+ * Themed Bottom Sheet for Adding a Contribution to a Goal.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AddContributionDialog(
+private fun AddContributionBottomSheet(
     goal: Goal,
+    availableAccountNames: List<String>,
     onDismiss: () -> Unit,
     onSaveContribution: (amountInPaise: Long, accountName: String, note: String?) -> Unit,
 ) {
     var amountText by remember { mutableStateOf("") }
     var noteText by remember { mutableStateOf("") }
-    val accountList = FakeData.accounts.map { it.name }
-    var selectedAccount by remember { mutableStateOf(accountList.firstOrNull() ?: "Demo Bank Salary") }
+    var selectedAccount by remember { mutableStateOf(availableAccountNames.firstOrNull() ?: "Bank Account") }
 
-    AlertDialog(
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
         onDismissRequest = onDismiss,
-        title = {
-            Text(
-                text = "Add Contribution",
-                fontWeight = FontWeight.Bold
-            )
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        sheetState = sheetState,
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Column {
+                Text(
+                    text = "Add Contribution",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
                 Text(
                     text = "Goal: ${goal.title}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.SemiBold
                 )
-
-                OutlinedTextField(
-                    value = amountText,
-                    onValueChange = { amountText = it },
-                    label = { Text("Amount (₹)") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                CoconutExposedDropdownMenu(
-                    value = selectedAccount,
-                    options = accountList,
-                    onOptionSelected = { selectedAccount = it },
-                    label = "From Account",
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                OutlinedTextField(
-                    value = noteText,
-                    onValueChange = { noteText = it },
-                    label = { Text("Note (Optional)") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
             }
-        },
-        confirmButton = {
-            Button(
+
+            // Amount Input
+            AmountInputField(
+                value = amountText,
+                onValueChange = { amountText = it },
+                label = "Contribution Amount"
+            )
+
+            // Source Account Selector
+            CoconutExposedDropdownMenu(
+                value = selectedAccount,
+                options = availableAccountNames,
+                onOptionSelected = { selectedAccount = it },
+                label = "From Account",
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            // Optional Note
+            OutlinedTextField(
+                value = noteText,
+                onValueChange = { noteText = it },
+                label = { Text("Note (Optional)") },
+                placeholder = { Text("e.g. Monthly salary savings") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp)
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            GradientButton(
                 onClick = {
-                    val amountDouble = amountText.toDoubleOrNull() ?: 0.0
-                    if (amountDouble > 0) {
+                    val amountPaise = MoneyFormatter.parseToPaise(amountText)
+                    if (amountPaise > 0) {
                         onSaveContribution(
-                            (amountDouble * 100).toLong(),
+                            amountPaise,
                             selectedAccount,
                             noteText.ifBlank { null }
                         )
                     }
-                }
+                },
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Add")
+                Text(
+                    text = "Add Contribution",
+                    fontWeight = FontWeight.Bold
+                )
             }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
-    )
-}
 
-@Composable
-private fun AddGoalDialog(
-    onDismiss: () -> Unit,
-    onSaveGoal: (title: String, targetPaise: Long, targetDate: String, perCyclePaise: Long, category: String) -> Unit,
-) {
-    var title by remember { mutableStateOf("") }
-    var targetAmountText by remember { mutableStateOf("") }
-    var targetDate by remember { mutableStateOf("31 Dec 2025") }
-    var perCycleText by remember { mutableStateOf("") }
-    var category by remember { mutableStateOf("Savings") }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Create New Goal", fontWeight = FontWeight.Bold) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedTextField(
-                    value = title,
-                    onValueChange = { title = it },
-                    label = { Text("Goal Title") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = targetAmountText,
-                    onValueChange = { targetAmountText = it },
-                    label = { Text("Target Amount (₹)") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = targetDate,
-                    onValueChange = { targetDate = it },
-                    label = { Text("Target Date (e.g. 31 Dec 2025)") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = perCycleText,
-                    onValueChange = { perCycleText = it },
-                    label = { Text("Needed per Cycle (₹)") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = category,
-                    onValueChange = { category = it },
-                    label = { Text("Category (e.g. Travel, Tech)") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    val targetDouble = targetAmountText.toDoubleOrNull() ?: 0.0
-                    val perCycleDouble = perCycleText.toDoubleOrNull() ?: 0.0
-                    if (title.isNotBlank() && targetDouble > 0) {
-                        onSaveGoal(
-                            title,
-                            (targetDouble * 100).toLong(),
-                            targetDate,
-                            (perCycleDouble * 100).toLong(),
-                            category.ifBlank { "Savings" }
-                        )
-                    }
-                }
-            ) {
-                Text("Create Goal")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            Spacer(modifier = Modifier.height(12.dp))
         }
-    )
+    }
 }
 
 @Preview(showBackground = true)

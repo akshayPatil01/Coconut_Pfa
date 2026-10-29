@@ -19,4 +19,5 @@ class GoalRepository(
     fun getContributionsForGoal(goalId: String): Flow<List<GoalContributionEntity>> = goalContributionDao.getContributionsForGoalFlow(goalId)
     suspend fun saveContribution(contribution: GoalContributionEntity) = goalContributionDao.insert(contribution)
     suspend fun deleteContribution(contribution: GoalContributionEntity) = goalContributionDao.delete(contribution)
+    suspend fun deleteContributionsForGoal(goalId: String) = goalContributionDao.deleteByGoalId(goalId)
 }

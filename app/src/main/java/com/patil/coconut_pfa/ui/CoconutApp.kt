@@ -462,7 +462,8 @@ fun CoconutApp(
                                     factory = GoalsViewModel.Factory(
                                         goalRepository = goalRepository,
                                         goalContributionDao = database.goalContributionDao(),
-                                        settingsRepository = settingsRepository
+                                        settingsRepository = settingsRepository,
+                                        accountRepository = accountRepository
                                     )
                                 )
                                 GoalsScreen(onNavigate = navigateTo, modifier = screenModifier, viewModel = goalsViewModel)
