@@ -1,6 +1,10 @@
 package com.patil.coconut_pfa.ui.screens
 
+import android.Manifest
+import android.os.Build
 import android.view.HapticFeedbackConstants
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
@@ -43,12 +47,20 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.automirrored.rounded.Backspace
+import androidx.compose.material.icons.automirrored.rounded.ShowChart
+import androidx.compose.material.icons.rounded.AccountBalance
 import androidx.compose.material.icons.rounded.CalendarToday
+import androidx.compose.material.icons.rounded.CameraAlt
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.CreditCard
+import androidx.compose.material.icons.rounded.Payments
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Fingerprint
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.Notifications
+import androidx.compose.material.icons.rounded.Shield
+import androidx.compose.material.icons.rounded.Sms
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -100,8 +112,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.PathParser
 import com.patil.coconut_pfa.data.local.datastore.UserSettingsDataStore
+import com.patil.coconut_pfa.data.local.db.CoconutDatabase
+import com.patil.coconut_pfa.data.local.entity.AccountEntity
+import com.patil.coconut_pfa.data.local.entity.CardDetailsEntity
+import com.patil.coconut_pfa.data.local.entity.DbAccountInstitution
+import com.patil.coconut_pfa.data.local.entity.DbAccountType
 import com.patil.coconut_pfa.navigation.Screen
 import com.patil.coconut_pfa.ui.theme.PlusJakartaSans
+import com.patil.coconut_pfa.util.KolkataDateTimeUtils
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -1640,233 +1658,1717 @@ private fun Step3SalaryCycle(onBack: () -> Unit, onNext: () -> Unit) {
 
 // ─── Step 4: Accounts ────────────────────────────────────────────────────────
 
-private data class AccountOption(
-    val emoji: String,
-    val label: String,
-    val defaultChecked: Boolean
-)
-
 @Composable
 private fun Step4Accounts(onBack: () -> Unit, onNext: () -> Unit) {
-    val accountOptions = remember {
-        listOf(
-            AccountOption("🏦", "Savings / Bank Account", true),
-            AccountOption("💳", "Credit Card", true),
-            AccountOption("💵", "Cash / Wallet", true),
-            AccountOption("🏠", "Loan", false),
-            AccountOption("💰", "Fixed Deposit", false),
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+
+    var bankSelected by remember { mutableStateOf(true) }
+    var bankBalance by remember { mutableStateOf("12,450.00") }
+
+    var cardSelected by remember { mutableStateOf(true) }
+    var cardBalance by remember { mutableStateOf("3,328.00") }
+
+    var cashSelected by remember { mutableStateOf(false) }
+    var cashBalance by remember { mutableStateOf("450.00") }
+
+    var investmentsSelected by remember { mutableStateOf(false) }
+    var investmentsBalance by remember { mutableStateOf("8,500.00") }
+
+    var showInfoDialog by remember { mutableStateOf(false) }
+    var editingAccount by remember { mutableStateOf<String?>(null) } // "bank", "card", "cash", "investments"
+    var tempBalanceInput by remember { mutableStateOf("") }
+
+    val parseBalanceToDouble: (String) -> Double = { str ->
+        str.replace(",", "").toDoubleOrNull() ?: 0.0
+    }
+
+    val formatBalance: (Double) -> String = { value ->
+        val formatter = java.text.DecimalFormat("#,##0.00")
+        formatter.format(value)
+    }
+
+    val selectedCount by remember {
+        derivedStateOf {
+            var count = 0
+            if (bankSelected) count++
+            if (cardSelected) count++
+            if (cashSelected) count++
+            if (investmentsSelected) count++
+            count
+        }
+    }
+
+    val totalNetWorth by remember {
+        derivedStateOf {
+            var total = 0.0
+            if (bankSelected) total += parseBalanceToDouble(bankBalance)
+            if (cardSelected) total += parseBalanceToDouble(cardBalance)
+            if (cashSelected) total += parseBalanceToDouble(cashBalance)
+            if (investmentsSelected) total += parseBalanceToDouble(investmentsBalance)
+            total
+        }
+    }
+
+    // Educational Info Dialog
+    if (showInfoDialog) {
+        AlertDialog(
+            onDismissRequest = { showInfoDialog = false },
+            title = {
+                Text(
+                    text = "Why Initial Accounts?",
+                    fontFamily = PlusJakartaSans,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF131315)
+                )
+            },
+            text = {
+                Text(
+                    text = "Setting up your initial accounts gives Fortis the foundation to calculate your real-time net worth, track spending across categories, and reconcile transactions automatically.\n\nYou can select the accounts you use most, customize starting balances, or edit and add more accounts anytime in the Accounts tab.",
+                    fontFamily = PlusJakartaSans,
+                    fontSize = 13.sp,
+                    lineHeight = 20.sp,
+                    color = Color(0xFF666B72)
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showInfoDialog = false }) {
+                    Text(
+                        text = "Got it",
+                        fontFamily = PlusJakartaSans,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF131315)
+                    )
+                }
+            },
+            containerColor = Color.White,
+            shape = RoundedCornerShape(20.dp)
         )
     }
-    val checked = remember {
-        mutableStateMapOf(*accountOptions.map { it.label to it.defaultChecked }.toTypedArray())
+
+    // Balance Edit Dialog
+    if (editingAccount != null) {
+        val (accountTitle, accountLabel) = when (editingAccount) {
+            "bank" -> "Bank Account" to "Starting Balance"
+            "card" -> "Credit Card" to "Available Limit"
+            "cash" -> "Cash & Wallets" to "Starting Balance"
+            "investments" -> "Investments & Savings" to "Starting Portfolio"
+            else -> "Account" to "Balance"
+        }
+        AlertDialog(
+            onDismissRequest = { editingAccount = null },
+            title = {
+                Text(
+                    text = "$accountTitle $accountLabel",
+                    fontFamily = PlusJakartaSans,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF131315)
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "Enter your starting amount ($ / ₹):",
+                        fontFamily = PlusJakartaSans,
+                        fontSize = 13.sp,
+                        color = Color(0xFF666B72)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = tempBalanceInput,
+                        onValueChange = { input ->
+                            tempBalanceInput = input.filter { it.isDigit() || it == '.' || it == ',' }
+                        },
+                        label = { Text("Amount ($ / ₹)") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val clean = tempBalanceInput.trim().ifEmpty { "0.00" }
+                    val d = clean.replace(",", "").toDoubleOrNull() ?: 0.0
+                    val formatted = formatBalance(d)
+                    when (editingAccount) {
+                        "bank" -> bankBalance = formatted
+                        "card" -> cardBalance = formatted
+                        "cash" -> cashBalance = formatted
+                        "investments" -> investmentsBalance = formatted
+                    }
+                    editingAccount = null
+                }) {
+                    Text(
+                        text = "Save",
+                        fontFamily = PlusJakartaSans,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF131315)
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { editingAccount = null }) {
+                    Text(
+                        text = "Cancel",
+                        fontFamily = PlusJakartaSans,
+                        color = Color(0xFF71717A)
+                    )
+                }
+            },
+            containerColor = Color.White,
+            shape = RoundedCornerShape(20.dp)
+        )
     }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(CardSurface)
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 28.dp, vertical = 32.dp),
+            .background(Color.White)
+            .statusBarsPadding()
+            .navigationBarsPadding(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        // Scrollable Screen Content
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                    contentDescription = "Back",
-                    tint = White
-                )
-            }
-            StepIndicator(total = 6, current = 3)
-            Spacer(modifier = Modifier.size(48.dp))
-        }
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        Text(
-            text = "Set up your accounts",
-            color = White,
-            fontWeight = FontWeight.Bold,
-            fontSize = 26.sp,
-            textAlign = TextAlign.Center
-        )
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        Text(
-            text = "Which account types would you like to start with?",
-            color = SubtleGray,
-            fontSize = 14.sp,
-            textAlign = TextAlign.Center,
-            lineHeight = 20.sp
-        )
-
-        Spacer(modifier = Modifier.height(28.dp))
-
-        accountOptions.forEach { option ->
-            val isChecked = checked[option.label] == true
+            // Header Row: Round Back Button, Step 4 Badge, Round Info Button
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 6.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Obsidian)
-                    .clickable { checked[option.label] = !isChecked }
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                    .padding(horizontal = 24.dp, vertical = 14.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(text = option.emoji, fontSize = 22.sp)
-                Spacer(modifier = Modifier.width(12.dp))
-                Text(
-                    text = option.label,
-                    color = White,
-                    fontWeight = FontWeight.Medium,
-                    fontSize = 15.sp,
-                    modifier = Modifier.weight(1f)
-                )
-                Switch(
-                    checked = isChecked,
-                    onCheckedChange = { checked[option.label] = it },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = Obsidian,
-                        checkedTrackColor = MintTeal,
-                        uncheckedThumbColor = SubtleGray,
-                        uncheckedTrackColor = Obsidian
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(Color.White)
+                        .border(1.dp, Color(0xFFE4E4E7), CircleShape)
+                        .clickable { onBack() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                        contentDescription = "Back",
+                        tint = Color(0xFF27272A),
+                        modifier = Modifier.size(18.dp)
                     )
+                }
+
+                Row(
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(Color.White)
+                        .border(1.dp, Color(0xFFE8EAED), CircleShape)
+                        .padding(horizontal = 14.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF131315))
+                    )
+                    Text(
+                        text = "STEP 4 OF 6",
+                        fontFamily = PlusJakartaSans,
+                        color = Color(0xFF131315).copy(alpha = 0.85f),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 0.6.sp
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(Color.White)
+                        .border(1.dp, Color(0xFFE4E4E7), CircleShape)
+                        .clickable { showInfoDialog = true },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Info,
+                        contentDescription = "Information",
+                        tint = Color(0xFF71717A),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+
+            // Step Indicator Dots
+            StepIndicator(
+                total = 6,
+                current = 3,
+                activeColor = Color(0xFF18181B),
+                inactiveColor = Color(0xFFE4E4E7)
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Headline & Explainer Text
+            Text(
+                text = "Initial Accounts",
+                fontFamily = PlusJakartaSans,
+                color = Color(0xFF131315),
+                fontWeight = FontWeight.Bold,
+                fontSize = 28.sp,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Text(
+                text = "Select a few accounts to kickstart your tracking.\nYou can customize balances and add more anytime.",
+                fontFamily = PlusJakartaSans,
+                color = Color(0xFF71717A),
+                fontSize = 13.sp,
+                textAlign = TextAlign.Center,
+                lineHeight = 18.sp,
+                modifier = Modifier.padding(horizontal = 24.dp)
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // 4 Account Cards List
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Card 1: Bank Account
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(22.dp))
+                        .background(Color.White)
+                        .border(
+                            width = if (bankSelected) 2.dp else 1.dp,
+                            color = if (bankSelected) Color(0xFF10B981).copy(alpha = 0.85f) else Color(0xFFE8EAED),
+                            shape = RoundedCornerShape(22.dp)
+                        )
+                        .clickable { bankSelected = !bankSelected }
+                        .padding(16.dp)
+                ) {
+                    Column {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(44.dp)
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(Color(0xFFECFDF5))
+                                        .border(1.dp, Color(0xFFA7F3D0), RoundedCornerShape(14.dp)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.AccountBalance,
+                                        contentDescription = null,
+                                        tint = Color(0xFF059669),
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                                Column {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Text(
+                                            text = "Bank Account",
+                                            fontFamily = PlusJakartaSans,
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontSize = 15.sp,
+                                            color = Color(0xFF131315)
+                                        )
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(CircleShape)
+                                                .background(Color(0xFFF4F5F7))
+                                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                                        ) {
+                                            Text(
+                                                text = "PRIMARY",
+                                                fontFamily = PlusJakartaSans,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 9.sp,
+                                                letterSpacing = 0.5.sp,
+                                                color = Color(0xFF52525B)
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = "Checking & Savings",
+                                        fontFamily = PlusJakartaSans,
+                                        fontSize = 12.sp,
+                                        color = Color(0xFF8E95A0)
+                                    )
+                                }
+                            }
+
+                            // Selection Checkmark
+                            Box(
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .clip(CircleShape)
+                                    .then(
+                                        if (bankSelected) {
+                                            Modifier.background(Color(0xFF10B981))
+                                        } else {
+                                            Modifier.border(2.dp, Color(0xFFD4D4D8), CircleShape)
+                                        }
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (bankSelected) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Check,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        // Divider & Starting Balance Row
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 12.dp, bottom = 10.dp)
+                                .height(1.dp)
+                                .background(Color(0xFFF4F5F7))
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "Starting Balance:",
+                                fontFamily = PlusJakartaSans,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color(0xFF71717A)
+                            )
+                            Row(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable {
+                                        tempBalanceInput = bankBalance
+                                        editingAccount = "bank"
+                                    }
+                                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    text = "$$bankBalance",
+                                    fontFamily = PlusJakartaSans,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF131315)
+                                )
+                                Icon(
+                                    imageVector = Icons.Rounded.Edit,
+                                    contentDescription = "Edit balance",
+                                    tint = Color(0xFF8E95A0),
+                                    modifier = Modifier.size(13.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Card 2: Credit Card (Hero Dark Obsidian Card Treatment from Stitch)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(22.dp))
+                        .background(Color(0xFF141416))
+                        .drawBehind {
+                            // Soft ambient glows matching Stitch project
+                            drawCircle(
+                                brush = Brush.radialGradient(
+                                    colors = listOf(
+                                        Color(0xFF10B981).copy(alpha = 0.18f),
+                                        Color.Transparent
+                                    ),
+                                    center = Offset(size.width * 1.05f, size.height * 1.05f),
+                                    radius = size.width * 0.55f
+                                )
+                            )
+                            drawCircle(
+                                brush = Brush.radialGradient(
+                                    colors = listOf(
+                                        Color(0xFFFF9692).copy(alpha = 0.12f),
+                                        Color.Transparent
+                                    ),
+                                    center = Offset(size.width * 0.05f, size.height * 0.05f),
+                                    radius = size.width * 0.50f
+                                )
+                            )
+                        }
+                        .border(
+                            width = if (cardSelected) 1.5.dp else 1.dp,
+                            color = if (cardSelected) Color(0xFFFF9692).copy(alpha = 0.70f) else Color(0xFF27272A),
+                            shape = RoundedCornerShape(22.dp)
+                        )
+                        .clickable { cardSelected = !cardSelected }
+                        .padding(16.dp)
+                ) {
+                    Column {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(44.dp)
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(Color.White.copy(alpha = 0.10f))
+                                        .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(14.dp)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.CreditCard,
+                                        contentDescription = null,
+                                        tint = Color(0xFFFF9692),
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                                Column {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Text(
+                                            text = "Credit Card",
+                                            fontFamily = PlusJakartaSans,
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontSize = 15.sp,
+                                            color = Color.White
+                                        )
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(Color.White.copy(alpha = 0.15f))
+                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        ) {
+                                            Text(
+                                                text = "VISA",
+                                                fontFamily = PlusJakartaSans,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 9.sp,
+                                                letterSpacing = 0.6.sp,
+                                                color = Color(0xFFD4D4D8)
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = "Offline limit & dues",
+                                        fontFamily = PlusJakartaSans,
+                                        fontSize = 12.sp,
+                                        color = Color(0xFF9CA3AF)
+                                    )
+                                }
+                            }
+
+                            // Selection Checkmark
+                            Box(
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .clip(CircleShape)
+                                    .then(
+                                        if (cardSelected) {
+                                            Modifier.background(Color(0xFFFF9692))
+                                        } else {
+                                            Modifier.border(2.dp, Color(0xFF52525B), CircleShape)
+                                        }
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (cardSelected) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Check,
+                                        contentDescription = null,
+                                        tint = Color(0xFF141416),
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        // Divider & Available Limit Row
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 12.dp, bottom = 10.dp)
+                                .height(1.dp)
+                                .background(Color.White.copy(alpha = 0.10f))
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "Available Limit:",
+                                fontFamily = PlusJakartaSans,
+                                fontSize = 12.sp,
+                                color = Color(0xFF9CA3AF)
+                            )
+                            Row(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable {
+                                        tempBalanceInput = cardBalance
+                                        editingAccount = "card"
+                                    }
+                                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    text = "$$cardBalance",
+                                    fontFamily = PlusJakartaSans,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFFF9692)
+                                )
+                                Icon(
+                                    imageVector = Icons.Rounded.Edit,
+                                    contentDescription = "Edit limit",
+                                    tint = Color(0xFFFF9692).copy(alpha = 0.7f),
+                                    modifier = Modifier.size(13.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Card 3: Cash & Wallets
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(22.dp))
+                        .background(Color.White)
+                        .border(
+                            width = if (cashSelected) 2.dp else 1.dp,
+                            color = if (cashSelected) Color(0xFFF59E0B).copy(alpha = 0.85f) else Color(0xFFE8EAED),
+                            shape = RoundedCornerShape(22.dp)
+                        )
+                        .clickable { cashSelected = !cashSelected }
+                        .padding(16.dp)
+                ) {
+                    Column {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(44.dp)
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(Color(0xFFFFFBEB))
+                                        .border(1.dp, Color(0xFFFDE68A), RoundedCornerShape(14.dp)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Payments,
+                                        contentDescription = null,
+                                        tint = Color(0xFFD97706),
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                                Column {
+                                    Text(
+                                        text = "Cash & Wallets",
+                                        fontFamily = PlusJakartaSans,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 15.sp,
+                                        color = Color(0xFF131315)
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = "Petty cash, emergency bills",
+                                        fontFamily = PlusJakartaSans,
+                                        fontSize = 12.sp,
+                                        color = Color(0xFF8E95A0)
+                                    )
+                                }
+                            }
+
+                            // Selection Checkmark
+                            Box(
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .clip(CircleShape)
+                                    .then(
+                                        if (cashSelected) {
+                                            Modifier.background(Color(0xFF10B981))
+                                        } else {
+                                            Modifier.border(2.dp, Color(0xFFD4D4D8), CircleShape)
+                                        }
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (cashSelected) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Check,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        // Divider & Starting Balance Row
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 12.dp, bottom = 10.dp)
+                                .height(1.dp)
+                                .background(Color(0xFFF4F5F7))
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "Starting Balance:",
+                                fontFamily = PlusJakartaSans,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color(0xFF71717A)
+                            )
+                            Row(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable {
+                                        tempBalanceInput = cashBalance
+                                        editingAccount = "cash"
+                                    }
+                                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    text = "$$cashBalance",
+                                    fontFamily = PlusJakartaSans,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF131315)
+                                )
+                                Icon(
+                                    imageVector = Icons.Rounded.Edit,
+                                    contentDescription = "Edit balance",
+                                    tint = Color(0xFF8E95A0),
+                                    modifier = Modifier.size(13.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Card 4: Investments & Savings
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(22.dp))
+                        .background(Color.White)
+                        .border(
+                            width = if (investmentsSelected) 2.dp else 1.dp,
+                            color = if (investmentsSelected) Color(0xFF3B82F6).copy(alpha = 0.85f) else Color(0xFFE8EAED),
+                            shape = RoundedCornerShape(22.dp)
+                        )
+                        .clickable { investmentsSelected = !investmentsSelected }
+                        .padding(16.dp)
+                ) {
+                    Column {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(44.dp)
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(Color(0xFFEFF6FF))
+                                        .border(1.dp, Color(0xFFBFDBFE), RoundedCornerShape(14.dp)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Rounded.ShowChart,
+                                        contentDescription = null,
+                                        tint = Color(0xFF2563EB),
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                                Column {
+                                    Text(
+                                        text = "Investments & Savings",
+                                        fontFamily = PlusJakartaSans,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 15.sp,
+                                        color = Color(0xFF131315)
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = "Stocks, deposits & crypto",
+                                        fontFamily = PlusJakartaSans,
+                                        fontSize = 12.sp,
+                                        color = Color(0xFF8E95A0)
+                                    )
+                                }
+                            }
+
+                            // Selection Checkmark
+                            Box(
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .clip(CircleShape)
+                                    .then(
+                                        if (investmentsSelected) {
+                                            Modifier.background(Color(0xFF10B981))
+                                        } else {
+                                            Modifier.border(2.dp, Color(0xFFD4D4D8), CircleShape)
+                                        }
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (investmentsSelected) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Check,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        // Divider & Starting Portfolio Row
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 12.dp, bottom = 10.dp)
+                                .height(1.dp)
+                                .background(Color(0xFFF4F5F7))
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "Starting Portfolio:",
+                                fontFamily = PlusJakartaSans,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color(0xFF71717A)
+                            )
+                            Row(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable {
+                                        tempBalanceInput = investmentsBalance
+                                        editingAccount = "investments"
+                                    }
+                                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    text = "$$investmentsBalance",
+                                    fontFamily = PlusJakartaSans,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF131315)
+                                )
+                                Icon(
+                                    imageVector = Icons.Rounded.Edit,
+                                    contentDescription = "Edit portfolio",
+                                    tint = Color(0xFF8E95A0),
+                                    modifier = Modifier.size(13.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Dynamic Initial Net Worth & Selected Accounts Summary Card
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color(0xFFF4F5F7))
+                    .border(1.dp, Color(0xFFE8EAED), RoundedCornerShape(16.dp))
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF10B981))
+                    )
+                    Text(
+                        text = "$selectedCount Accounts selected",
+                        fontFamily = PlusJakartaSans,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFF52525B)
+                    )
+                }
+
+                Text(
+                    text = buildAnnotatedString {
+                        append("Initial Net Worth: ")
+                        withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = Color(0xFF131315))) {
+                            append("$$${formatBalance(totalNetWorth)}")
+                        }
+                    },
+                    fontFamily = PlusJakartaSans,
+                    fontSize = 12.sp,
+                    color = Color(0xFF71717A)
                 )
             }
+
+            Spacer(modifier = Modifier.height(20.dp))
         }
 
-        Spacer(modifier = Modifier.height(36.dp))
+        // Bottom CTA Footer with Black Button (matching 1st & 3rd page dimensions, typography & vertical line)
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0f),
+                            Color.White.copy(alpha = 0.95f),
+                            Color.White
+                        )
+                    )
+                )
+                .padding(top = 8.dp, bottom = 16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // Primary Black Pill Button: Same style, dimensions, typography, and vertical line (32.dp) as 1st & 3rd page
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 32.dp)
+                    .drawBehind {
+                        drawRoundRect(
+                            color = Color(0xFF131315).copy(alpha = 0.20f),
+                            topLeft = Offset(0f, 6.dp.toPx()),
+                            size = Size(size.width, size.height),
+                            cornerRadius = CornerRadius(size.height / 2f, size.height / 2f)
+                        )
+                    }
+                    .clip(RoundedCornerShape(percent = 50))
+                    .background(Color(0xFF131315))
+                    .clickable {
+                        coroutineScope.launch {
+                            try {
+                                val db = CoconutDatabase.getInstance(context)
+                                val currentDate = KolkataDateTimeUtils.currentDateString()
+                                if (bankSelected) {
+                                    val amountPaise = (parseBalanceToDouble(bankBalance) * 100).toLong()
+                                    db.accountDao().insert(
+                                        AccountEntity(
+                                            id = "acc_1",
+                                            name = "Bank Account",
+                                            type = DbAccountType.BANK,
+                                            institution = DbAccountInstitution.HDFC,
+                                            last4 = "4321",
+                                            openingBalancePaise = amountPaise,
+                                            openingDate = currentDate,
+                                            icon = "account_balance",
+                                            colour = 0xFF10B981L
+                                        )
+                                    )
+                                }
+                                if (cardSelected) {
+                                    val limitPaise = (parseBalanceToDouble(cardBalance) * 100).toLong()
+                                    db.accountDao().insert(
+                                        AccountEntity(
+                                            id = "acc_3",
+                                            name = "Credit Card",
+                                            type = DbAccountType.CREDIT_CARD,
+                                            institution = DbAccountInstitution.HDFC,
+                                            last4 = "1122",
+                                            openingBalancePaise = -limitPaise / 4,
+                                            openingDate = currentDate,
+                                            icon = "credit_card",
+                                            colour = 0xFFFF9692L
+                                        )
+                                    )
+                                    db.cardDetailsDao().insert(
+                                        CardDetailsEntity(
+                                            accountId = "acc_3",
+                                            creditLimitPaise = limitPaise,
+                                            statementDay = 15,
+                                            dueDay = 5
+                                        )
+                                    )
+                                }
+                                if (cashSelected) {
+                                    val amountPaise = (parseBalanceToDouble(cashBalance) * 100).toLong()
+                                    db.accountDao().insert(
+                                        AccountEntity(
+                                            id = "acc_5",
+                                            name = "Cash & Wallets",
+                                            type = DbAccountType.CASH,
+                                            institution = DbAccountInstitution.OTHER,
+                                            openingBalancePaise = amountPaise,
+                                            openingDate = currentDate,
+                                            icon = "payments",
+                                            colour = 0xFFF59E0BL
+                                        )
+                                    )
+                                }
+                                if (investmentsSelected) {
+                                    val amountPaise = (parseBalanceToDouble(investmentsBalance) * 100).toLong()
+                                    db.accountDao().insert(
+                                        AccountEntity(
+                                            id = "acc_inv_1",
+                                            name = "Investments & Savings",
+                                            type = DbAccountType.INVESTMENT,
+                                            institution = DbAccountInstitution.OTHER,
+                                            openingBalancePaise = amountPaise,
+                                            openingDate = currentDate,
+                                            icon = "show_chart",
+                                            colour = 0xFF3B82F6L
+                                        )
+                                    )
+                                }
+                            } catch (_: Exception) {}
+                        }
+                        onNext()
+                    }
+                    .padding(vertical = 17.dp, horizontal = 24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = "Continue",
+                        fontFamily = PlusJakartaSans,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                        letterSpacing = (-0.2).sp,
+                        color = Color.White
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
 
-        PillButton(
-            text = "Create Accounts",
-            onClick = onNext,
-            modifier = Modifier.fillMaxWidth()
-        )
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Text(
+                text = "Skip for now",
+                fontFamily = PlusJakartaSans,
+                color = Color(0xFF71717A),
+                fontSize = 13.sp,
+                textDecoration = TextDecoration.Underline,
+                modifier = Modifier
+                    .clickable { onNext() }
+                    .padding(vertical = 4.dp, horizontal = 12.dp)
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // Home Indicator Bar
+            Box(
+                modifier = Modifier
+                    .width(134.dp)
+                    .height(4.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF131315).copy(alpha = 0.18f))
+            )
+        }
     }
 }
 
 // ─── Step 5: Permissions ─────────────────────────────────────────────────────
 
-private data class PermissionOption(
-    val emoji: String,
-    val title: String,
-    val description: String
-)
+@Composable
+private fun PermissionCard(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    iconColor: Color,
+    iconBgColor: Color,
+    iconBorderColor: Color,
+    accentBorderColor: Color,
+    title: String,
+    badgeText: String?,
+    badgeTextColor: Color,
+    badgeBgColor: Color,
+    subtitle: String,
+    tags: List<String>,
+    isEnabled: Boolean,
+    onToggle: (Boolean) -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(22.dp))
+            .background(Color.White)
+            .border(
+                width = if (isEnabled) 1.5.dp else 1.dp,
+                color = if (isEnabled) accentBorderColor.copy(alpha = 0.85f) else Color(0xFFE8EAED),
+                shape = RoundedCornerShape(22.dp)
+            )
+            .clickable { onToggle(!isEnabled) }
+            .padding(16.dp)
+    ) {
+        Column {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(iconBgColor)
+                            .border(1.dp, iconBorderColor, RoundedCornerShape(14.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = iconColor,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = title,
+                                fontFamily = PlusJakartaSans,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 15.sp,
+                                color = Color(0xFF131315)
+                            )
+                            if (badgeText != null) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(CircleShape)
+                                        .background(badgeBgColor)
+                                        .padding(horizontal = 7.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = badgeText,
+                                        fontFamily = PlusJakartaSans,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 9.sp,
+                                        letterSpacing = 0.5.sp,
+                                        color = badgeTextColor
+                                    )
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = subtitle,
+                            fontFamily = PlusJakartaSans,
+                            fontSize = 12.sp,
+                            color = Color(0xFF8E95A0),
+                            lineHeight = 16.sp
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                Switch(
+                    checked = isEnabled,
+                    onCheckedChange = { onToggle(it) },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = accentBorderColor,
+                        uncheckedThumbColor = Color.White,
+                        uncheckedTrackColor = Color(0xFFE4E4E7),
+                        uncheckedBorderColor = Color.Transparent,
+                        checkedBorderColor = Color.Transparent
+                    )
+                )
+            }
+
+            // Divider & Feature Tags
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 12.dp, bottom = 10.dp)
+                    .height(1.dp)
+                    .background(Color(0xFFF4F5F7))
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                tags.forEach { tag ->
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color(0xFFF4F5F7))
+                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                    ) {
+                        Text(
+                            text = tag,
+                            fontFamily = PlusJakartaSans,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 10.sp,
+                            color = Color(0xFF52525B)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
 
 @Composable
 private fun Step5Permissions(onBack: () -> Unit, onNext: () -> Unit) {
-    val permissions = remember {
-        listOf(
-            PermissionOption("📱", "SMS Access", "Auto-detect transactions from bank SMS"),
-            PermissionOption("🔔", "Notifications", "Get bill reminders and due date alerts"),
-            PermissionOption("📷", "Camera", "Scan receipts and statements"),
-        )
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+
+    var showInfoDialog by remember { mutableStateOf(false) }
+
+    var smsEnabled by remember { mutableStateOf(true) }
+    var biometricEnabled by remember { mutableStateOf(true) }
+    var notifEnabled by remember { mutableStateOf(true) }
+    var cameraEnabled by remember { mutableStateOf(false) }
+
+    val smsPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        val granted = results.values.all { it }
+        smsEnabled = granted
     }
-    val granted = remember {
-        mutableStateMapOf(*permissions.map { it.title to false }.toTypedArray())
+
+    val notifPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        notifEnabled = isGranted
+    }
+
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        cameraEnabled = isGranted
+    }
+
+    // Educational Info Dialog (Private by Design)
+    if (showInfoDialog) {
+        AlertDialog(
+            onDismissRequest = { showInfoDialog = false },
+            title = {
+                Text(
+                    text = "Why Permissions?",
+                    fontFamily = PlusJakartaSans,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF131315)
+                )
+            },
+            text = {
+                Text(
+                    text = "Fortis is built with a zero-knowledge, local-only architecture:\n\n" +
+                            "• SMS Sync: Parses transaction alerts locally to auto-log your debits and credits. OTPs and personal chats are strictly filtered out.\n\n" +
+                            "• Biometric Vault: Keeps your balances and credentials locked using Android's hardware Secure Element.\n\n" +
+                            "• Local Notifications: Delivers timely reminders for bill payment due dates and salary cycles without sending data to any external server.\n\n" +
+                            "• Receipt Scanner: Uses on-device ML Kit OCR to extract transaction amounts directly from camera scans.\n\n" +
+                            "No remote database. No advertising. 100% private.",
+                    fontFamily = PlusJakartaSans,
+                    fontSize = 13.sp,
+                    color = Color(0xFF52525B),
+                    lineHeight = 18.sp
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showInfoDialog = false }) {
+                    Text(
+                        text = "Got it",
+                        fontFamily = PlusJakartaSans,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF131315)
+                    )
+                }
+            },
+            containerColor = Color.White,
+            shape = RoundedCornerShape(20.dp)
+        )
     }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(CardSurface)
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 28.dp, vertical = 32.dp),
+            .background(Color.White)
+            .statusBarsPadding()
+            .navigationBarsPadding(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        // Scrollable Screen Content
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                    contentDescription = "Back",
-                    tint = White
-                )
-            }
-            StepIndicator(total = 6, current = 4)
-            Spacer(modifier = Modifier.size(48.dp))
-        }
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        Text(
-            text = "A few permissions to unlock the full experience",
-            color = White,
-            fontWeight = FontWeight.Bold,
-            fontSize = 24.sp,
-            textAlign = TextAlign.Center,
-            lineHeight = 32.sp
-        )
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        Text(
-            text = "All data stays on your device. We never access your messages.",
-            color = SubtleGray,
-            fontSize = 14.sp,
-            textAlign = TextAlign.Center,
-            lineHeight = 20.sp
-        )
-
-        Spacer(modifier = Modifier.height(28.dp))
-
-        permissions.forEach { perm ->
-            val isGranted = granted[perm.title] == true
+            // Header Row: Round Back Button, Step 5 Badge, Round Info Button
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 6.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(Obsidian)
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                    .padding(horizontal = 24.dp, vertical = 14.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(text = perm.emoji, fontSize = 26.sp)
-                Spacer(modifier = Modifier.width(14.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = perm.title,
-                        color = White,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 15.sp
-                    )
-                    Text(
-                        text = perm.description,
-                        color = SubtleGray,
-                        fontSize = 12.sp,
-                        lineHeight = 16.sp
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(Color.White)
+                        .border(1.dp, Color(0xFFE4E4E7), CircleShape)
+                        .clickable { onBack() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                        contentDescription = "Back",
+                        tint = Color(0xFF27272A),
+                        modifier = Modifier.size(18.dp)
                     )
                 }
-                Spacer(modifier = Modifier.width(12.dp))
-                Switch(
-                    checked = isGranted,
-                    onCheckedChange = { granted[perm.title] = it },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = Obsidian,
-                        checkedTrackColor = MintTeal,
-                        uncheckedThumbColor = SubtleGray,
-                        uncheckedTrackColor = Obsidian
+
+                Row(
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(Color.White)
+                        .border(1.dp, Color(0xFFE8EAED), CircleShape)
+                        .padding(horizontal = 14.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF131315))
                     )
+                    Text(
+                        text = "STEP 5 OF 6",
+                        fontFamily = PlusJakartaSans,
+                        color = Color(0xFF131315).copy(alpha = 0.85f),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 0.6.sp
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(Color.White)
+                        .border(1.dp, Color(0xFFE4E4E7), CircleShape)
+                        .clickable { showInfoDialog = true },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Info,
+                        contentDescription = "Information",
+                        tint = Color(0xFF71717A),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+
+            // Step Indicator Dots
+            StepIndicator(
+                total = 6,
+                current = 4,
+                activeColor = Color(0xFF18181B),
+                inactiveColor = Color(0xFFE4E4E7)
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Headline & Explainer Text
+            Text(
+                text = "Permissions Overview",
+                fontFamily = PlusJakartaSans,
+                color = Color(0xFF131315),
+                fontWeight = FontWeight.Bold,
+                fontSize = 28.sp,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Text(
+                text = "Grant essential on-device permissions for private tracking.\nAll processing stays 100% offline on your device.",
+                fontFamily = PlusJakartaSans,
+                color = Color(0xFF71717A),
+                fontSize = 13.sp,
+                textAlign = TextAlign.Center,
+                lineHeight = 18.sp,
+                modifier = Modifier.padding(horizontal = 24.dp)
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Trust / Privacy Guarantee Banner
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(Color(0xFFF0FDF4))
+                    .border(1.dp, Color(0xFFBBF7D0), RoundedCornerShape(18.dp))
+                    .padding(horizontal = 14.dp, vertical = 10.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFFDCFCE7)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Shield,
+                            contentDescription = null,
+                            tint = Color(0xFF16A34A),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(6.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF16A34A))
+                            )
+                            Text(
+                                text = "100% On-Device & Offline",
+                                fontFamily = PlusJakartaSans,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp,
+                                color = Color(0xFF15803D)
+                            )
+                        }
+                        Text(
+                            text = "Zero cloud uploads. Your financial data never leaves this phone.",
+                            fontFamily = PlusJakartaSans,
+                            fontSize = 11.sp,
+                            color = Color(0xFF166534),
+                            lineHeight = 14.sp
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 4 Permission Cards List
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Card 1: SMS Sync / Detection
+                PermissionCard(
+                    icon = Icons.Rounded.Sms,
+                    iconColor = Color(0xFF059669),
+                    iconBgColor = Color(0xFFECFDF5),
+                    iconBorderColor = Color(0xFFA7F3D0),
+                    accentBorderColor = Color(0xFF10B981),
+                    title = "SMS Sync / Detection",
+                    badgeText = "INSTANT",
+                    badgeTextColor = Color(0xFF059669),
+                    badgeBgColor = Color(0xFFECFDF5),
+                    subtitle = "Auto-detect bank transactions locally",
+                    tags = listOf("Bank SMS Only", "OTPs Ignored", "Zero Cloud Sync"),
+                    isEnabled = smsEnabled,
+                    onToggle = { enabled ->
+                        smsEnabled = enabled
+                        if (enabled) {
+                            try {
+                                smsPermissionLauncher.launch(
+                                    arrayOf(
+                                        Manifest.permission.RECEIVE_SMS,
+                                        Manifest.permission.READ_SMS
+                                    )
+                                )
+                            } catch (_: Exception) {}
+                        }
+                    }
+                )
+
+                // Card 2: Biometrics
+                PermissionCard(
+                    icon = Icons.Rounded.Fingerprint,
+                    iconColor = Color(0xFFD97706),
+                    iconBgColor = Color(0xFFFFFBEB),
+                    iconBorderColor = Color(0xFFFDE68A),
+                    accentBorderColor = Color(0xFFF59E0B),
+                    title = "Biometrics",
+                    badgeText = "SECURE",
+                    badgeTextColor = Color(0xFFD97706),
+                    badgeBgColor = Color(0xFFFFFBEB),
+                    subtitle = "Protect vault with Face ID / Fingerprint",
+                    tags = listOf("Hardware KeyStore", "Instant Unlock", "Auto-lock On Exit"),
+                    isEnabled = biometricEnabled,
+                    onToggle = { enabled ->
+                        biometricEnabled = enabled
+                    }
+                )
+
+                // Card 3: Local Notifications
+                PermissionCard(
+                    icon = Icons.Rounded.Notifications,
+                    iconColor = Color(0xFF2563EB),
+                    iconBgColor = Color(0xFFEFF6FF),
+                    iconBorderColor = Color(0xFFBFDBFE),
+                    accentBorderColor = Color(0xFF3B82F6),
+                    title = "Local Notifications",
+                    badgeText = "TIMELY",
+                    badgeTextColor = Color(0xFF2563EB),
+                    badgeBgColor = Color(0xFFEFF6FF),
+                    subtitle = "Timely bill & salary cycle reminders",
+                    tags = listOf("Bill Due Alerts", "Salary Day Reminders", "On-Device Only"),
+                    isEnabled = notifEnabled,
+                    onToggle = { enabled ->
+                        notifEnabled = enabled
+                        if (enabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            try {
+                                notifPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            } catch (_: Exception) {}
+                        }
+                    }
+                )
+
+                // Card 4: Receipt & Statement Scanner
+                PermissionCard(
+                    icon = Icons.Rounded.CameraAlt,
+                    iconColor = Color(0xFF7C3AED),
+                    iconBgColor = Color(0xFFF5F3FF),
+                    iconBorderColor = Color(0xFFDDD6FE),
+                    accentBorderColor = Color(0xFF8B5CF6),
+                    title = "Receipt & Statement Scanner",
+                    badgeText = "OPTIONAL",
+                    badgeTextColor = Color(0xFF7C3AED),
+                    badgeBgColor = Color(0xFFF5F3FF),
+                    subtitle = "Scan receipts & PDF bank statements",
+                    tags = listOf("On-Device ML OCR", "Instant Total Parsing", "No Uploads"),
+                    isEnabled = cameraEnabled,
+                    onToggle = { enabled ->
+                        cameraEnabled = enabled
+                        if (enabled) {
+                            try {
+                                cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                            } catch (_: Exception) {}
+                        }
+                    }
                 )
             }
+
+            Spacer(modifier = Modifier.height(20.dp))
         }
 
-        Spacer(modifier = Modifier.height(36.dp))
+        // Bottom CTA Footer with Black Button (matching 1st, 3rd, 4th page dimensions, typography & vertical line)
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0f),
+                            Color.White.copy(alpha = 0.95f),
+                            Color.White
+                        )
+                    )
+                )
+                .padding(top = 8.dp, bottom = 16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // Primary Black Pill Button: Same style, dimensions, typography, and vertical line (32.dp) as 1st, 3rd, 4th page
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 32.dp)
+                    .drawBehind {
+                        drawRoundRect(
+                            color = Color(0xFF131315).copy(alpha = 0.20f),
+                            topLeft = Offset(0f, 6.dp.toPx()),
+                            size = Size(size.width, size.height),
+                            cornerRadius = CornerRadius(size.height / 2f, size.height / 2f)
+                        )
+                    }
+                    .clip(RoundedCornerShape(percent = 50))
+                    .background(Color(0xFF131315))
+                    .clickable {
+                        coroutineScope.launch {
+                            try {
+                                val userSettingsDataStore = UserSettingsDataStore(context)
+                                userSettingsDataStore.updateSmsEnabled(smsEnabled)
+                                userSettingsDataStore.updateBiometricEnabled(biometricEnabled)
+                            } catch (_: Exception) {}
+                        }
+                        if (smsEnabled) {
+                            try {
+                                smsPermissionLauncher.launch(
+                                    arrayOf(
+                                        Manifest.permission.RECEIVE_SMS,
+                                        Manifest.permission.READ_SMS
+                                    )
+                                )
+                            } catch (_: Exception) {}
+                        }
+                        if (notifEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            try {
+                                notifPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            } catch (_: Exception) {}
+                        }
+                        if (cameraEnabled) {
+                            try {
+                                cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                            } catch (_: Exception) {}
+                        }
+                        onNext()
+                    }
+                    .padding(vertical = 17.dp, horizontal = 24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = "Grant & Continue",
+                        fontFamily = PlusJakartaSans,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                        letterSpacing = (-0.2).sp,
+                        color = Color.White
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
 
-        PillButton(
-            text = "Grant Permissions",
-            onClick = onNext,
-            modifier = Modifier.fillMaxWidth()
-        )
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Text(
+                text = "Skip for now",
+                fontFamily = PlusJakartaSans,
+                color = Color(0xFF71717A),
+                fontSize = 13.sp,
+                textDecoration = TextDecoration.Underline,
+                modifier = Modifier
+                    .clickable { onNext() }
+                    .padding(vertical = 4.dp, horizontal = 12.dp)
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // Home Indicator Bar
+            Box(
+                modifier = Modifier
+                    .width(134.dp)
+                    .height(4.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF131315).copy(alpha = 0.18f))
+            )
+        }
     }
 }
 
@@ -1967,4 +3469,16 @@ private fun Step2PinPreview() {
 @Composable
 private fun Step3SalaryCyclePreview() {
     Step3SalaryCycle(onBack = {}, onNext = {})
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFFFFFFF, device = "spec:width=390dp,height=844dp,dpi=460")
+@Composable
+private fun Step4AccountsPreview() {
+    Step4Accounts(onBack = {}, onNext = {})
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFFFFFFF, device = "spec:width=390dp,height=844dp,dpi=460")
+@Composable
+private fun Step5PermissionsPreview() {
+    Step5Permissions(onBack = {}, onNext = {})
 }
