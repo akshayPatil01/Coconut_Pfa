@@ -3,6 +3,7 @@ package com.patil.coconut_pfa.data.repository
 import android.content.Context
 import android.net.Uri
 import com.patil.coconut_pfa.data.local.datastore.UserSettingsDataStore
+import com.patil.coconut_pfa.data.local.datastore.VaultDataStore
 import com.patil.coconut_pfa.data.local.db.CoconutDatabase
 import com.patil.coconut_pfa.data.local.entity.AccountEntity
 import com.patil.coconut_pfa.data.local.entity.BillEntity
@@ -21,11 +22,17 @@ import com.patil.coconut_pfa.data.local.entity.PersonEntity
 import com.patil.coconut_pfa.data.local.entity.SmsItemEntity
 import com.patil.coconut_pfa.data.local.entity.TxnEntity
 import com.patil.coconut_pfa.data.local.entity.ValuationEntity
+import com.patil.coconut_pfa.data.local.entity.VaultItem
+import com.patil.coconut_pfa.data.local.entity.VaultKeyset
 import com.patil.coconut_pfa.data.local.security.BackupPassphraseManager
+import com.patil.coconut_pfa.data.local.security.BiometricKeyManager
+import com.patil.coconut_pfa.data.local.security.VaultSession
 import com.squareup.moshi.JsonClass
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import kotlinx.coroutines.flow.first
+import vault.crypto.KdfParams
+import vault.crypto.PasswordKdf
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.DataInputStream
@@ -39,6 +46,33 @@ import javax.crypto.spec.SecretKeySpec
 
 @JsonClass(generateAdapter = true)
 data class BackupContainer(
+    val formatVersion: Int = 2,
+    val createdAt: Long = System.currentTimeMillis(),
+    val appVersion: String = "1.0",
+    val settings: SettingsBackupDto,
+    val accounts: List<AccountEntity>,
+    val cardDetails: List<CardDetailsEntity>,
+    val cardStatements: List<CardStatementEntity>,
+    val loanDetails: List<LoanDetailsEntity>,
+    val fdDetails: List<FdDetailsEntity>,
+    val valuations: List<ValuationEntity>,
+    val categories: List<CategoryEntity>,
+    val transactions: List<TxnEntity>,
+    val bills: List<BillEntity>,
+    val billOccurrences: List<BillOccurrenceEntity>,
+    val persons: List<PersonEntity>,
+    val ledgerEntries: List<LedgerEntryEntity>,
+    val goals: List<GoalEntity>,
+    val goalContributions: List<GoalContributionEntity>,
+    val smsItems: List<SmsItemEntity>,
+    val merchantMemory: List<MerchantMemoryEntity>,
+    val netWorthSnapshots: List<NetWorthSnapshotEntity>,
+    val vaultKeysets: List<VaultKeyset> = emptyList(),
+    val vaultItems: List<VaultItem> = emptyList()
+)
+
+@JsonClass(generateAdapter = true)
+data class PreVaultBackupContainer(
     val formatVersion: Int = 1,
     val createdAt: Long = System.currentTimeMillis(),
     val appVersion: String = "1.0",
@@ -107,11 +141,29 @@ object BackupCrypto {
         return Pair(iv, ciphertext)
     }
 
+    fun encryptPayloadWithAad(derivedKey: ByteArray, iv: ByteArray, plaintextBytes: ByteArray, aad: ByteArray): ByteArray {
+        val secretKey = SecretKeySpec(derivedKey, "AES")
+        val cipher = Cipher.getInstance(TRANSFORMATION)
+        val gcmSpec = GCMParameterSpec(GCM_TAG_LENGTH_BITS, iv)
+        cipher.init(Cipher.ENCRYPT_MODE, secretKey, gcmSpec)
+        cipher.updateAAD(aad)
+        return cipher.doFinal(plaintextBytes)
+    }
+
     fun decryptPayload(derivedKey: ByteArray, iv: ByteArray, ciphertext: ByteArray): ByteArray {
         val secretKey = SecretKeySpec(derivedKey, "AES")
         val cipher = Cipher.getInstance(TRANSFORMATION)
         val gcmSpec = GCMParameterSpec(GCM_TAG_LENGTH_BITS, iv)
         cipher.init(Cipher.DECRYPT_MODE, secretKey, gcmSpec)
+        return cipher.doFinal(ciphertext)
+    }
+
+    fun decryptPayloadWithAad(derivedKey: ByteArray, iv: ByteArray, ciphertext: ByteArray, aad: ByteArray): ByteArray {
+        val secretKey = SecretKeySpec(derivedKey, "AES")
+        val cipher = Cipher.getInstance(TRANSFORMATION)
+        val gcmSpec = GCMParameterSpec(GCM_TAG_LENGTH_BITS, iv)
+        cipher.init(Cipher.DECRYPT_MODE, secretKey, gcmSpec)
+        cipher.updateAAD(aad)
         return cipher.doFinal(ciphertext)
     }
 
@@ -129,7 +181,7 @@ object BackupCrypto {
 
 object BackupManager {
 
-    suspend fun exportBackup(context: Context, destinationUri: Uri, password: String? = null) {
+    suspend fun exportPreVaultBytes(context: Context, password: String? = null): ByteArray {
         val db = CoconutDatabase.getInstance(context)
         val settingsDataStore = UserSettingsDataStore(context)
         val currentSettings = settingsDataStore.settingsFlow.first()
@@ -151,7 +203,7 @@ object BackupManager {
             lastSmsCatchupTimestamp = currentSettings.lastSmsCatchupTimestamp
         )
 
-        val container = BackupContainer(
+        val container = PreVaultBackupContainer(
             formatVersion = 1,
             createdAt = System.currentTimeMillis(),
             appVersion = "1.0",
@@ -176,12 +228,13 @@ object BackupManager {
         )
 
         val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
-        val jsonString = moshi.adapter(BackupContainer::class.java).toJson(container)
+        val jsonString = moshi.adapter(PreVaultBackupContainer::class.java).toJson(container)
         val jsonBytes = jsonString.toByteArray(Charsets.UTF_8)
         val gzipBytes = BackupCrypto.gzipCompress(jsonBytes)
 
-        val derivedKey = BackupPassphraseManager.getDerivedKey(context, password)
-        val salt = BackupPassphraseManager.getSalt(context) ?: ByteArray(16).also { SecureRandom().nextBytes(it) }
+        val pwd = password ?: BackupPassphraseManager.getBackupPassword(context)
+        val salt = ByteArray(16).also { SecureRandom().nextBytes(it) }
+        val derivedKey = BackupPassphraseManager.deriveKey(pwd, salt)
         val (iv, ciphertext) = BackupCrypto.encryptPayload(derivedKey, gzipBytes)
 
         val bos = ByteArrayOutputStream()
@@ -198,6 +251,107 @@ object BackupManager {
             dos.write(versionBytes)
             dos.write(ciphertext)
         }
+        return bos.toByteArray()
+    }
+
+    suspend fun exportBackup(context: Context, destinationUri: Uri, password: String? = null) {
+        val settingsDataStore = UserSettingsDataStore(context)
+        val settings = settingsDataStore.settingsFlow.first()
+
+        if (!settings.backupUpgradedToV2 && BackupPassphraseManager.hasBackupPassword(context)) {
+            try {
+                val preVaultBytes = exportPreVaultBytes(context, password)
+                if (settings.googleAccountEmail != null) {
+                    DriveBackupManager.uploadPinnedPreVaultBackupToDrive(context, preVaultBytes)
+                }
+                settingsDataStore.updateBackupUpgradedToV2(true)
+            } catch (e: Exception) {
+                throw RuntimeException("Failed to create pinned pre-vault backup during upgrade: ${e.localizedMessage}", e)
+            }
+        }
+
+        val db = CoconutDatabase.getInstance(context)
+        val currentSettings = settingsDataStore.settingsFlow.first()
+
+        val settingsDto = SettingsBackupDto(
+            salaryCycleStartDay = currentSettings.salaryCycleStartDay,
+            biometricEnabled = currentSettings.biometricEnabled,
+            autoLockSeconds = currentSettings.autoLockSeconds,
+            privacyModeDefault = currentSettings.privacyModeDefault,
+            reminderHour = currentSettings.reminderHour,
+            defaultReminderDays = currentSettings.defaultReminderDays,
+            smsEnabled = currentSettings.smsEnabled,
+            backupEnabled = currentSettings.backupEnabled,
+            lastBackupAt = System.currentTimeMillis(),
+            backupKeep = currentSettings.backupKeep,
+            onboardingDone = currentSettings.onboardingDone,
+            lastUsedAccountId = currentSettings.lastUsedAccountId,
+            lastUsedCategoryId = currentSettings.lastUsedCategoryId,
+            lastSmsCatchupTimestamp = currentSettings.lastSmsCatchupTimestamp
+        )
+
+        val container = BackupContainer(
+            formatVersion = 2,
+            createdAt = System.currentTimeMillis(),
+            appVersion = "1.0",
+            settings = settingsDto,
+            accounts = db.accountDao().getAllAccountsList(),
+            cardDetails = db.cardDetailsDao().getAll(),
+            cardStatements = db.cardStatementDao().getAll(),
+            loanDetails = db.loanDetailsDao().getAll(),
+            fdDetails = db.fdDetailsDao().getAll(),
+            valuations = db.valuationDao().getAll(),
+            categories = db.categoryDao().getAll(),
+            transactions = db.txnDao().getAll(),
+            bills = db.billDao().getAll(),
+            billOccurrences = db.billOccurrenceDao().getAll(),
+            persons = db.personDao().getAll(),
+            ledgerEntries = db.ledgerEntryDao().getAll(),
+            goals = db.goalDao().getAll(),
+            goalContributions = db.goalContributionDao().getAll(),
+            smsItems = db.smsItemDao().getAll(),
+            merchantMemory = db.merchantMemoryDao().getAll(),
+            netWorthSnapshots = db.netWorthSnapshotDao().getAll(),
+            vaultKeysets = db.vaultKeysetDao().getKeyset()?.let { listOf(it) } ?: emptyList(),
+            vaultItems = db.vaultItemDao().getAllRawItems()
+        )
+
+        val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
+        val jsonString = moshi.adapter(BackupContainer::class.java).toJson(container)
+        val jsonBytes = jsonString.toByteArray(Charsets.UTF_8)
+        val gzipBytes = BackupCrypto.gzipCompress(jsonBytes)
+
+        val pwd = password ?: BackupPassphraseManager.getBackupPassword(context)
+        val salt = ByteArray(16).also { SecureRandom().nextBytes(it) }
+        val iv = ByteArray(12).also { SecureRandom().nextBytes(it) }
+        val kdfParams = KdfParams(65536, 3, 1)
+        val derivedKey = PasswordKdf.argon2id(pwd.toCharArray(), salt, kdfParams)
+
+        val headerBos = ByteArrayOutputStream()
+        DataOutputStream(headerBos).use { hd ->
+            hd.write("CBK1".toByteArray(Charsets.UTF_8))
+            hd.writeInt(2)
+            val kdfNameBytes = "ARGON2ID".toByteArray(Charsets.UTF_8)
+            hd.writeInt(kdfNameBytes.size)
+            hd.write(kdfNameBytes)
+            hd.writeInt(kdfParams.memoryKiB)
+            hd.writeInt(kdfParams.iterations)
+            hd.writeInt(kdfParams.parallelism)
+            hd.writeInt(salt.size)
+            hd.write(salt)
+            hd.writeInt(iv.size)
+            hd.write(iv)
+            hd.writeLong(container.createdAt)
+            val versionBytes = container.appVersion.toByteArray(Charsets.UTF_8)
+            hd.writeInt(versionBytes.size)
+            hd.write(versionBytes)
+        }
+        val headerBytes = headerBos.toByteArray()
+        val ciphertext = BackupCrypto.encryptPayloadWithAad(derivedKey, iv, gzipBytes, headerBytes)
+
+        val bos = ByteArrayOutputStream()
+        bos.write(headerBytes)
+        bos.write(ciphertext)
 
         context.contentResolver.openOutputStream(destinationUri)?.use { os ->
             os.write(bos.toByteArray())
@@ -214,30 +368,82 @@ object BackupManager {
         require(String(magic, Charsets.UTF_8) == "CBK1") { "Invalid backup file format (magic mismatch)" }
 
         val formatVersion = dis.readInt()
-        val saltLen = dis.readInt()
-        val salt = ByteArray(saltLen)
-        dis.readFully(salt)
-
-        val ivLen = dis.readInt()
-        val iv = ByteArray(ivLen)
-        dis.readFully(iv)
-
-        val createdAt = dis.readLong()
-        val versionLen = dis.readInt()
-        val versionBytes = ByteArray(versionLen)
-        dis.readFully(versionBytes)
-        val appVersion = String(versionBytes, Charsets.UTF_8)
-
-        val ciphertext = dis.readBytes()
-
-        val derivedKey = BackupPassphraseManager.deriveKey(password, salt)
-        val decryptedGzip = BackupCrypto.decryptPayload(derivedKey, iv, ciphertext)
-        val jsonBytes = BackupCrypto.gzipDecompress(decryptedGzip)
-        val jsonString = String(jsonBytes, Charsets.UTF_8)
-
         val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
         val adapter = moshi.adapter(BackupContainer::class.java)
-        return adapter.fromJson(jsonString) ?: throw IllegalStateException("Failed to parse backup JSON")
+
+        if (formatVersion == 1) {
+            val saltLen = dis.readInt()
+            val salt = ByteArray(saltLen)
+            dis.readFully(salt)
+
+            val ivLen = dis.readInt()
+            val iv = ByteArray(ivLen)
+            dis.readFully(iv)
+
+            val createdAt = dis.readLong()
+            val versionLen = dis.readInt()
+            val versionBytes = ByteArray(versionLen)
+            dis.readFully(versionBytes)
+
+            val ciphertext = dis.readBytes()
+
+            val derivedKey = BackupPassphraseManager.deriveKey(password, salt)
+            val decryptedGzip = BackupCrypto.decryptPayload(derivedKey, iv, ciphertext)
+            val jsonBytes = BackupCrypto.gzipDecompress(decryptedGzip)
+            val jsonString = String(jsonBytes, Charsets.UTF_8)
+            return adapter.fromJson(jsonString) ?: throw IllegalStateException("Failed to parse backup JSON")
+        } else if (formatVersion == 2) {
+            val kdfNameLen = dis.readInt()
+            val kdfNameBytes = ByteArray(kdfNameLen)
+            dis.readFully(kdfNameBytes)
+
+            val memoryKiB = dis.readInt()
+            val iterations = dis.readInt()
+            val parallelism = dis.readInt()
+            val kdfParams = KdfParams(memoryKiB, iterations, parallelism)
+
+            val saltLen = dis.readInt()
+            val salt = ByteArray(saltLen)
+            dis.readFully(salt)
+
+            val ivLen = dis.readInt()
+            val iv = ByteArray(ivLen)
+            dis.readFully(iv)
+
+            val createdAt = dis.readLong()
+
+            val versionLen = dis.readInt()
+            val versionBytes = ByteArray(versionLen)
+            dis.readFully(versionBytes)
+
+            val fullHeaderBos = ByteArrayOutputStream()
+            DataOutputStream(fullHeaderBos).use { hd ->
+                hd.write("CBK1".toByteArray(Charsets.UTF_8))
+                hd.writeInt(2)
+                hd.writeInt(kdfNameLen)
+                hd.write(kdfNameBytes)
+                hd.writeInt(memoryKiB)
+                hd.writeInt(iterations)
+                hd.writeInt(parallelism)
+                hd.writeInt(saltLen)
+                hd.write(salt)
+                hd.writeInt(ivLen)
+                hd.write(iv)
+                hd.writeLong(createdAt)
+                hd.writeInt(versionLen)
+                hd.write(versionBytes)
+            }
+            val headerBytes = fullHeaderBos.toByteArray()
+            val ciphertext = dis.readBytes()
+
+            val derivedKey = PasswordKdf.argon2id(password.toCharArray(), salt, kdfParams)
+            val decryptedGzip = BackupCrypto.decryptPayloadWithAad(derivedKey, iv, ciphertext, headerBytes)
+            val jsonBytes = BackupCrypto.gzipDecompress(decryptedGzip)
+            val jsonString = String(jsonBytes, Charsets.UTF_8)
+            return adapter.fromJson(jsonString) ?: throw IllegalStateException("Failed to parse backup JSON")
+        } else {
+            throw IllegalArgumentException("Unsupported backup format version: $formatVersion")
+        }
     }
 
     suspend fun inspectBackup(context: Context, sourceUri: Uri, password: String): BackupSummary {
@@ -269,6 +475,8 @@ object BackupManager {
         rawDb.beginTransaction()
         try {
             rawDb.execSQL("PRAGMA foreign_keys = OFF")
+            rawDb.execSQL("DELETE FROM vault_items")
+            rawDb.execSQL("DELETE FROM vault_keysets")
             rawDb.execSQL("DELETE FROM card_details")
             rawDb.execSQL("DELETE FROM card_statements")
             rawDb.execSQL("DELETE FROM loan_details")
@@ -322,6 +530,11 @@ object BackupManager {
             val netWorthDao = db.netWorthSnapshotDao()
             container.netWorthSnapshots.forEach { netWorthDao.insert(it) }
 
+            val keysetDao = db.vaultKeysetDao()
+            container.vaultKeysets.forEach { keysetDao.insertKeyset(it) }
+            val itemDao = db.vaultItemDao()
+            container.vaultItems.forEach { itemDao.insertItem(it) }
+
             rawDb.execSQL("PRAGMA foreign_keys = ON")
             rawDb.setTransactionSuccessful()
         } finally {
@@ -346,7 +559,12 @@ object BackupManager {
         settingsDataStore.updateLastUsedCategory(s.lastUsedCategoryId)
         settingsDataStore.updateLastSmsCatchupTimestamp(s.lastSmsCatchupTimestamp)
 
-        // Clear PIN as PINs are not included in backups, and require setting new PIN
+        // Clear PIN and Vault security state after restore
         settingsDataStore.updatePin(null, null)
+        BiometricKeyManager.deleteKey()
+        val vaultDataStore = VaultDataStore(context)
+        vaultDataStore.setVkByBiometric(null)
+        vaultDataStore.setVaultBioEnabled(false)
+        VaultSession.lock(context)
     }
 }

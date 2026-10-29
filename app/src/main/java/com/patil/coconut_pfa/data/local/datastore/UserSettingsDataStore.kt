@@ -49,7 +49,8 @@ data class UserSettings(
     val lastBackupStatus: String? = null,
     val showAmountOnWidget: Boolean = false,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
-    val toastStyle: ToastStyle = ToastStyle.ORANGE_ADAPTIVE
+    val toastStyle: ToastStyle = ToastStyle.ORANGE_ADAPTIVE,
+    val backupUpgradedToV2: Boolean = false
 )
 
 class UserSettingsDataStore(private val context: Context) {
@@ -76,6 +77,7 @@ class UserSettingsDataStore(private val context: Context) {
         val SHOW_AMOUNT_ON_WIDGET = booleanPreferencesKey("show_amount_on_widget")
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val TOAST_STYLE = stringPreferencesKey("toast_style")
+        val BACKUP_UPGRADED_TO_V2 = booleanPreferencesKey("backup_upgraded_to_v2")
     }
 
     val settingsFlow: Flow<UserSettings> = context.settingsDataStore.data.map { prefs ->
@@ -104,7 +106,8 @@ class UserSettingsDataStore(private val context: Context) {
             } ?: ThemeMode.SYSTEM,
             toastStyle = prefs[Keys.TOAST_STYLE]?.let { style ->
                 runCatching { ToastStyle.valueOf(style) }.getOrNull()
-            } ?: ToastStyle.ORANGE_ADAPTIVE
+            } ?: ToastStyle.ORANGE_ADAPTIVE,
+            backupUpgradedToV2 = prefs[Keys.BACKUP_UPGRADED_TO_V2] ?: false
         )
     }
 
@@ -199,5 +202,9 @@ class UserSettingsDataStore(private val context: Context) {
 
     suspend fun updateToastStyle(style: ToastStyle) {
         context.settingsDataStore.edit { it[Keys.TOAST_STYLE] = style.name }
+    }
+
+    suspend fun updateBackupUpgradedToV2(upgraded: Boolean) {
+        context.settingsDataStore.edit { it[Keys.BACKUP_UPGRADED_TO_V2] = upgraded }
     }
 }

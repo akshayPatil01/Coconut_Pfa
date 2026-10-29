@@ -20,6 +20,7 @@ object BackupPassphraseManager {
     private const val PREF_NAME = "coconut_secure_backup_prefs"
     private const val PREF_KEY_WRAPPED_KEY = "encrypted_backup_derived_key_b64"
     private const val PREF_KEY_SALT = "backup_salt_b64"
+    private const val PREF_KEY_ENCRYPTED_PASSWORD = "encrypted_backup_password_b64"
     private const val TRANSFORMATION = "AES/GCM/NoPadding"
     private const val GCM_IV_LENGTH_BYTES = 12
     private const val GCM_TAG_LENGTH_BITS = 128
@@ -36,12 +37,23 @@ object BackupPassphraseManager {
         val salt = ByteArray(16).also { SecureRandom().nextBytes(it) }
         val derivedKey = deriveKey(password, salt)
         val encryptedDerivedKeyWithIv = encryptDerivedKey(derivedKey)
+        val encryptedPasswordWithIv = encryptDerivedKey(password.toByteArray(Charsets.UTF_8))
 
         val prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
         prefs.edit()
             .putString(PREF_KEY_WRAPPED_KEY, Base64.encodeToString(encryptedDerivedKeyWithIv, Base64.NO_WRAP))
             .putString(PREF_KEY_SALT, Base64.encodeToString(salt, Base64.NO_WRAP))
+            .putString(PREF_KEY_ENCRYPTED_PASSWORD, Base64.encodeToString(encryptedPasswordWithIv, Base64.NO_WRAP))
             .apply()
+    }
+
+    fun getBackupPassword(context: Context): String {
+        val prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+        val encryptedB64 = prefs.getString(PREF_KEY_ENCRYPTED_PASSWORD, null)
+            ?: throw IllegalStateException("No backup password set.")
+        val encryptedBytes = Base64.decode(encryptedB64, Base64.NO_WRAP)
+        val decryptedBytes = decryptDerivedKey(encryptedBytes)
+        return String(decryptedBytes, Charsets.UTF_8)
     }
 
     fun getDerivedKey(context: Context, password: String? = null): ByteArray {

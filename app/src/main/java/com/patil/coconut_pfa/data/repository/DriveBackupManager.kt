@@ -23,7 +23,8 @@ data class DriveBackupSummary(
     val id: String,
     val name: String,
     val size: Long,
-    val createdTime: String
+    val createdTime: String,
+    val isPinned: Boolean
 )
 
 object DriveBackupManager {
@@ -55,6 +56,32 @@ object DriveBackupManager {
                 throw RuntimeException("Google authentication expired or failed: ${e.localizedMessage}")
             }
         }
+    }
+
+    suspend fun uploadPinnedPreVaultBackupToDrive(context: Context, preVaultBytes: ByteArray): String {
+        val settingsDataStore = UserSettingsDataStore(context)
+        val settings = settingsDataStore.settingsFlow.first()
+        val email = settings.googleAccountEmail ?: throw IllegalStateException("Google account not connected")
+
+        val token = getAccessToken(context, email)
+        val authHeader = "Bearer $token"
+
+        val timestampStr = android.text.format.DateFormat.format("yyyyMMdd-HHmm", java.util.Date()).toString()
+        val fileName = "coconut-$timestampStr.cbk"
+
+        val jsonMetadata = "{\"name\":\"$fileName\",\"parents\":[\"appDataFolder\"],\"appProperties\":{\"pinned\":\"true\",\"kind\":\"pre-vault\"}}"
+        val metadataPart = MultipartBody.Part.createFormData(
+            "metadata", null, jsonMetadata.toRequestBody("application/json; charset=UTF-8".toMediaTypeOrNull())
+        )
+        val requestFile = preVaultBytes.toRequestBody("application/octet-stream".toMediaTypeOrNull())
+        val mediaPart = MultipartBody.Part.createFormData("file", fileName, requestFile)
+
+        val uploadResponse = api.uploadFile(authHeader, metadataPart, mediaPart)
+        if (!uploadResponse.isSuccessful) {
+            val errorBody = uploadResponse.errorBody()?.string() ?: "Unknown error"
+            throw RuntimeException("Pinned pre-vault upload failed (${uploadResponse.code()}): $errorBody")
+        }
+        return fileName
     }
 
     suspend fun uploadBackupToDrive(context: Context): String {
@@ -110,8 +137,9 @@ object DriveBackupManager {
             val response = api.listFiles(authHeader)
             if (response.isSuccessful) {
                 val files = response.body()?.files.orEmpty()
-                if (files.size > 7) {
-                    val filesToDelete = files.drop(7)
+                val nonPinnedFiles = files.filter { it.appProperties?.get("pinned") != "true" }
+                if (nonPinnedFiles.size > 7) {
+                    val filesToDelete = nonPinnedFiles.drop(7)
                     for (file in filesToDelete) {
                         api.deleteFile(authHeader, file.id)
                     }
@@ -141,8 +169,21 @@ object DriveBackupManager {
                 id = file.id,
                 name = file.name,
                 size = file.size?.toLongOrNull() ?: 0L,
-                createdTime = file.createdTime ?: ""
+                createdTime = file.createdTime ?: "",
+                isPinned = file.appProperties?.get("pinned") == "true"
             )
+        }
+    }
+
+    suspend fun deleteDriveFile(context: Context, fileId: String) {
+        val settingsDataStore = UserSettingsDataStore(context)
+        val settings = settingsDataStore.settingsFlow.first()
+        val email = settings.googleAccountEmail ?: throw IllegalStateException("Google account not connected")
+        val token = getAccessToken(context, email)
+        val authHeader = "Bearer $token"
+        val response = api.deleteFile(authHeader, fileId)
+        if (!response.isSuccessful) {
+            throw RuntimeException("Failed to delete backup file (${response.code()})")
         }
     }
 

@@ -21,7 +21,8 @@ data class DriveFileItem(
     val name: String,
     val size: String?,
     val createdTime: String?,
-    val modifiedTime: String?
+    val modifiedTime: String?,
+    val appProperties: Map<String, String>?
 )
 
 interface DriveApiService {
@@ -29,7 +30,7 @@ interface DriveApiService {
     suspend fun listFiles(
         @Header("Authorization") authHeader: String,
         @Query("spaces") spaces: String = "appDataFolder",
-        @Query("fields") fields: String = "files(id,name,size,createdTime,modifiedTime)",
+        @Query("fields") fields: String = "files(id,name,size,createdTime,modifiedTime,appProperties)",
         @Query("orderBy") orderBy: String = "createdTime desc"
     ): Response<DriveFileList>
 
