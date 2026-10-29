@@ -76,6 +76,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.PopupProperties
 import com.patil.coconut_pfa.data.local.entity.AccountEntity
 import com.patil.coconut_pfa.data.local.entity.CategoryEntity
 import com.patil.coconut_pfa.data.local.entity.DbTxnType
@@ -547,7 +548,7 @@ fun AddTransactionScreen(
                         value = payee,
                         onValueChange = {
                             payee = it
-                            payeeDropdownExpanded = uiState.distinctPayees.any { p -> p.contains(it, ignoreCase = true) }
+                            payeeDropdownExpanded = it.isNotBlank() && uiState.distinctPayees.any { p -> p.contains(it, ignoreCase = true) }
                         },
                         modifier = Modifier.fillMaxWidth(),
                         label = { Text("Payee / Merchant / Description") },
@@ -562,7 +563,8 @@ fun AddTransactionScreen(
                         if (matchingPayees.isNotEmpty()) {
                             CoconutDropdownMenu(
                                 expanded = payeeDropdownExpanded,
-                                onDismissRequest = { payeeDropdownExpanded = false }
+                                onDismissRequest = { payeeDropdownExpanded = false },
+                                properties = PopupProperties(focusable = false)
                             ) {
                                 matchingPayees.forEach { suggestion ->
                                     CoconutDropdownMenuItem(

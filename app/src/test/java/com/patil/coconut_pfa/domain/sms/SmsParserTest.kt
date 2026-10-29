@@ -371,4 +371,24 @@ class SmsParserTest {
         assertEquals(120000L, SmsParserUtils.extractAmount("1,200.00 INR debited"))
         assertEquals(35000L, SmsParserUtils.extractAmount("350 Rs paid to Merchant"))
     }
+
+    @Test
+    fun `extract amount supports uncomma-formatted numbers with 4 or more digits`() {
+        assertEquals(249900L, SmsParserUtils.extractAmount("Rs. 2499.00 debited from A/C XX4321"))
+        assertEquals(1250000L, SmsParserUtils.extractAmount("Rs 12500 credited to A/C XX1234"))
+        assertEquals(123450L, SmsParserUtils.extractAmount("INR 1234.50 spent at STARBUCKS"))
+    }
+
+    @Test
+    fun `extract amount supports rounding fractional paise`() {
+        assertEquals(12346L, SmsParserUtils.parseAmountToPaise("123.456"))
+        assertEquals(12345L, SmsParserUtils.parseAmountToPaise("123.454"))
+    }
+
+    @Test
+    fun `extract merchant handles spent at and VPA cleanup`() {
+        assertEquals("STARBUCKS COFFEE", SmsParserUtils.extractMerchant("spent Rs 500 at STARBUCKS COFFEE on 12-Nov"))
+        assertEquals("Swiggy", SmsParserUtils.extractMerchant("paid to Swiggy Pvt Ltd via UPI"))
+        assertEquals("swiggy food", SmsParserUtils.extractMerchant("transferred to VPA swiggy.food@icici"))
+    }
 }

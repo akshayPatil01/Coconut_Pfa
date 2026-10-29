@@ -366,9 +366,9 @@ fun TransactionsScreen(
             ) {
                 // SMS Review Banner at Top of Feed
                 item {
-                    if (FakeData.smsReviewItems.isNotEmpty()) {
+                    if (uiState.pendingSmsCount > 0) {
                         SmsBannerInTransactions(
-                            unreadCount = FakeData.smsReviewItems.size,
+                            unreadCount = uiState.pendingSmsCount,
                             onClick = { onNavigate(Screen.ReviewInbox) },
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                         )

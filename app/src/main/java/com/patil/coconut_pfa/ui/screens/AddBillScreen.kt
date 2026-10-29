@@ -1,15 +1,15 @@
 package com.patil.coconut_pfa.ui.screens
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -17,11 +17,18 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.Category
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.CreditCard
+import androidx.compose.material.icons.rounded.DateRange
+import androidx.compose.material.icons.rounded.Event
+import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.Receipt
+import androidx.compose.material.icons.rounded.Repeat
+import androidx.compose.material.icons.rounded.Security
 import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
@@ -60,7 +67,7 @@ import com.patil.coconut_pfa.ui.viewmodel.AddBillUiState
 import com.patil.coconut_pfa.ui.viewmodel.AddBillViewModel
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddBillScreen(
     onNavigate: (Screen) -> Unit,
@@ -91,10 +98,10 @@ fun AddBillScreen(
     var selectedCategoryId by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(uiState.accounts, uiState.categories) {
-        if (selectedAccountId == null && uiState.accounts.isNotEmpty()) {
+        if ((selectedAccountId == null || uiState.accounts.none { it.id == selectedAccountId }) && uiState.accounts.isNotEmpty()) {
             selectedAccountId = uiState.accounts.firstOrNull()?.id
         }
-        if (selectedCategoryId == null && uiState.categories.isNotEmpty()) {
+        if ((selectedCategoryId == null || uiState.categories.none { it.id == selectedCategoryId }) && uiState.categories.isNotEmpty()) {
             val defaultCat = uiState.categories.firstOrNull { it.name.contains("Bill", ignoreCase = true) || it.name.contains("Utility", ignoreCase = true) }
                 ?: uiState.categories.firstOrNull()
             selectedCategoryId = defaultCat?.id
@@ -106,14 +113,18 @@ fun AddBillScreen(
 
     val remindOptions = listOf(1, 3, 5, 7)
 
+    val isSubscriptionFlow = initialKind == "SUBSCRIPTION" || selectedKind == DbBillKind.SUBSCRIPTION
+    val targetScreen = if (isSubscriptionFlow) Screen.Subscriptions else Screen.Payments
+    val backDestination = if (initialKind == "SUBSCRIPTION") Screen.Subscriptions else Screen.Payments
+
     Scaffold(
         modifier = modifier.fillMaxSize(),
         snackbarHost = { CoconutSnackbarHost(hostState = snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text(if (initialKind == "SUBSCRIPTION") "Add Subscription" else "Add Recurring Bill", fontWeight = FontWeight.Bold) },
+                title = { Text(if (isSubscriptionFlow) "Add Subscription" else "Add Recurring Bill", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = { onNavigate(Screen.Payments) }) {
+                    IconButton(onClick = { onNavigate(backDestination) }) {
                         Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
                     }
                 }
@@ -145,26 +156,33 @@ fun AddBillScreen(
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold
             )
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 DbBillKind.entries.forEach { kind ->
-                    val displayName = when (kind) {
-                        DbBillKind.RENT -> "Rent"
-                        DbBillKind.UTILITY -> "Utility"
-                        DbBillKind.INSURANCE -> "Insurance"
-                        DbBillKind.SUBSCRIPTION -> "Subscription"
-                        DbBillKind.EMI -> "EMI"
-                        DbBillKind.OTHER -> "Other"
+                    val (displayName, kindIcon) = when (kind) {
+                        DbBillKind.RENT -> "Rent" to Icons.Rounded.Home
+                        DbBillKind.UTILITY -> "Utility" to Icons.Rounded.Receipt
+                        DbBillKind.INSURANCE -> "Insurance" to Icons.Rounded.Security
+                        DbBillKind.SUBSCRIPTION -> "Subscription" to Icons.Rounded.Repeat
+                        DbBillKind.EMI -> "EMI" to Icons.Rounded.CreditCard
+                        DbBillKind.OTHER -> "Other" to Icons.Rounded.Category
                     }
+                    val isSelected = selectedKind == kind
                     FilterChip(
-                        selected = selectedKind == kind,
+                        selected = isSelected,
                         onClick = { selectedKind = kind },
                         label = { Text(displayName) },
-                        leadingIcon = if (selectedKind == kind) {
-                            { Icon(Icons.Rounded.Check, contentDescription = null) }
-                        } else null
+                        leadingIcon = {
+                            Icon(
+                                imageVector = if (isSelected) Icons.Rounded.Check else kindIcon,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     )
                 }
             }
@@ -206,20 +224,31 @@ fun AddBillScreen(
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold
             )
-            FlowRow(
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 DbBillFrequency.entries.forEach { freq ->
-                    val freqLabel = when (freq) {
-                        DbBillFrequency.MONTHLY -> "Monthly"
-                        DbBillFrequency.QUARTERLY -> "Quarterly"
-                        DbBillFrequency.YEARLY -> "Yearly"
-                        DbBillFrequency.EVERY_N_DAYS -> "Custom Days"
+                    val (freqLabel, freqIcon) = when (freq) {
+                        DbBillFrequency.MONTHLY -> "Monthly" to Icons.Rounded.CalendarMonth
+                        DbBillFrequency.QUARTERLY -> "Quarterly" to Icons.Rounded.DateRange
+                        DbBillFrequency.YEARLY -> "Yearly" to Icons.Rounded.DateRange
+                        DbBillFrequency.EVERY_N_DAYS -> "Custom Days" to Icons.Rounded.Event
                     }
+                    val isSelected = selectedFrequency == freq
                     FilterChip(
-                        selected = selectedFrequency == freq,
+                        selected = isSelected,
                         onClick = { selectedFrequency = freq },
-                        label = { Text(freqLabel) }
+                        label = { Text(freqLabel) },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = if (isSelected) Icons.Rounded.Check else freqIcon,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     )
                 }
             }
@@ -300,7 +329,7 @@ fun AddBillScreen(
                         ) ?: true
 
                         if (success) {
-                            onNavigate(Screen.Payments)
+                            onNavigate(targetScreen)
                         } else {
                             snackbarHostState.showSnackbar("Failed to save bill")
                         }
@@ -312,7 +341,7 @@ fun AddBillScreen(
                 shape = RoundedCornerShape(14.dp)
             ) {
                 Text(
-                    text = "Save Bill",
+                    text = if (isSubscriptionFlow) "Save Subscription" else "Save Bill",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )

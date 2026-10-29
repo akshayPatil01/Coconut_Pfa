@@ -386,6 +386,7 @@ fun CoconutApp(
                                         accountRepository = accountRepository,
                                         categoryRepository = categoryRepository,
                                         settingsRepository = settingsRepository,
+                                        smsRepository = smsRepository,
                                         initialCategory = dest.initialCategory,
                                         initialCycle = dest.initialCycle,
                                         initialStartDateMillis = dest.initialStartDateMillis,

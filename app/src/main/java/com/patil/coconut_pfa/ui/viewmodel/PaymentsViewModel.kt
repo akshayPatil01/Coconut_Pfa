@@ -183,7 +183,7 @@ class PaymentsViewModel(
         }.sortedWith(compareBy({ if (it.isOverdue) 0 else 1 }, { it.dueDate }))
 
         // 2. Process Cards Sub-Tab Data
-        val creditCardAccounts = accounts.filter { it.type == DbAccountType.CREDIT_CARD }
+        val creditCardAccounts = accounts.filter { it.type == DbAccountType.CREDIT_CARD && !it.archived }
         val cardItems = creditCardAccounts.map { cardAcc ->
             val accountStatements = statements.filter { it.accountId == cardAcc.id }.sortedByDescending { it.periodEnd }
             val latestStatement = accountStatements.firstOrNull()

@@ -23,8 +23,11 @@ interface AccountDao {
     @Query("SELECT * FROM accounts ORDER BY createdAt ASC")
     suspend fun getAllAccountsList(): List<AccountEntity>
 
-    @Query("SELECT * FROM accounts WHERE archived = 0 ORDER BY createdAt ASC")
+    @Query("SELECT * FROM accounts WHERE archived = 0 ORDER BY createdAt DESC")
     fun getActiveAccountsFlow(): Flow<List<AccountEntity>>
+
+    @Query("SELECT * FROM accounts WHERE archived = 0 ORDER BY createdAt DESC")
+    suspend fun getActiveAccountsList(): List<AccountEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(account: AccountEntity)

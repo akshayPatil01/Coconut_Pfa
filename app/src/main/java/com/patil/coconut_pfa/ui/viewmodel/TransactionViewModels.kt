@@ -9,9 +9,11 @@ import com.patil.coconut_pfa.data.local.entity.DbCategoryKind
 import com.patil.coconut_pfa.data.local.entity.DbTxnSource
 import com.patil.coconut_pfa.data.local.entity.DbTxnType
 import com.patil.coconut_pfa.data.local.entity.TxnEntity
+import com.patil.coconut_pfa.data.local.entity.DbSmsStatus
 import com.patil.coconut_pfa.data.repository.AccountRepository
 import com.patil.coconut_pfa.data.repository.CategoryRepository
 import com.patil.coconut_pfa.data.repository.SettingsRepository
+import com.patil.coconut_pfa.data.repository.SmsRepository
 import com.patil.coconut_pfa.data.repository.TransactionRepository
 import com.patil.coconut_pfa.domain.SalaryCycleCalculator
 import com.patil.coconut_pfa.util.KolkataDateTimeUtils
@@ -20,6 +22,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -46,6 +49,7 @@ data class TransactionsUiState(
     val selectedAccount: String? = null,
     val selectedCycle: String = "Current Cycle",
     val selectedSource: DbTxnSource? = null,
+    val pendingSmsCount: Int = 0,
     val isLoading: Boolean = true
 )
 
@@ -54,6 +58,7 @@ class TransactionsViewModel(
     private val accountRepository: AccountRepository,
     private val categoryRepository: CategoryRepository,
     private val settingsRepository: SettingsRepository,
+    private val smsRepository: SmsRepository? = null,
     initialCategory: String? = null,
     initialCycle: String? = null,
     val initialStartDateMillis: Long? = null,
@@ -78,13 +83,22 @@ class TransactionsViewModel(
     private val _selectedSource = MutableStateFlow<DbTxnSource?>(null)
     val selectedSource = _selectedSource.asStateFlow()
 
+    private data class BaseData(
+        val txns: List<TxnEntity>,
+        val accounts: List<AccountEntity>,
+        val categories: List<CategoryEntity>,
+        val settings: com.patil.coconut_pfa.data.local.datastore.UserSettings,
+        val pendingSmsCount: Int
+    )
+
     private val baseDataFlow = combine(
         transactionRepository.getAllActiveTransactions(),
         accountRepository.getAllAccounts(),
         categoryRepository.getAllCategories(),
-        settingsRepository.settingsFlow
-    ) { txns, accounts, categories, settings ->
-        Quadruple(txns, accounts, categories, settings)
+        settingsRepository.settingsFlow,
+        smsRepository?.getSmsByStatus(DbSmsStatus.PENDING) ?: flowOf(emptyList())
+    ) { txns, accounts, categories, settings, pendingSmsList ->
+        BaseData(txns, accounts, categories, settings, pendingSmsList.size)
     }
 
     private val filterTupleFlow = combine(
@@ -98,7 +112,8 @@ class TransactionsViewModel(
     val uiState: StateFlow<TransactionsUiState> = combine(
         baseDataFlow,
         filterTupleFlow
-    ) { (txns, accounts, categories, settings), filters ->
+    ) { baseData, filters ->
+        val (txns, accounts, categories, settings, pendingSmsCount) = baseData
         val accountMap = accounts.associateBy { it.id }
         val categoryMap = categories.associateBy { it.id }
 
@@ -196,6 +211,7 @@ class TransactionsViewModel(
             selectedAccount = filters.selectedAccount,
             selectedCycle = filters.selectedCycle,
             selectedSource = filters.selectedSource,
+            pendingSmsCount = pendingSmsCount,
             isLoading = false
         )
     }.stateIn(
@@ -248,7 +264,6 @@ class TransactionsViewModel(
         }
     }
 
-    private data class Quadruple<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
     private data class FilterTuple(
         val searchQuery: String,
         val selectedType: DbTxnType?,
@@ -263,6 +278,7 @@ class TransactionsViewModel(
         private val accountRepository: AccountRepository,
         private val categoryRepository: CategoryRepository,
         private val settingsRepository: SettingsRepository,
+        private val smsRepository: SmsRepository? = null,
         private val initialCategory: String? = null,
         private val initialCycle: String? = null,
         private val initialStartDateMillis: Long? = null,
@@ -275,6 +291,7 @@ class TransactionsViewModel(
                 accountRepository,
                 categoryRepository,
                 settingsRepository,
+                smsRepository,
                 initialCategory,
                 initialCycle,
                 initialStartDateMillis,

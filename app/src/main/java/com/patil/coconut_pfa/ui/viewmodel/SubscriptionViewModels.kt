@@ -5,7 +5,6 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.patil.coconut_pfa.data.local.entity.BillEntity
 import com.patil.coconut_pfa.data.local.entity.DbBillFrequency
-import com.patil.coconut_pfa.data.local.entity.DbBillKind
 import com.patil.coconut_pfa.data.repository.BillRepository
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -32,7 +31,7 @@ class SubscriptionsViewModel(
 
     val uiState: StateFlow<SubscriptionsUiState> = billRepository.getAllBills()
         .map { allBills ->
-            val subs = allBills.filter { it.kind == DbBillKind.SUBSCRIPTION }
+            val subs = allBills
             val activeSubs = subs.filter { it.active }
             val monthlyTotal = activeSubs.sumOf { sub ->
                 val mult = when (sub.frequency) {

@@ -4,22 +4,9 @@ object SmsParserUtils {
 
     fun parseAmountToPaise(amountStr: String): Long? {
         val clean = amountStr.replace(",", "").trim()
-        val parts = clean.split(".")
-        val rupees = parts.getOrNull(0)?.toLongOrNull() ?: return null
-        val paise = when (parts.size) {
-            1 -> 0L
-            2 -> {
-                val p = parts[1]
-                when (p.length) {
-                    0 -> 0L
-                    1 -> (p.toLongOrNull() ?: 0L) * 10L
-                    2 -> p.take(2).toLongOrNull() ?: 0L
-                    else -> p.take(2).toLongOrNull() ?: 0L
-                }
-            }
-            else -> return null
-        }
-        return (rupees * 100L) + paise
+        val d = clean.toDoubleOrNull() ?: return null
+        if (d < 0) return null
+        return kotlin.math.round(d * 100.0).toLong()
     }
 
     fun detectBankInstitution(sender: String, body: String): String? {
@@ -128,16 +115,18 @@ object SmsParserUtils {
         return promoRegex.containsMatchIn(lower) || failedRegex.containsMatchIn(lower)
     }
 
+    private const val AMOUNT_PATTERN = """([0-9]{1,3}(?:,[0-9]{2,3})+(?:\.[0-9]+)?|[0-9]+(?:\.[0-9]+)?)"""
+
     fun extractAmount(body: String): Long? {
         // 1. Leading currency: Rs. 500, INR 1,200.50, ₹ 500
-        val leadingRegex = Regex("""(?i)(?:Rs\.?|INR|₹)\s*([0-9]{1,3}(?:,[0-9]{2,3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)""")
+        val leadingRegex = Regex("""(?i)(?:Rs\.?|INR|₹)\s*$AMOUNT_PATTERN""")
         val matchLeading = leadingRegex.find(body)
         if (matchLeading != null) {
             return parseAmountToPaise(matchLeading.groupValues[1])
         }
 
         // 2. Trailing currency: 500 Rs, 1200.00 INR, 500/-
-        val trailingRegex = Regex("""(?i)\b([0-9]{1,3}(?:,[0-9]{2,3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)\s*(?:Rs\.?|INR|₹|/-)""")
+        val trailingRegex = Regex("""(?i)\b$AMOUNT_PATTERN\s*(?:Rs\.?|INR|₹|/-)""")
         val matchTrailing = trailingRegex.find(body)
         if (matchTrailing != null) {
             return parseAmountToPaise(matchTrailing.groupValues[1])
@@ -165,7 +154,7 @@ object SmsParserUtils {
     }
 
     fun extractAvailableBalance(body: String): Long? {
-        val regex = Regex("""(?i)(?:Avl Bal|Available Balance|Avail Bal|A/c Bal|Bal:?|Available Limit|Avl Lim|Clear Bal)\s*[:.\-]?\s*(?:Rs\.?|INR|₹)?\s*([0-9]{1,3}(?:,[0-9]{2,3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)""")
+        val regex = Regex("""(?i)(?:Avl Bal|Available Balance|Avail Bal|A/c Bal|Bal:?|Available Limit|Avl Lim|Clear Bal)\s*[:.\-]?\s*(?:Rs\.?|INR|₹)?\s*$AMOUNT_PATTERN""")
         val match = regex.find(body) ?: return null
         val amountStr = match.groupValues[1]
         return parseAmountToPaise(amountStr)
@@ -191,7 +180,9 @@ object SmsParserUtils {
 
     fun extractMerchant(body: String): String? {
         val patterns = listOf(
-            Regex("""(?i)\bswiped at\s+([A-Za-z0-9\s.&'-]+?)(?=\s+(?:on|for|ref|avail|avl|bal|using|via|vpa|\.|$))"""),
+            Regex("""(?i)\bspent\s+(?:at|on)\s+([A-Za-z0-9\s.&'-]+?)(?=\s+(?:on|for|ref|avail|avl|bal|using|via|vpa|\.|$))"""),
+            Regex("""(?i)\bused\s+(?:at|on)\s+([A-Za-z0-9\s.&'-]+?)(?=\s+(?:on|for|ref|avail|avl|bal|using|via|vpa|\.|$))"""),
+            Regex("""(?i)\bswiped\s+(?:at|on)\s+([A-Za-z0-9\s.&'-]+?)(?=\s+(?:on|for|ref|avail|avl|bal|using|via|vpa|\.|$))"""),
             Regex("""(?i)\bpaid to\s+([A-Za-z0-9\s.&'-]+?)(?=\s+(?:on|for|ref|avail|avl|bal|using|via|vpa|\.|$))"""),
             Regex("""(?i)\bsent to\s+([A-Za-z0-9\s.&'-]+?)(?=\s+(?:on|for|ref|avail|avl|bal|using|via|vpa|\.|$))"""),
             Regex("""(?i)\btransfer to\s+([A-Za-z0-9\s.&'-]+?)(?=\s+(?:on|for|ref|avail|avl|bal|a/c|using|via|vpa|\.|$))"""),
@@ -223,17 +214,28 @@ object SmsParserUtils {
             .trim()
         // Remove trailing date-like strings if appended (e.g. "Swiggy on 12-Nov")
         clean = clean.replace(Regex("""(?i)\s+on\s+\d{1,2}[-/\s][A-Za-z0-9]+.*$"""), "")
+        // Remove trailing payment modes or noise words (e.g. "Swiggy via UPI", "Zomato using card")
+        clean = clean.replace(Regex("""(?i)\s+(?:via|using|through)\s+(?:UPI|Card|Netbanking|A/C|Debit Card|Credit Card).*$"""), "")
+        // If raw is VPA like "swiggy@icici" or "john@okaxis", extract name part before @
+        if (clean.contains("@") && !clean.contains(" ")) {
+            val namePart = clean.substringBefore("@").replace(".", " ").trim()
+            if (namePart.isNotBlank()) {
+                clean = namePart
+            }
+        }
+        // Remove trailing legal/corporate noise suffixes like "Pvt Ltd", "Ltd", "Inc"
+        clean = clean.replace(Regex("""(?i)\s+(?:Pvt\.?\s*Ltd\.?|Private\s+Limited|Ltd\.?|Inc\.?|Corp\.?|India)$"""), "")
         return clean.trim()
     }
 
     fun extractStatementTotal(body: String): Long? {
-        val regex = Regex("""(?i)(?:Total Amt Due|Total Amount Due|Total Due|Total Due:?)\s*[:.\-]?\s*(?:Rs\.?|INR|₹)?\s*([0-9]{1,3}(?:,[0-9]{2,3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)""")
+        val regex = Regex("""(?i)(?:Total Amt Due|Total Amount Due|Total Due|Total Due:?)\s*[:.\-]?\s*(?:Rs\.?|INR|₹)?\s*$AMOUNT_PATTERN""")
         val match = regex.find(body) ?: return null
         return parseAmountToPaise(match.groupValues[1])
     }
 
     fun extractMinDue(body: String): Long? {
-        val regex = Regex("""(?i)(?:Min Amt Due|Min Amount Due|Min Due|Min Due:?)\s*[:.\-]?\s*(?:Rs\.?|INR|₹)?\s*([0-9]{1,3}(?:,[0-9]{2,3})*(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)""")
+        val regex = Regex("""(?i)(?:Min Amt Due|Min Amount Due|Min Due|Min Due:?)\s*[:.\-]?\s*(?:Rs\.?|INR|₹)?\s*$AMOUNT_PATTERN""")
         val match = regex.find(body) ?: return null
         return parseAmountToPaise(match.groupValues[1])
     }

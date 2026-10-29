@@ -118,7 +118,7 @@ fun ImportStatementScreen(
 
     // Load accounts
     LaunchedEffect(Unit) {
-        val list = accountDao.getAllAccountsList()
+        val list = accountDao.getActiveAccountsList()
         accounts = list
         if (list.isNotEmpty() && selectedAccount == null) {
             selectedAccount = list.first()

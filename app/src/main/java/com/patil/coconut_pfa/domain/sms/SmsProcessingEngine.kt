@@ -56,14 +56,31 @@ object SmsProcessingEngine {
         }
 
         val accounts = accountDao.getAllAccountsList()
-        val matchedAccount = accounts.firstOrNull { acc ->
-            val matchesInstitution = parsed.institution == null ||
-                    acc.institution.name.equals(parsed.institution.replace(" Bank", "").replace(" ", ""), ignoreCase = true) ||
-                    acc.name.equals(parsed.institution, ignoreCase = true)
-            val matchesLast4 = parsed.last4 == null || acc.last4 == parsed.last4
-            matchesInstitution && matchesLast4
-        } ?: accounts.firstOrNull { acc ->
-            parsed.last4 != null && acc.last4 == parsed.last4
+        val matchedAccount = accounts.maxByOrNull { acc ->
+            var score = 0
+            val instClean = parsed.institution?.replace(" Bank", "")?.replace(" ", "") ?: ""
+            val instMatch = instClean.isNotBlank() && (
+                acc.institution.name.equals(instClean, ignoreCase = true) ||
+                acc.name.contains(instClean, ignoreCase = true) ||
+                acc.name.contains(parsed.institution ?: "", ignoreCase = true)
+            )
+            val last4Match = !parsed.last4.isNullOrBlank() && !acc.last4.isNullOrBlank() && acc.last4 == parsed.last4
+
+            if (last4Match && instMatch) score += 100
+            else if (last4Match) score += 80
+            else if (instMatch && acc.last4.isNullOrBlank()) score += 50
+            else if (instMatch) score += 30
+
+            score
+        }?.takeIf { acc ->
+            val instClean = parsed.institution?.replace(" Bank", "")?.replace(" ", "") ?: ""
+            val instMatch = instClean.isNotBlank() && (
+                acc.institution.name.equals(instClean, ignoreCase = true) ||
+                acc.name.contains(instClean, ignoreCase = true) ||
+                acc.name.contains(parsed.institution ?: "", ignoreCase = true)
+            )
+            val last4Match = !parsed.last4.isNullOrBlank() && !acc.last4.isNullOrBlank() && acc.last4 == parsed.last4
+            last4Match || instMatch
         }
 
         // Handle CARD_STATEMENT
@@ -111,7 +128,11 @@ object SmsProcessingEngine {
         val merchant = parsed.merchant
         if (!merchant.isNullOrBlank()) {
             val merchantKey = merchant.lowercase().replace(Regex("[0-9]"), "").trim()
+            val allMemories = merchantMemoryDao.getAll()
             val memory = merchantMemoryDao.getByMerchantKey(merchantKey)
+                ?: allMemories.firstOrNull { mem ->
+                    mem.merchantKey.length >= 3 && (merchantKey.contains(mem.merchantKey) || mem.merchantKey.contains(merchantKey))
+                }
             if (memory != null) {
                 suggestedCategoryId = memory.categoryId
             }

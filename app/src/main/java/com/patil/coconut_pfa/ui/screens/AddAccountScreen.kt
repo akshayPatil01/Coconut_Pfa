@@ -105,6 +105,10 @@ fun AddAccountScreen(
 
     var investmentValueText by remember { mutableStateOf("") }
 
+    var existingArchived by remember { mutableStateOf(false) }
+    var existingCreatedAt by remember { mutableStateOf<Long?>(null) }
+    var existingOpeningDate by remember { mutableStateOf<String?>(null) }
+
     // Pre-fill fields in Edit Mode
     LaunchedEffect(accountId) {
         if (isEditMode && viewModel != null) {
@@ -116,6 +120,9 @@ fun AddAccountScreen(
                 last4Digits = entity.last4 ?: ""
                 openingBalanceText = (abs(entity.openingBalancePaise) / 100.0).toString()
                 includeInNetWorth = entity.includeInNetWorth
+                existingArchived = entity.archived
+                existingCreatedAt = entity.createdAt
+                existingOpeningDate = entity.openingDate
 
                 when (entity.type) {
                     DbAccountType.CREDIT_CARD -> {
@@ -474,7 +481,7 @@ fun AddAccountScreen(
                             institution = dbInst,
                             last4 = last4Digits.ifBlank { null },
                             openingBalancePaise = openingBal,
-                            openingDate = KolkataDateTimeUtils.currentDateString(),
+                            openingDate = existingOpeningDate ?: KolkataDateTimeUtils.currentDateString(),
                             icon = when (selectedType) {
                                 AccountType.BANK -> "account_balance"
                                 AccountType.CREDIT_CARD -> "credit_card"
@@ -485,7 +492,10 @@ fun AddAccountScreen(
                                 AccountType.FIXED_DEPOSIT -> "savings"
                             },
                             colour = 0xFF1E88E5L,
-                            includeInNetWorth = includeInNetWorth
+                            includeInNetWorth = includeInNetWorth,
+                            archived = existingArchived,
+                            createdAt = existingCreatedAt ?: System.currentTimeMillis(),
+                            updatedAt = System.currentTimeMillis()
                         )
 
                         var cardDetails: CardDetailsEntity? = null
