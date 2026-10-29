@@ -134,12 +134,39 @@ fun CoconutApp(
     val userSettingsDataStore = remember { UserSettingsDataStore(context) }
     val settingsRepository = remember { SettingsRepository(userSettingsDataStore) }
 
+    val vaultDataStore = remember { com.patil.coconut_pfa.data.local.datastore.VaultDataStore(context) }
+    val vaultRepository = remember { com.patil.coconut_pfa.data.repository.VaultRepository(database.vaultKeysetDao(), database.vaultItemDao()) }
+    val vaultViewModel: com.patil.coconut_pfa.ui.viewmodel.VaultViewModel = viewModel(
+        factory = com.patil.coconut_pfa.ui.viewmodel.VaultViewModel.Factory(vaultRepository, vaultDataStore)
+    )
+    val vaultUiState by vaultViewModel.uiState.collectAsState()
+
     val userSettings by settingsRepository.settingsFlow.collectAsState(initial = UserSettings())
     val isLocked by LockManager.isLocked.collectAsState()
 
     val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
     val hasColdStarted = remember { mutableStateOf(false) }
+
+    DisposableEffect(context) {
+        val receiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(ctx: android.content.Context?, intent: android.content.Intent?) {
+                if (intent?.action == android.content.Intent.ACTION_SCREEN_OFF) {
+                    com.patil.coconut_pfa.data.local.security.VaultSession.lock(context)
+                }
+            }
+        }
+        context.registerReceiver(receiver, android.content.IntentFilter(android.content.Intent.ACTION_SCREEN_OFF))
+        onDispose {
+            runCatching { context.unregisterReceiver(receiver) }
+        }
+    }
+
+    LaunchedEffect(isLocked) {
+        if (isLocked) {
+            com.patil.coconut_pfa.data.local.security.VaultSession.lock(context)
+        }
+    }
 
     // Schedule WorkManager job for purging old trash & bill reminders
     LaunchedEffect(Unit) {
@@ -630,6 +657,36 @@ fun CoconutApp(
                                 onWipeAndReset = { handleWipeAndReset() },
                                 modifier = screenModifier
                             )
+                            is Screen.Vault -> {
+                                if (vaultUiState.screenState == com.patil.coconut_pfa.ui.viewmodel.VaultScreenState.NOT_SETUP) {
+                                    com.patil.coconut_pfa.ui.screens.vault.VaultSetupScreen(
+                                        viewModel = vaultViewModel,
+                                        uiState = vaultUiState,
+                                        modifier = screenModifier
+                                    )
+                                } else if (vaultUiState.screenState == com.patil.coconut_pfa.ui.viewmodel.VaultScreenState.LOCKED || vaultUiState.showRecoveryMode) {
+                                    if (vaultUiState.showRecoveryMode) {
+                                        com.patil.coconut_pfa.ui.screens.vault.VaultRecoveryScreen(
+                                            viewModel = vaultViewModel,
+                                            uiState = vaultUiState,
+                                            modifier = screenModifier
+                                        )
+                                    } else {
+                                        com.patil.coconut_pfa.ui.screens.vault.VaultUnlockScreen(
+                                            viewModel = vaultViewModel,
+                                            uiState = vaultUiState,
+                                            modifier = screenModifier
+                                        )
+                                    }
+                                } else {
+                                    com.patil.coconut_pfa.ui.screens.vault.VaultPlaceholderScreen(
+                                        initialTab = dest.tab,
+                                        viewModel = vaultViewModel,
+                                        onNavigateBack = { navigateTo(Screen.Home) },
+                                        modifier = screenModifier
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -648,7 +705,8 @@ private fun isTopLevelDestination(screen: Screen): Boolean = when (screen) {
     Screen.Subscriptions,
     Screen.SplitAndIOUs,
     Screen.ReviewInbox,
-    Screen.Settings -> true
+    Screen.Settings,
+    is Screen.Vault -> true
     else -> false
 }
 

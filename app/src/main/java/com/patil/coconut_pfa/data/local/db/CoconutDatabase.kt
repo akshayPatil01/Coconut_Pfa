@@ -6,6 +6,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import androidx.sqlite.db.SupportSQLiteDatabase
+import androidx.room.migration.Migration
 import com.patil.coconut_pfa.data.local.dao.AccountDao
 import com.patil.coconut_pfa.data.local.dao.BillDao
 import com.patil.coconut_pfa.data.local.dao.BillOccurrenceDao
@@ -23,6 +24,8 @@ import com.patil.coconut_pfa.data.local.dao.PersonDao
 import com.patil.coconut_pfa.data.local.dao.SmsItemDao
 import com.patil.coconut_pfa.data.local.dao.TxnDao
 import com.patil.coconut_pfa.data.local.dao.ValuationDao
+import com.patil.coconut_pfa.data.local.dao.VaultItemDao
+import com.patil.coconut_pfa.data.local.dao.VaultKeysetDao
 import com.patil.coconut_pfa.data.local.entity.AccountEntity
 import com.patil.coconut_pfa.data.local.entity.BillEntity
 import com.patil.coconut_pfa.data.local.entity.BillOccurrenceEntity
@@ -40,6 +43,8 @@ import com.patil.coconut_pfa.data.local.entity.PersonEntity
 import com.patil.coconut_pfa.data.local.entity.SmsItemEntity
 import com.patil.coconut_pfa.data.local.entity.TxnEntity
 import com.patil.coconut_pfa.data.local.entity.ValuationEntity
+import com.patil.coconut_pfa.data.local.entity.VaultItem
+import com.patil.coconut_pfa.data.local.entity.VaultKeyset
 import com.patil.coconut_pfa.data.local.security.PassphraseManager
 import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 
@@ -61,9 +66,11 @@ import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
         GoalContributionEntity::class,
         SmsItemEntity::class,
         MerchantMemoryEntity::class,
-        NetWorthSnapshotEntity::class
+        NetWorthSnapshotEntity::class,
+        VaultKeyset::class,
+        VaultItem::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -86,8 +93,47 @@ abstract class CoconutDatabase : RoomDatabase() {
     abstract fun smsItemDao(): SmsItemDao
     abstract fun merchantMemoryDao(): MerchantMemoryDao
     abstract fun netWorthSnapshotDao(): NetWorthSnapshotDao
+    abstract fun vaultKeysetDao(): VaultKeysetDao
+    abstract fun vaultItemDao(): VaultItemDao
 
     companion object {
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `vault_keysets` (
+                        `id` INTEGER NOT NULL PRIMARY KEY,
+                        `kdf` TEXT NOT NULL,
+                        `salt` BLOB NOT NULL,
+                        `memoryKiB` INTEGER NOT NULL,
+                        `iterations` INTEGER NOT NULL,
+                        `parallelism` INTEGER NOT NULL,
+                        `vkByMaster` BLOB NOT NULL,
+                        `vkByRecovery` BLOB NOT NULL,
+                        `recoverySalt` BLOB NOT NULL,
+                        `keyVersion` INTEGER NOT NULL,
+                        `createdAt` INTEGER NOT NULL,
+                        `masterChangedAt` INTEGER NOT NULL
+                    )
+                """.trimIndent())
+
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `vault_items` (
+                        `id` TEXT NOT NULL PRIMARY KEY,
+                        `type` TEXT NOT NULL,
+                        `metaBlob` BLOB NOT NULL,
+                        `secretBlob` BLOB NOT NULL,
+                        `favourite` INTEGER NOT NULL,
+                        `linkedAccountId` TEXT,
+                        `createdAt` INTEGER NOT NULL,
+                        `updatedAt` INTEGER NOT NULL,
+                        `lastUsedAt` INTEGER,
+                        `deletedAt` INTEGER,
+                        `keyVersion` INTEGER NOT NULL
+                    )
+                """.trimIndent())
+            }
+        }
+
         @Volatile
         private var INSTANCE: CoconutDatabase? = null
 
@@ -112,6 +158,7 @@ abstract class CoconutDatabase : RoomDatabase() {
                 "coconut.db"
             )
                 .openHelperFactory(factory)
+                .addMigrations(MIGRATION_1_2)
                 .addCallback(object : Callback() {
                     override fun onCreate(db: SupportSQLiteDatabase) {
                         super.onCreate(db)

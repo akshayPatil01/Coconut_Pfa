@@ -142,4 +142,16 @@ sealed interface Screen {
         override val title: String = "App Locked"
         override val subtitle: String = "Enter your PIN to unlock"
     }
+
+    @Serializable
+    data class Vault(val tab: VaultTab = VaultTab.CARDS) : Screen {
+        override val title: String = if (tab == VaultTab.CARDS) "Vault Cards" else "Vault Credentials"
+        override val subtitle: String = "Encrypted credentials & cards"
+    }
+}
+
+@Serializable
+enum class VaultTab {
+    CARDS,
+    CREDENTIALS
 }
