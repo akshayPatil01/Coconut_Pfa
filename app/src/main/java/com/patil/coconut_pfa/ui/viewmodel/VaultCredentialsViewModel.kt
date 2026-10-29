@@ -19,6 +19,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import java.util.UUID
+import com.patil.coconut_pfa.data.repository.AccountRepository
+import com.patil.coconut_pfa.data.repository.TransactionRepository
+import com.patil.coconut_pfa.domain.AccountDomainEngine
+import com.patil.coconut_pfa.data.local.entity.DbAccountType
 import com.patil.coconut_pfa.vault.PasswordHealthAnalyzer
 import com.patil.coconut_pfa.vault.PasswordHealthReport
 
@@ -77,6 +81,8 @@ data class VaultCredentialsUiState(
     val selectedItemSecret: Any? = null,
     val selectedCardMeta: CardMeta? = null,
     val selectedCardSecret: CardSecret? = null,
+    val selectedCardLinkedAccount: Account? = null,
+    val accounts: List<Account> = emptyList(),
     val revealedFields: Map<String, Boolean> = emptyMap(),
     val snackbarMessage: String? = null,
     val isLoading: Boolean = false,
@@ -92,7 +98,9 @@ data class VaultCredentialsUiState(
 )
 
 class VaultCredentialsViewModel(
-    private val vaultRepository: VaultRepository
+    private val vaultRepository: VaultRepository,
+    private val accountRepository: AccountRepository? = null,
+    private val transactionRepository: TransactionRepository? = null
 ) : ViewModel() {
 
     private val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
@@ -115,6 +123,24 @@ class VaultCredentialsViewModel(
 
     init {
         observeItems()
+        observeAccounts()
+    }
+
+    private fun observeAccounts() {
+        if (accountRepository == null) return
+        viewModelScope.launch {
+            accountRepository.getActiveAccounts().collect { entities ->
+                val accs = entities.map { entity ->
+                    val cardDetails = if (entity.type == DbAccountType.CREDIT_CARD) accountRepository.getCardDetails(entity.id) else null
+                    val loanDetails = if (entity.type == DbAccountType.LOAN) accountRepository.getLoanDetails(entity.id) else null
+                    val fdDetails = if (entity.type == DbAccountType.FD) accountRepository.getFdDetails(entity.id) else null
+                    val valuations = accountRepository.getValuationsList(entity.id)
+                    val txns = transactionRepository?.getTransactionsForAccountList(entity.id) ?: emptyList()
+                    AccountDomainEngine.buildAccountModel(entity, cardDetails, loanDetails, fdDetails, valuations, txns)
+                }
+                _uiState.value = _uiState.value.copy(accounts = accs)
+            }
+        }
     }
 
     private fun observeItems() {
@@ -207,6 +233,9 @@ class VaultCredentialsViewModel(
                 selectedItemDetail = null,
                 selectedItemMeta = null,
                 selectedItemSecret = null,
+                selectedCardMeta = null,
+                selectedCardSecret = null,
+                selectedCardLinkedAccount = null,
                 revealedFields = emptyMap()
             )
             return
@@ -238,6 +267,18 @@ class VaultCredentialsViewModel(
                         VaultItemType.CARD -> Pair(cardMetaAdapter.fromJson(metaJson), cardSecretAdapter.fromJson(secretJson))
                     }
 
+                    val linkedAccount = if (item.type == VaultItemType.CARD && item.linkedAccountId != null && accountRepository != null) {
+                        val accEntity = accountRepository.getAccountById(item.linkedAccountId)
+                        if (accEntity != null) {
+                            val cardDetails = if (accEntity.type == DbAccountType.CREDIT_CARD) accountRepository.getCardDetails(accEntity.id) else null
+                            val loanDetails = if (accEntity.type == DbAccountType.LOAN) accountRepository.getLoanDetails(accEntity.id) else null
+                            val fdDetails = if (accEntity.type == DbAccountType.FD) accountRepository.getFdDetails(accEntity.id) else null
+                            val valuations = accountRepository.getValuationsList(accEntity.id)
+                            val txns = transactionRepository?.getTransactionsForAccountList(accEntity.id) ?: emptyList()
+                            AccountDomainEngine.buildAccountModel(accEntity, cardDetails, loanDetails, fdDetails, valuations, txns)
+                        } else null
+                    } else null
+
                     _uiState.value = _uiState.value.copy(
                         selectedItemId = itemId,
                         selectedItemDetail = updatedItem,
@@ -245,6 +286,7 @@ class VaultCredentialsViewModel(
                         selectedItemSecret = if (item.type == VaultItemType.CARD) null else secretObj,
                         selectedCardMeta = if (item.type == VaultItemType.CARD) metaObj as? CardMeta else null,
                         selectedCardSecret = if (item.type == VaultItemType.CARD) secretObj as? CardSecret else null,
+                        selectedCardLinkedAccount = linkedAccount,
                         revealedFields = emptyMap()
                     )
                 } catch (e: Exception) {
@@ -312,9 +354,12 @@ class VaultCredentialsViewModel(
         }
     }
 
-    fun copyField(context: Context, label: String, value: String) {
-        VaultClipboardManager.copyToClipboard(context, label, value, 30)
-        _uiState.value = _uiState.value.copy(snackbarMessage = "Copied $label, clears in 30 s")
+    fun copyField(context: Context, label: String, value: String, customMessage: String? = null) {
+        val clearSeconds = 30
+        val cleanValue = if (label.contains("Number", ignoreCase = true)) value.filter { it.isDigit() } else value
+        VaultClipboardManager.copyToClipboard(context, label, cleanValue, clearSeconds)
+        val msg = customMessage ?: "$label copied - clears in $clearSeconds s"
+        _uiState.value = _uiState.value.copy(snackbarMessage = msg)
     }
 
     fun clearSnackbar() {

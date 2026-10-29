@@ -25,6 +25,7 @@ fun VaultMainScreen(
     vaultViewModel: VaultViewModel,
     credentialsViewModel: VaultCredentialsViewModel,
     onNavigateBack: () -> Unit,
+    onNavigateToAccount: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -287,7 +288,8 @@ fun VaultMainScreen(
                                     currentScreenMode = VaultScreenMode.CardList
                                 },
                                 onRevealField = credentialsViewModel::revealField,
-                                onCopyField = { label, value -> credentialsViewModel.copyField(context, label, value) }
+                                onCopyField = { label, value, customMsg -> credentialsViewModel.copyField(context, label, value, customMsg) },
+                                onOpenAccount = onNavigateToAccount
                             )
                         }
                         is VaultScreenMode.CardAdd -> {
@@ -295,7 +297,7 @@ fun VaultMainScreen(
                                 existingItem = null,
                                 existingMeta = null,
                                 existingSecret = null,
-                                accounts = emptyList(),
+                                accounts = credentialsUiState.accounts,
                                 onNavigateBack = { currentScreenMode = VaultScreenMode.CardList },
                                 onSaveCard = { nickname, bank, cardType, network, cardNumber, expiry, cardholderName, colour, notes, cvv, linkedAccountId, favourite ->
                                     credentialsViewModel.saveCard(null, nickname, bank, null, cardType, network, cardNumber, expiry, cardholderName, colour, notes, cvv, linkedAccountId, favourite)
@@ -308,7 +310,7 @@ fun VaultMainScreen(
                                 existingItem = credentialsUiState.selectedItemDetail,
                                 existingMeta = credentialsUiState.selectedCardMeta,
                                 existingSecret = credentialsUiState.selectedCardSecret,
-                                accounts = emptyList(),
+                                accounts = credentialsUiState.accounts,
                                 onNavigateBack = { currentScreenMode = VaultScreenMode.CardDetail(mode.itemId) },
                                 onSaveCard = { nickname, bank, cardType, network, cardNumber, expiry, cardholderName, colour, notes, cvv, linkedAccountId, favourite ->
                                     credentialsViewModel.saveCard(mode.itemId, nickname, bank, null, cardType, network, cardNumber, expiry, cardholderName, colour, notes, cvv, linkedAccountId, favourite)
