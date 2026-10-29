@@ -70,7 +70,7 @@ class CoconutWidget : GlanceAppWidget() {
                         horizontalAlignment = Alignment.Horizontal.End
                     ) {
                         Text(
-                            text = "Coconut PFA",
+                            text = "Fortis",
                             style = TextStyle(
                                 color = GlanceTheme.colors.onSurface,
                                 fontSize = 14.sp,

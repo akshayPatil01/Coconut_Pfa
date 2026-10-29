@@ -22,6 +22,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Coconut_Pfa"
+rootProject.name = "Fortis"
 include(":app")
  

@@ -157,7 +157,7 @@ fun LockScreen(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Text(
-                    text = "Coconut PFA Locked",
+                    text = "Fortis Locked",
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onBackground
@@ -392,7 +392,7 @@ fun launchBiometricPrompt(
         )
 
         val promptInfo = BiometricPrompt.PromptInfo.Builder()
-            .setTitle("Unlock Coconut PFA")
+            .setTitle("Unlock Fortis")
             .setSubtitle("Use your biometric credential to unlock")
             .setNegativeButtonText("Use PIN")
             .build()

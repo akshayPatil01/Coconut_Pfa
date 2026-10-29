@@ -22,7 +22,7 @@ class BackupManagerTest {
 
         assertEquals(32, derivedKey.size)
 
-        val plaintext = "Hello Coconut PFA Backup & Restore!".toByteArray(Charsets.UTF_8)
+        val plaintext = "Hello Fortis Backup & Restore!".toByteArray(Charsets.UTF_8)
         val compressed = BackupCrypto.gzipCompress(plaintext)
         assertTrue(compressed.isNotEmpty())
 
@@ -34,7 +34,7 @@ class BackupManagerTest {
         val decompressed = BackupCrypto.gzipDecompress(decrypted)
         val result = String(decompressed, Charsets.UTF_8)
 
-        assertEquals("Hello Coconut PFA Backup & Restore!", result)
+        assertEquals("Hello Fortis Backup & Restore!", result)
     }
 
     @Test

@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <radialGradient id="bg-02" cx="50%" cy="30%" r="85%">
+      <stop offset="0%" stop-color="#0E244D" />
+      <stop offset="50%" stop-color="#081329" />
+      <stop offset="100%" stop-color="#02050D" />
+    </radialGradient>
+    <linearGradient id="vault-rim" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38BDF8" />
+      <stop offset="40%" stop-color="#0284C7" />
+      <stop offset="100%" stop-color="#075985" />
+    </linearGradient>
+    <linearGradient id="sapphire-glow" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" stop-color="#0369A1" />
+      <stop offset="50%" stop-color="#38BDF8" />
+      <stop offset="100%" stop-color="#E0F2FE" />
+    </linearGradient>
+    <filter id="shadow-02">
+      <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#000000" flood-opacity="0.85" />
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="115" fill="url(#bg-02)" />
+  <rect x="2" y="2" width="508" height="508" rx="113" fill="none" stroke="#0284C7" stroke-width="2" stroke-opacity="0.4" />
+  <circle cx="256" cy="256" r="140" fill="#0284C7" opacity="0.12" />
+  <!-- Outer Vault Gear Teeth -->
+  <g filter="url(#shadow-02)">
+    <circle cx="256" cy="256" r="168" fill="#091830" stroke="url(#vault-rim)" stroke-width="4" />
+  </g>
+  <!-- Vault Radial Dial Bolts (8 Security Interlocks) -->
+  <g fill="#38BDF8" opacity="0.85">
+    <circle cx="256" cy="116" r="8" />
+    <circle cx="355" cy="157" r="8" />
+    <circle cx="396" cy="256" r="8" />
+    <circle cx="355" cy="355" r="8" />
+    <circle cx="256" cy="396" r="8" />
+    <circle cx="157" cy="355" r="8" />
+    <circle cx="116" cy="256" r="8" />
+    <circle cx="157" cy="157" r="8" />
+  </g>
+  <!-- Inner Rotating Dial Ring -->
+  <circle cx="256" cy="256" r="126" fill="#061224" stroke="#0284C7" stroke-width="2" stroke-dasharray="6 8" />
+  <circle cx="256" cy="256" r="102" fill="#0C1D3A" stroke="#38BDF8" stroke-width="1.5" stroke-opacity="0.6" />
+  <!-- Central 3D Upward Compass Surge -->
+  <g filter="url(#shadow-02)">
+    <path d="M 256 142 L 314 274 L 256 244 L 198 274 Z" fill="url(#sapphire-glow)" stroke="#FFFFFF" stroke-width="1.5" />
+    <!-- Downward Anchor Fin -->
+    <path d="M 256 370 L 226 280 L 256 294 L 286 280 Z" fill="#0369A1" opacity="0.8" />
+  </g>
+  <!-- Center Safe Combination Hub -->
+  <circle cx="256" cy="256" r="32" fill="#03152B" stroke="#38BDF8" stroke-width="2.5" />
+  <circle cx="256" cy="256" r="14" fill="#FFFFFF" />
+  <!-- Specular Highlights -->
+  <path d="M 140 180 C 180 140 332 140 372 180" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-opacity="0.3" stroke-linecap="round" />
+</svg>

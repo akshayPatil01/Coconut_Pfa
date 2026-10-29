@@ -416,7 +416,7 @@ private fun OnboardingWelcomeStep(onRestoreClick: () -> Unit) {
             Text(text = "🥥", style = MaterialTheme.typography.displayMedium)
         }
         Spacer(modifier = Modifier.height(24.dp))
-        Text(text = "Welcome to Coconut PFA", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        Text(text = "Welcome to Fortis", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = "Your 100% offline & private Personal Finance Assistant. Zero cloud syncing, total financial sovereignty.",
@@ -484,7 +484,7 @@ private fun OnboardingSetPinStep(pin: String, onPinChange: (String) -> Unit) {
         Spacer(modifier = Modifier.height(6.dp))
 
         Text(
-            text = "Choose a 4-digit passcode to lock Coconut PFA",
+            text = "Choose a 4-digit passcode to lock Fortis",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -1024,7 +1024,7 @@ private fun OnboardingPermissionsStep(
         Icon(imageVector = Icons.Rounded.Shield, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(48.dp))
         Spacer(modifier = Modifier.height(16.dp))
         Text(text = "Permissions Overview", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        Text(text = "Coconut PFA stays 100% offline", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(text = "Fortis stays 100% offline", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(modifier = Modifier.height(20.dp))
 
         Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
@@ -1059,7 +1059,7 @@ private fun OnboardingDoneStep() {
         Text(text = "All Set!", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "Your Coconut PFA workspace is ready. Experience private, offline financial mastery.",
+            text = "Your Fortis workspace is ready. Experience private, offline financial mastery.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,

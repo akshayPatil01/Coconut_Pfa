@@ -10,7 +10,7 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Coconut PFA"
+        android:text="Fortis"
         android:textColor="#E6E1E5"
         android:textSize="16sp"
         android:textStyle="bold" />

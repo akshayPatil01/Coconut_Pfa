@@ -124,48 +124,32 @@ fun CoconutBottomBar(
 
                 // 3. Center Raised '+' Add Button
                 Box(
-                    modifier = Modifier.weight(1.2f),
+                    modifier = Modifier.weight(1f),
                     contentAlignment = Alignment.Center
                 ) {
-                    // Outer glow effect box
-                    Box(
+                    FloatingActionButton(
+                        onClick = onAddClick,
+                        shape = CircleShape,
+                        containerColor = Color.Transparent,
+                        elevation = FloatingActionButtonDefaults.elevation(
+                            defaultElevation = 0.dp,
+                            pressedElevation = 0.dp
+                        ),
                         modifier = Modifier
-                            .size(56.dp)
-                            .clip(CircleShape)
+                            .size(48.dp)
                             .background(
-                                Brush.linearGradient(
-                                    colors = listOf(
-                                        GradientOrangeCoralStart.copy(alpha = 0.35f),
-                                        GradientOrangeCoralEnd.copy(alpha = 0.35f)
-                                    )
-                                )
+                                brush = Brush.linearGradient(
+                                    colors = listOf(GradientOrangeCoralStart, GradientOrangeCoralEnd)
+                                ),
+                                shape = CircleShape
                             )
                     ) {
-                        FloatingActionButton(
-                            onClick = onAddClick,
-                            shape = CircleShape,
-                            containerColor = Color.Transparent,
-                            elevation = FloatingActionButtonDefaults.elevation(
-                                defaultElevation = 0.dp,
-                                pressedElevation = 0.dp
-                            ),
-                            modifier = Modifier
-                                .size(52.dp)
-                                .align(Alignment.Center)
-                                .background(
-                                    brush = Brush.linearGradient(
-                                        colors = listOf(GradientOrangeCoralStart, GradientOrangeCoralEnd)
-                                    ),
-                                    shape = CircleShape
-                                )
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Add,
-                                contentDescription = "Add Transaction",
-                                tint = Color.White,
-                                modifier = Modifier.size(28.dp)
-                            )
-                        }
+                        Icon(
+                            imageVector = Icons.Rounded.Add,
+                            contentDescription = "Add Transaction",
+                            tint = Color.White,
+                            modifier = Modifier.size(24.dp)
+                        )
                     }
                 }
 

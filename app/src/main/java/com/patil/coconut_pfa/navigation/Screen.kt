@@ -133,7 +133,7 @@ sealed interface Screen {
 
     @Serializable
     data object Onboarding : Screen {
-        override val title: String = "Welcome to Coconut PFA"
+        override val title: String = "Welcome to Fortis"
         override val subtitle: String = "Set up your personal finance manager"
     }
 

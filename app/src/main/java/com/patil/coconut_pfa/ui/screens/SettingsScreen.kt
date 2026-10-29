@@ -104,7 +104,7 @@ import com.patil.coconut_pfa.util.PrivacyManager
 import kotlinx.coroutines.launch
 
 /**
- * Main Settings Sections available in Coconut PFA
+ * Main Settings Sections available in Fortis
  */
 enum class SettingsSection(
     val title: String,
@@ -733,7 +733,7 @@ fun SettingsScreen(
                                                     }
                                                     Spacer(modifier = Modifier.height(4.dp))
                                                     Text(
-                                                        text = "Coconut PFA requires notification permission to alert you about bills due in N days, due today, and overdue payments.\n\nPrivacy Note: Payment amounts are NEVER included in notifications.",
+                                                        text = "Fortis requires notification permission to alert you about bills due in N days, due today, and overdue payments.\n\nPrivacy Note: Payment amounts are NEVER included in notifications.",
                                                         style = MaterialTheme.typography.bodySmall,
                                                         color = MaterialTheme.colorScheme.onErrorContainer
                                                     )
@@ -959,10 +959,10 @@ fun SettingsScreen(
 
                             SettingsSection.ABOUT -> {
                                 item {
-                                    SettingsCategoryCard(title = "About Coconut PFA", icon = Icons.Rounded.Info) {
+                                    SettingsCategoryCard(title = "About Fortis", icon = Icons.Rounded.Info) {
                                         Column(modifier = Modifier.padding(16.dp)) {
                                             Text(
-                                                text = "Coconut PFA v1.0.0",
+                                                text = "Fortis v1.0.0",
                                                 style = MaterialTheme.typography.titleMedium,
                                                 fontWeight = FontWeight.Bold
                                             )
@@ -1065,7 +1065,7 @@ fun SettingsScreen(
             title = { Text("Enable Bill Reminders", fontWeight = FontWeight.Bold) },
             text = {
                 Text(
-                    "Coconut PFA uses daily notifications at your set reminder time to alert you about upcoming bills, due today items, and overdue payments.\n\n" +
+                    "Fortis uses daily notifications at your set reminder time to alert you about upcoming bills, due today items, and overdue payments.\n\n" +
                             "Privacy Guarantee: For your complete privacy, notification text only displays the bill name and due date — NEVER the amount."
                 )
             },
@@ -1098,7 +1098,7 @@ fun SettingsScreen(
                 Text(
                     "Android has restricted SMS permissions for this app.\n\n" +
                             "To enable SMS auto-detection:\n" +
-                            "1. Open device App Info (Settings → Apps → Coconut PFA).\n" +
+                            "1. Open device App Info (Settings → Apps → Fortis).\n" +
                             "2. Tap the three dots (⋮) in the top-right corner.\n" +
                             "3. Select 'Allow restricted settings'.\n" +
                             "4. Return here and enable SMS Auto-Detection."
