@@ -144,6 +144,12 @@ sealed interface Screen {
     }
 
     @Serializable
+    data object WelcomeWorkflow : Screen {
+        override val title: String = "Welcome Workflow"
+        override val subtitle: String = "Preview the new welcome experience"
+    }
+
+    @Serializable
     data class Vault(val tab: VaultTab = VaultTab.CARDS) : Screen {
         override val title: String = if (tab == VaultTab.CARDS) "Vault Cards" else "Vault Credentials"
         override val subtitle: String = "Encrypted credentials & cards"

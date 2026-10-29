@@ -6,13 +6,13 @@ plugins {
 }
 
 android {
-    namespace = "com.patil.fortis_pfa"
+    namespace = "com.patil.coconut_pfa"
     compileSdk {
         version = release(37)
     }
 
     defaultConfig {
-        applicationId = "com.patil.fortis_pfa"
+        applicationId = "com.patil.coconut_pfa"
         minSdk = 35
         targetSdk = 37
         versionCode = 1

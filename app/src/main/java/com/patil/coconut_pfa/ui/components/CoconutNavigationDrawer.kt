@@ -17,6 +17,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.CallSplit
+import androidx.compose.material.icons.rounded.AutoAwesome
+
 import androidx.compose.material.icons.rounded.BarChart
 import androidx.compose.material.icons.rounded.Inbox
 import androidx.compose.material.icons.rounded.Lock
@@ -60,6 +62,12 @@ fun CoconutNavigationDrawer(
     modifier: Modifier = Modifier,
 ) {
     val drawerItems = listOf(
+        DrawerMenuItem(
+            screen = Screen.WelcomeWorkflow,
+            title = "Workflow",
+            icon = Icons.Rounded.AutoAwesome
+        ),
+
         DrawerMenuItem(
             screen = Screen.Vault(),
             title = "Coconut Vault",

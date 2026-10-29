@@ -1,0 +1,50 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="320dp"
+    android:height="340dp"
+    android:viewportWidth="320"
+    android:viewportHeight="340">
+
+    <!-- Hairline Contour Curves Behind Artwork -->
+    <path
+        android:strokeColor="#525660"
+        android:strokeWidth="1.2"
+        android:strokeAlpha="0.42"
+        android:pathData="M -15,200 C 60,215 120,270 200,215 C 255,178 300,235 345,230" />
+    <path
+        android:strokeColor="#525660"
+        android:strokeWidth="1.2"
+        android:strokeAlpha="0.42"
+        android:pathData="M -20,220 C 65,240 115,292 195,235 C 250,195 305,255 350,250" />
+    <path
+        android:strokeColor="#525660"
+        android:strokeWidth="1.2"
+        android:strokeAlpha="0.42"
+        android:pathData="M -25,242 C 55,260 110,310 190,255 C 245,215 310,270 355,268" />
+
+    <!-- Shape 1: Coral Salmon Petal (Top-Left) -->
+    <path
+        android:fillColor="#FF9190"
+        android:pathData="M 124,28 C 66,28 20,74 20,132 C 20,148 24,163 31,176 L 124,176 Z" />
+
+    <!-- Shape 2: Bold White Donut (Top-Right) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M 230,46 C 267.55,46 298,76.45 298,114 C 298,151.55 267.55,182 230,182 C 192.45,182 162,151.55 162,114 C 162,76.45 192.45,46 230,46 Z M 230,79 C 249.33,79 265,94.67 265,114 C 265,133.33 249.33,149 230,149 C 210.67,149 195,133.33 195,114 C 195,94.67 210.67,79 230,79 Z" />
+
+    <!-- Shape 3: Mint Donut (Mid-Left) -->
+    <path
+        android:fillColor="#88E5C9"
+        android:fillType="evenOdd"
+        android:pathData="M 82,202 C 117.35,202 146,230.65 146,266 C 146,301.35 117.35,330 82,330 C 46.65,330 18,301.35 18,266 C 18,230.65 46.65,202 82,202 Z M 82,232 C 100.78,232 116,247.22 116,266 C 116,284.78 100.78,300 82,300 C 63.22,300 48,284.78 48,266 C 48,247.22 63.22,232 82,232 Z" />
+
+    <!-- Shape 4: Warm Cream Pill (Center) -->
+    <path
+        android:fillColor="#FCE2AC"
+        android:pathData="M 172,202 C 188,202 202,216 202,232 L 202,320 C 202,329 195,336 186,336 L 180,336 C 171,336 164,329 164,320 L 164,210 C 164,205.6 167.6,202 172,202 Z" />
+
+    <!-- Shape 5: Mint Column (Mid-Right) -->
+    <path
+        android:fillColor="#7CE5C4"
+        android:pathData="M 218,250 C 218,233.4 231.4,220 248,220 L 274,220 C 290.6,220 304,233.4 304,250 L 304,354 C 304,372 289.4,386 272,386 L 250,386 C 232.3,386 218,371.7 218,354 Z" />
+</vector>

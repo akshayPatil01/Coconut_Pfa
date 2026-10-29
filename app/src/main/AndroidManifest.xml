@@ -18,7 +18,7 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.Fortis_Pfa">
+        android:theme="@style/Theme.Coconut_Pfa">
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -33,7 +33,7 @@
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
-            android:theme="@style/Theme.Fortis_Pfa"
+            android:theme="@style/Theme.Coconut_Pfa"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -53,14 +53,14 @@
         </receiver>
 
         <receiver
-            android:name=".widget.FortisWidgetReceiver"
+            android:name=".widget.CoconutWidgetReceiver"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
-                android:resource="@xml/fortis_widget_info" />
+                android:resource="@xml/coconut_widget_info" />
         </receiver>
     </application>
 

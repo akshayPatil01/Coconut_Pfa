@@ -74,6 +74,8 @@ import com.patil.coconut_pfa.ui.screens.SplitAndIOUsScreen
 import com.patil.coconut_pfa.ui.screens.SubscriptionsScreen
 import com.patil.coconut_pfa.ui.screens.TransactionsScreen
 import com.patil.coconut_pfa.ui.screens.TrashScreen
+import com.patil.coconut_pfa.ui.screens.WelcomeWorkflowScreen
+
 import com.patil.coconut_pfa.ui.viewmodel.AccountDetailViewModel
 import com.patil.coconut_pfa.ui.viewmodel.AccountsViewModel
 import com.patil.coconut_pfa.ui.viewmodel.AddAccountViewModel
@@ -643,6 +645,11 @@ fun CoconutApp(
                                 )
                             }
                             Screen.ParserTest -> ParserTestScreen(onNavigate = navigateTo, modifier = screenModifier)
+                            Screen.WelcomeWorkflow -> WelcomeWorkflowScreen(
+                                onNavigate = navigateTo,
+                                modifier = screenModifier
+                            )
+
                             Screen.Onboarding -> OnboardingScreen(
                                 onNavigate = navigateTo,
                                 onCompleteOnboarding = { pin, bio, day, b, c, ca, l, fd ->
@@ -717,6 +724,8 @@ private fun isTopLevelDestination(screen: Screen): Boolean = when (screen) {
     Screen.SplitAndIOUs,
     Screen.ReviewInbox,
     Screen.Settings,
+    Screen.WelcomeWorkflow,
+
     is Screen.Vault -> true
     else -> false
 }
