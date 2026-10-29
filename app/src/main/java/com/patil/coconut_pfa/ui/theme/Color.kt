@@ -15,7 +15,7 @@ val Emerald40 = Color(0xFF0D9488)
 val EmeraldPrimaryContainerLight = Color(0xFFCCFBF1)
 
 val SlateSecondary80 = Color(0xFFCBD5E1)
-val SlateSecondaryContainerDark = Color(0xFF334155)
+val SlateSecondaryContainerDark = Color(0xFF22262E)
 val SlateSecondary40 = Color(0xFF475569)
 val SlateSecondaryContainerLight = Color(0xFFE2E8F0)
 
@@ -44,13 +44,13 @@ val PastelCoral = Color(0xFFFECACA)
 val PastelSkyBlue = Color(0xFFBAE6FD)
 val PastelWarmAmber = Color(0xFFFDE68A)
 
-// Dark Theme Surfaces
-val DarkBackground = Color(0xFF0F172A) // Rich Slate Dark
-val DarkSurface = Color(0xFF1E293B)    // Card / Container Surface
-val DarkSurfaceVariant = Color(0xFF334155)
-val DarkOnBackground = Color(0xFFF8FAFC)
-val DarkOnSurface = Color(0xFFF1F5F9)
-val DarkOnSurfaceVariant = Color(0xFF94A3B8)
+// Dark Theme Surfaces (Deep Charcoal Black)
+val DarkBackground = Color(0xFF0C0E12) // Deep Midnight Charcoal
+val DarkSurface = Color(0xFF16191E)    // Elevated Dark Card Surface
+val DarkSurfaceVariant = Color(0xFF22262E)
+val DarkOnBackground = Color(0xFFF3F4F6)
+val DarkOnSurface = Color(0xFFE5E7EB)
+val DarkOnSurfaceVariant = Color(0xFF9CA3AF)
 
 // Light Theme Surfaces
 val LightBackground = Color(0xFFF8F9FA) // Slate Light updated to F8F9FA
@@ -67,5 +67,5 @@ val TransferBlue = Color(0xFF3B82F6)
 
 // Subtle Card Border Colors
 val LightCardBorder = Color(0xFFE2E8F0)
-val DarkCardBorder = Color(0xFF334155)
+val DarkCardBorder = Color(0xFF2B303A)
 

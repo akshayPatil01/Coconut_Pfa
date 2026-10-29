@@ -466,8 +466,13 @@ fun AddAccountScreen(
                     coroutineScope.launch {
                         val targetAccountId = accountId ?: UUID.randomUUID().toString()
                         val rawBal = ((openingBalanceText.toDoubleOrNull() ?: 0.0) * 100).toLong()
+                        val fdPrincipal = ((principalText.toDoubleOrNull() ?: 0.0) * 100).toLong()
+                        val investValue = ((investmentValueText.toDoubleOrNull() ?: 0.0) * 100).toLong()
+
                         val openingBal = when (selectedType) {
                             AccountType.CREDIT_CARD, AccountType.LOAN -> -abs(rawBal)
+                            AccountType.FIXED_DEPOSIT -> if (fdPrincipal > 0) fdPrincipal else abs(rawBal)
+                            AccountType.INVESTMENT -> if (investValue > 0) investValue else abs(rawBal)
                             else -> abs(rawBal)
                         }
 

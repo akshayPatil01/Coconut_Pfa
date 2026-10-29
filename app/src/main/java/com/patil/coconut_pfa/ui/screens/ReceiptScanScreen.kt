@@ -452,7 +452,7 @@ private fun parseReceiptText(text: String): ScannedReceiptData {
 
     // 3. Total amount
     var amountPaise = 0L
-    val amountRegex = Regex("\\b(?:[₹$€Rs.]\\s*)?(\\d{1,3}(?:,\\d{3})*|\\d+)(?:\\.(\\d{2}))?\\b")
+    val amountRegex = Regex("\\b(?:[₹$€Rs.]\\s*)?(\\d{1,3}(?:,\\d{2,3})+|\\d+)(?:\\.(\\d{1,2}))?\\b")
     val keywordRegex = Regex("total|grand total|amount payable|net amount|due|balance|sum", RegexOption.IGNORE_CASE)
     var foundKeywordAmount = false
 

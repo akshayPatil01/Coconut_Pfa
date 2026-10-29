@@ -6,8 +6,11 @@ import androidx.lifecycle.viewModelScope
 import com.patil.coconut_pfa.data.local.entity.AccountEntity
 import com.patil.coconut_pfa.data.local.entity.BillEntity
 import com.patil.coconut_pfa.data.local.entity.BillOccurrenceEntity
+import com.patil.coconut_pfa.data.local.entity.CardDetailsEntity
 import com.patil.coconut_pfa.data.local.entity.CardStatementEntity
 import com.patil.coconut_pfa.data.local.entity.CategoryEntity
+import com.patil.coconut_pfa.data.local.entity.FdDetailsEntity
+import com.patil.coconut_pfa.data.local.entity.LoanDetailsEntity
 import com.patil.coconut_pfa.data.local.entity.DbAccountType
 import com.patil.coconut_pfa.data.local.entity.DbBillKind
 import com.patil.coconut_pfa.data.local.entity.DbBillOccurrenceStatus
@@ -108,15 +111,29 @@ class HomeViewModel(
     private data class HomeAccountAndValuationsTuple(
         val accounts: List<AccountEntity>,
         val txns: List<TxnEntity>,
-        val valuations: List<ValuationEntity>
+        val valuations: List<ValuationEntity>,
+        val allCardDetails: List<CardDetailsEntity>,
+        val allLoanDetails: List<LoanDetailsEntity>,
+        val allFdDetails: List<FdDetailsEntity>
     )
 
+    @Suppress("UNCHECKED_CAST")
     private val accountDataFlow = combine(
         accountRepository.getAllAccounts(),
         transactionRepository.getAllActiveTransactions(),
-        accountRepository.getAllValuations()
-    ) { accounts, txns, valuations ->
-        HomeAccountAndValuationsTuple(accounts, txns, valuations)
+        accountRepository.getAllValuations(),
+        accountRepository.getAllCardDetails(),
+        accountRepository.getAllLoanDetails(),
+        accountRepository.getAllFdDetails()
+    ) { flows ->
+        HomeAccountAndValuationsTuple(
+            accounts = flows[0] as List<AccountEntity>,
+            txns = flows[1] as List<TxnEntity>,
+            valuations = flows[2] as List<ValuationEntity>,
+            allCardDetails = flows[3] as List<CardDetailsEntity>,
+            allLoanDetails = flows[4] as List<LoanDetailsEntity>,
+            allFdDetails = flows[5] as List<FdDetailsEntity>
+        )
     }
 
     private val baseDataFlow = combine(
@@ -125,7 +142,17 @@ class HomeViewModel(
         personLedgerRepository.getAllPersons(),
         personLedgerRepository.getAllLedgerEntries()
     ) { accTuple, snapshots, persons, ledgerEntries ->
-        HomeDataTuple(accTuple.accounts, accTuple.txns, accTuple.valuations, snapshots, persons, ledgerEntries)
+        HomeDataTuple(
+            accTuple.accounts,
+            accTuple.txns,
+            accTuple.valuations,
+            accTuple.allCardDetails,
+            accTuple.allLoanDetails,
+            accTuple.allFdDetails,
+            snapshots,
+            persons,
+            ledgerEntries
+        )
     }
 
     private val secondaryDataFlow = combine(
@@ -147,6 +174,9 @@ class HomeViewModel(
         val accounts = tuple1.accounts
         val txns = tuple1.txns
         val allValuations = tuple1.valuations
+        val allCardDetails = tuple1.allCardDetails
+        val allLoanDetails = tuple1.allLoanDetails
+        val allFdDetails = tuple1.allFdDetails
         val snapshots = tuple1.snapshots
         val persons = tuple1.persons
         val ledgerEntries = tuple1.ledgerEntries
@@ -159,9 +189,9 @@ class HomeViewModel(
 
         // Map domain accounts
         val domainAccounts = accounts.map { entity ->
-            val cardDetails = if (entity.type == DbAccountType.CREDIT_CARD) accountRepository.getCardDetails(entity.id) else null
-            val loanDetails = if (entity.type == DbAccountType.LOAN) accountRepository.getLoanDetails(entity.id) else null
-            val fdDetails = if (entity.type == DbAccountType.FD) accountRepository.getFdDetails(entity.id) else null
+            val cardDetails = if (entity.type == DbAccountType.CREDIT_CARD) allCardDetails.find { it.accountId == entity.id } else null
+            val loanDetails = if (entity.type == DbAccountType.LOAN) allLoanDetails.find { it.accountId == entity.id } else null
+            val fdDetails = if (entity.type == DbAccountType.FD) allFdDetails.find { it.accountId == entity.id } else null
             val valuations = allValuations.filter { it.accountId == entity.id }
             val accTxns = txns.filter { it.accountId == entity.id || it.toAccountId == entity.id }
 
@@ -367,6 +397,9 @@ class HomeViewModel(
         val accounts: List<AccountEntity>,
         val txns: List<TxnEntity>,
         val valuations: List<ValuationEntity>,
+        val allCardDetails: List<CardDetailsEntity>,
+        val allLoanDetails: List<LoanDetailsEntity>,
+        val allFdDetails: List<FdDetailsEntity>,
         val snapshots: List<NetWorthSnapshotEntity>,
         val persons: List<PersonEntity>,
         val ledgerEntries: List<LedgerEntryEntity>

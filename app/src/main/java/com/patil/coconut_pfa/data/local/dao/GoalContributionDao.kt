@@ -29,6 +29,9 @@ interface GoalContributionDao {
     @Delete
     suspend fun delete(contribution: GoalContributionEntity)
 
+    @Query("DELETE FROM goal_contributions WHERE id = :id")
+    suspend fun deleteById(id: String)
+
     @Query("DELETE FROM goal_contributions WHERE goalId = :goalId")
     suspend fun deleteByGoalId(goalId: String)
 }

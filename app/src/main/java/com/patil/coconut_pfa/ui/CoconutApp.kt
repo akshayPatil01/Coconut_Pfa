@@ -296,8 +296,12 @@ fun CoconutApp(
                     CoconutNavigationDrawer(
                         currentDestination = currentDestination,
                         onNavigate = { destination ->
-                            scope.launch { drawerState.close() }
-                            navigateTo(destination)
+                            scope.launch {
+                                drawerState.close()
+                                if (currentDestination != destination) {
+                                    navigateTo(destination)
+                                }
+                            }
                         }
                     )
                 },
@@ -334,19 +338,22 @@ fun CoconutApp(
                     AnimatedContent(
                         targetState = currentDestination,
                         transitionSpec = {
-                            val mainTabs = listOf(
-                                Screen.Home::class,
-                                Screen.Transactions::class,
-                                Screen.Payments::class,
-                                Screen.Accounts::class,
-                                Screen.Reports::class
-                            )
-                            val isTargetMain = mainTabs.any { it.isInstance(targetState) }
-                            val isInitialMain = mainTabs.any { it.isInstance(initialState) }
+                            val isInitialTopLevel = isTopLevelDestination(initialState)
+                            val isTargetTopLevel = isTopLevelDestination(targetState)
 
-                            if (isTargetMain && isInitialMain) {
-                                // Fast crossfade for main tab navigation
-                                fadeIn(animationSpec = tween(100)) togetherWith fadeOut(animationSpec = tween(80))
+                            if (isInitialTopLevel && isTargetTopLevel) {
+                                // Fast, smooth crossfade for top-level tab & sidebar navigation
+                                fadeIn(
+                                    animationSpec = tween(
+                                        180,
+                                        easing = androidx.compose.animation.core.FastOutSlowInEasing
+                                    )
+                                ) togetherWith fadeOut(
+                                    animationSpec = tween(
+                                        120,
+                                        easing = androidx.compose.animation.core.FastOutSlowInEasing
+                                    )
+                                )
                             } else {
                                 // Smooth horizontal slide for detail/editing screens
                                 (fadeIn(animationSpec = tween(180, easing = androidx.compose.animation.core.FastOutSlowInEasing)) + 
@@ -630,3 +637,18 @@ fun CoconutApp(
         }
     }
 }
+
+private fun isTopLevelDestination(screen: Screen): Boolean = when (screen) {
+    Screen.Home,
+    is Screen.Transactions,
+    Screen.Payments,
+    Screen.Accounts,
+    Screen.Reports,
+    Screen.Goals,
+    Screen.Subscriptions,
+    Screen.SplitAndIOUs,
+    Screen.ReviewInbox,
+    Screen.Settings -> true
+    else -> false
+}
+

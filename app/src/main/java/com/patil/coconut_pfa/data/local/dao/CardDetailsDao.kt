@@ -17,6 +17,9 @@ interface CardDetailsDao {
     @Query("SELECT * FROM card_details")
     suspend fun getAll(): List<CardDetailsEntity>
 
+    @Query("SELECT * FROM card_details")
+    fun getAllFlow(): Flow<List<CardDetailsEntity>>
+
     @Query("SELECT * FROM card_details WHERE accountId = :accountId")
     fun getByAccountIdFlow(accountId: String): Flow<CardDetailsEntity?>
 

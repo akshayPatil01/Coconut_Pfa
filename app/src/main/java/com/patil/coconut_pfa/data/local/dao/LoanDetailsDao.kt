@@ -17,6 +17,9 @@ interface LoanDetailsDao {
     @Query("SELECT * FROM loan_details")
     suspend fun getAll(): List<LoanDetailsEntity>
 
+    @Query("SELECT * FROM loan_details")
+    fun getAllFlow(): Flow<List<LoanDetailsEntity>>
+
     @Query("SELECT * FROM loan_details WHERE accountId = :accountId")
     fun getByAccountIdFlow(accountId: String): Flow<LoanDetailsEntity?>
 

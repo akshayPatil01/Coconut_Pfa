@@ -700,7 +700,7 @@ private fun processPdfUri(
 
 private fun parsePdfLinesToRows(lines: List<String>): List<List<String>> {
     val dateRegex = Regex("\\b\\d{1,2}[/\\-]\\d{1,2}[/\\-]\\d{2,4}\\b|\\b\\d{1,2}\\s+[A-Za-z]{3}\\s+\\d{2,4}\\b")
-    val amountRegex = Regex("\\b(?:[₹$€Rs.]\\s*)?\\d{1,3}(?:,\\d{3})*(?:\\.\\d{2})?\\b")
+    val amountRegex = Regex("\\b(?:[₹$€Rs.]\\s*)?(?:\\d{1,3}(?:,\\d{2,3})+|\\d+)(?:\\.\\d{1,2})?\\b")
 
     val rows = mutableListOf<List<String>>()
     for (line in lines) {

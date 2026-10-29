@@ -38,6 +38,7 @@ class AccountRepository(
 
     suspend fun getCardDetails(accountId: String): CardDetailsEntity? = cardDetailsDao.getByAccountId(accountId)
     fun getCardDetailsFlow(accountId: String): Flow<CardDetailsEntity?> = cardDetailsDao.getByAccountIdFlow(accountId)
+    fun getAllCardDetails(): Flow<List<CardDetailsEntity>> = cardDetailsDao.getAllFlow()
     suspend fun saveCardDetails(cardDetails: CardDetailsEntity) = cardDetailsDao.insert(cardDetails)
 
     fun getCardStatements(accountId: String): Flow<List<CardStatementEntity>> = cardStatementDao.getStatementsForAccountFlow(accountId)
@@ -45,10 +46,12 @@ class AccountRepository(
 
     suspend fun getLoanDetails(accountId: String): LoanDetailsEntity? = loanDetailsDao.getByAccountId(accountId)
     fun getLoanDetailsFlow(accountId: String): Flow<LoanDetailsEntity?> = loanDetailsDao.getByAccountIdFlow(accountId)
+    fun getAllLoanDetails(): Flow<List<LoanDetailsEntity>> = loanDetailsDao.getAllFlow()
     suspend fun saveLoanDetails(loanDetails: LoanDetailsEntity) = loanDetailsDao.insert(loanDetails)
 
     suspend fun getFdDetails(accountId: String): FdDetailsEntity? = fdDetailsDao.getByAccountId(accountId)
     fun getFdDetailsFlow(accountId: String): Flow<FdDetailsEntity?> = fdDetailsDao.getByAccountIdFlow(accountId)
+    fun getAllFdDetails(): Flow<List<FdDetailsEntity>> = fdDetailsDao.getAllFlow()
     suspend fun saveFdDetails(fdDetails: FdDetailsEntity) = fdDetailsDao.insert(fdDetails)
 
     fun getValuations(accountId: String): Flow<List<ValuationEntity>> = valuationDao.getValuationsForAccountFlow(accountId)

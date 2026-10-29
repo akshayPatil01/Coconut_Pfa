@@ -3,7 +3,10 @@ package com.patil.coconut_pfa.ui.screens
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -207,6 +210,13 @@ fun GoalsScreen(
                 goalToEdit = entity
                 selectedGoalForDetail = null
                 showAddGoalSheet = true
+            },
+            onDeleteContribution = { contributionId ->
+                viewModel?.deleteContribution(contributionId)
+                // Refresh local goal instance in detail bottom sheet
+                selectedGoalForDetail = selectedGoalForDetail?.copy(
+                    contributions = selectedGoalForDetail?.contributions?.filter { it.id != contributionId } ?: emptyList()
+                )
             }
         )
     }
@@ -477,7 +487,10 @@ private fun GoalCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Box(
                         modifier = Modifier
                             .size(40.dp)
@@ -493,11 +506,13 @@ private fun GoalCard(
                         )
                     }
                     Spacer(modifier = Modifier.width(12.dp))
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = goal.title,
                             style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Text(
                             text = goal.category,
@@ -516,11 +531,13 @@ private fun GoalCard(
                             modifier = Modifier.size(20.dp)
                         )
                     }
-                    Icon(
-                        imageVector = Icons.Rounded.ChevronRight,
-                        contentDescription = "Details",
-                        tint = MaterialTheme.colorScheme.outline
-                    )
+                    IconButton(onClick = onClick) {
+                        Icon(
+                            imageVector = Icons.Rounded.ChevronRight,
+                            contentDescription = "Details",
+                            tint = MaterialTheme.colorScheme.outline
+                        )
+                    }
                 }
             }
 
@@ -640,7 +657,8 @@ private fun GoalDetailBottomSheet(
     goal: Goal,
     onDismiss: () -> Unit,
     onAddContributionClick: () -> Unit,
-    onEditGoalClick: () -> Unit
+    onEditGoalClick: () -> Unit,
+    onDeleteContribution: (String) -> Unit = {}
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -659,11 +677,13 @@ private fun GoalDetailBottomSheet(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = goal.title,
                         style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Text(
                         text = "Target Date: ${goal.targetDate}",
@@ -671,11 +691,13 @@ private fun GoalDetailBottomSheet(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+                Spacer(modifier = Modifier.width(8.dp))
 
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     OutlinedButton(
                         onClick = onEditGoalClick,
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.Edit,
@@ -688,7 +710,8 @@ private fun GoalDetailBottomSheet(
 
                     Button(
                         onClick = onAddContributionClick,
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.Add,
@@ -776,7 +799,7 @@ private fun GoalDetailBottomSheet(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Column {
+                                Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         text = item.sourceAccountName,
                                         style = MaterialTheme.typography.bodyMedium,
@@ -789,12 +812,26 @@ private fun GoalDetailBottomSheet(
                                     )
                                 }
 
-                                AmountText(
-                                    amountInPaise = item.amountInPaise,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    AmountText(
+                                        amountInPaise = item.amountInPaise,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    IconButton(
+                                        onClick = { onDeleteContribution(item.id) },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Delete,
+                                            contentDescription = "Delete Contribution",
+                                            tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -909,17 +946,19 @@ private fun AddEditGoalBottomSheet(
                 label = "Target Date"
             )
 
-            // Category Choice Chips
+            // Category Choice Chips (Horizontal Scroll)
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
                     text = "Category",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                FlowRow(
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth()
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     GOAL_CATEGORY_OPTIONS.forEach { categoryName ->
                         val isSelected = selectedCategory == categoryName

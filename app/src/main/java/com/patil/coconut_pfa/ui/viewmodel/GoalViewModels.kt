@@ -171,6 +171,12 @@ class GoalsViewModel(
         }
     }
 
+    fun deleteContribution(contributionId: String) {
+        viewModelScope.launch {
+            goalRepository.deleteContributionById(contributionId)
+        }
+    }
+
     class Factory(
         private val goalRepository: GoalRepository,
         private val goalContributionDao: com.patil.coconut_pfa.data.local.dao.GoalContributionDao,

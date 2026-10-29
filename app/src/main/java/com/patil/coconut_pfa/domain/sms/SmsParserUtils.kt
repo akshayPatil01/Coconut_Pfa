@@ -115,7 +115,7 @@ object SmsParserUtils {
         return promoRegex.containsMatchIn(lower) || failedRegex.containsMatchIn(lower)
     }
 
-    private const val AMOUNT_PATTERN = """([0-9]{1,3}(?:,[0-9]{2,3})+(?:\.[0-9]+)?|[0-9]+(?:\.[0-9]+)?)"""
+    private const val AMOUNT_PATTERN = """((?:[0-9]{1,3}(?:,[0-9]{2,3})+|[0-9]+)(?:\.[0-9]+)?)"""
 
     fun extractAmount(body: String): Long? {
         // 1. Leading currency: Rs. 500, INR 1,200.50, ₹ 500

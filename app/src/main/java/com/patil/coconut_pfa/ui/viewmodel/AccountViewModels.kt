@@ -41,13 +41,19 @@ import java.util.UUID
 private data class AccountAndValuationsTuple(
     val accounts: List<AccountEntity>,
     val txns: List<TxnEntity>,
-    val valuations: List<ValuationEntity>
+    val valuations: List<ValuationEntity>,
+    val allCardDetails: List<CardDetailsEntity>,
+    val allLoanDetails: List<LoanDetailsEntity>,
+    val allFdDetails: List<FdDetailsEntity>
 )
 
 private data class AccountsDataTuple(
     val accounts: List<AccountEntity>,
     val txns: List<TxnEntity>,
     val valuations: List<ValuationEntity>,
+    val allCardDetails: List<CardDetailsEntity>,
+    val allLoanDetails: List<LoanDetailsEntity>,
+    val allFdDetails: List<FdDetailsEntity>,
     val snapshots: List<NetWorthSnapshotEntity>,
     val persons: List<PersonEntity>,
     val ledgerEntries: List<LedgerEntryEntity>
@@ -71,12 +77,23 @@ class AccountsViewModel(
     private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
+    @Suppress("UNCHECKED_CAST")
     private val accountDataFlow = combine(
         accountRepository.getAllAccounts(),
         transactionRepository.getAllActiveTransactions(),
-        accountRepository.getAllValuations()
-    ) { accounts, txns, valuations ->
-        AccountAndValuationsTuple(accounts, txns, valuations)
+        accountRepository.getAllValuations(),
+        accountRepository.getAllCardDetails(),
+        accountRepository.getAllLoanDetails(),
+        accountRepository.getAllFdDetails()
+    ) { flows ->
+        AccountAndValuationsTuple(
+            accounts = flows[0] as List<AccountEntity>,
+            txns = flows[1] as List<TxnEntity>,
+            valuations = flows[2] as List<ValuationEntity>,
+            allCardDetails = flows[3] as List<CardDetailsEntity>,
+            allLoanDetails = flows[4] as List<LoanDetailsEntity>,
+            allFdDetails = flows[5] as List<FdDetailsEntity>
+        )
     }
 
     private val baseDataFlow = combine(
@@ -85,7 +102,17 @@ class AccountsViewModel(
         personLedgerRepository.getAllPersons(),
         personLedgerRepository.getAllLedgerEntries()
     ) { accTuple, snapshots, persons, ledgerEntries ->
-        AccountsDataTuple(accTuple.accounts, accTuple.txns, accTuple.valuations, snapshots, persons, ledgerEntries)
+        AccountsDataTuple(
+            accTuple.accounts,
+            accTuple.txns,
+            accTuple.valuations,
+            accTuple.allCardDetails,
+            accTuple.allLoanDetails,
+            accTuple.allFdDetails,
+            snapshots,
+            persons,
+            ledgerEntries
+        )
     }
 
     val uiState: StateFlow<AccountsScreenUiState> = combine(
@@ -95,14 +122,17 @@ class AccountsViewModel(
         val accounts = tuple.accounts
         val txns = tuple.txns
         val allValuations = tuple.valuations
+        val allCardDetails = tuple.allCardDetails
+        val allLoanDetails = tuple.allLoanDetails
+        val allFdDetails = tuple.allFdDetails
         val snapshots = tuple.snapshots
         val persons = tuple.persons
         val ledgerEntries = tuple.ledgerEntries
 
         val domainAccounts = accounts.map { entity ->
-            val cardDetails = if (entity.type == DbAccountType.CREDIT_CARD) accountRepository.getCardDetails(entity.id) else null
-            val loanDetails = if (entity.type == DbAccountType.LOAN) accountRepository.getLoanDetails(entity.id) else null
-            val fdDetails = if (entity.type == DbAccountType.FD) accountRepository.getFdDetails(entity.id) else null
+            val cardDetails = if (entity.type == DbAccountType.CREDIT_CARD) allCardDetails.find { it.accountId == entity.id } else null
+            val loanDetails = if (entity.type == DbAccountType.LOAN) allLoanDetails.find { it.accountId == entity.id } else null
+            val fdDetails = if (entity.type == DbAccountType.FD) allFdDetails.find { it.accountId == entity.id } else null
             val valuations = allValuations.filter { it.accountId == entity.id }
             val accTxns = txns.filter { it.accountId == entity.id || it.toAccountId == entity.id }
 
