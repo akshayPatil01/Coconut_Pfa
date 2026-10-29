@@ -3,10 +3,17 @@ package com.patil.coconut_pfa.ui.screens
 import android.Manifest
 import android.os.Build
 import android.view.HapticFeedbackConstants
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -19,6 +26,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -55,9 +63,11 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CreditCard
 import androidx.compose.material.icons.rounded.Payments
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Face
 import androidx.compose.material.icons.rounded.Fingerprint
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.LockOpen
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.Sms
@@ -90,6 +100,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
@@ -120,6 +131,7 @@ import com.patil.coconut_pfa.data.local.entity.DbAccountType
 import com.patil.coconut_pfa.navigation.Screen
 import com.patil.coconut_pfa.ui.theme.PlusJakartaSans
 import com.patil.coconut_pfa.util.KolkataDateTimeUtils
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -162,7 +174,7 @@ fun WelcomeWorkflowScreen(
             2 -> Step3SalaryCycle(onBack = { currentStep = 1 }, onNext = { currentStep = 3 })
             3 -> Step4Accounts(onBack = { currentStep = 2 }, onNext = { currentStep = 4 })
             4 -> Step5Permissions(onBack = { currentStep = 3 }, onNext = { currentStep = 5 })
-            5 -> Step6AllSet(onNext = { onNavigate(Screen.Home) })
+            5 -> Step6AllSet(onBack = { currentStep = 4 }, onNext = { onNavigate(Screen.Home) })
         }
     }
 }
@@ -3372,81 +3384,551 @@ private fun Step5Permissions(onBack: () -> Unit, onNext: () -> Unit) {
     }
 }
 
-// ─── Step 6: All Set ─────────────────────────────────────────────────────────
+// ─── Step 6: All Set (Fortis Splash) ─────────────────────────────────────────
+
+private enum class AllSetUnlockState {
+    Idle,
+    Authenticating,
+    Success
+}
 
 @Composable
-private fun Step6AllSet(onNext: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.radialGradient(
-                    colors = listOf(MintTeal.copy(alpha = 0.18f), Obsidian),
-                    radius = 700f
-                )
-            ),
-        contentAlignment = Alignment.Center
+private fun SplashContourBackground(modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        val w = size.width
+        val h = size.height
+        val scaleX = w / 400f
+        val scaleY = h / 800f
+        val strokeW = 1.dp.toPx()
+        val strokeColor = Color(0xFF87948E)
+
+        // Curve 1 (dashed 3 4, opacity 0.25 * 0.4 = 0.10f)
+        val p1 = Path().apply {
+            moveTo(-80f * scaleX, 120f * scaleY)
+            cubicTo(
+                60f * scaleX, 140f * scaleY,
+                120f * scaleX, 40f * scaleY,
+                260f * scaleX, 100f * scaleY
+            )
+            cubicTo(
+                380f * scaleX, 150f * scaleY,
+                420f * scaleX, 80f * scaleY,
+                480f * scaleX, 110f * scaleY
+            )
+        }
+        drawPath(
+            path = p1,
+            color = strokeColor.copy(alpha = 0.15f),
+            style = Stroke(
+                width = strokeW,
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 8f), 0f)
+            )
+        )
+
+        // Curve 2 (solid, opacity 0.20 * 0.4 = 0.08f)
+        val p2 = Path().apply {
+            moveTo(-60f * scaleX, 280f * scaleY)
+            cubicTo(
+                80f * scaleX, 320f * scaleY,
+                180f * scaleX, 210f * scaleY,
+                320f * scaleX, 270f * scaleY
+            )
+            cubicTo(
+                420f * scaleX, 310f * scaleY,
+                460f * scaleX, 250f * scaleY,
+                520f * scaleX, 290f * scaleY
+            )
+        }
+        drawPath(
+            path = p2,
+            color = strokeColor.copy(alpha = 0.12f),
+            style = Stroke(width = strokeW)
+        )
+
+        // Curve 3 (dashed 4 6, opacity 0.20 * 0.4 = 0.08f)
+        val p3 = Path().apply {
+            moveTo(-100f * scaleX, 460f * scaleY)
+            cubicTo(
+                40f * scaleX, 430f * scaleY,
+                140f * scaleX, 520f * scaleY,
+                280f * scaleX, 470f * scaleY
+            )
+            cubicTo(
+                390f * scaleX, 430f * scaleY,
+                440f * scaleX, 500f * scaleY,
+                500f * scaleX, 480f * scaleY
+            )
+        }
+        drawPath(
+            path = p3,
+            color = strokeColor.copy(alpha = 0.12f),
+            style = Stroke(
+                width = strokeW,
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 10f), 0f)
+            )
+        )
+
+        // Curve 4 (solid, opacity 0.15 * 0.4 = 0.06f)
+        val p4 = Path().apply {
+            moveTo(-40f * scaleX, 640f * scaleY)
+            cubicTo(
+                100f * scaleX, 680f * scaleY,
+                200f * scaleX, 590f * scaleY,
+                340f * scaleX, 650f * scaleY
+            )
+            cubicTo(
+                440f * scaleX, 690f * scaleY,
+                480f * scaleX, 630f * scaleY,
+                540f * scaleX, 670f * scaleY
+            )
+        }
+        drawPath(
+            path = p4,
+            color = strokeColor.copy(alpha = 0.09f),
+            style = Stroke(width = strokeW)
+        )
+    }
+}
+
+@Composable
+fun FortisAllSetArtwork(
+    scaleFactor: Float = 1f,
+    modifier: Modifier = Modifier
+) {
+    Canvas(
+        modifier = modifier
+            .size(256.dp)
+            .graphicsLayer {
+                scaleX = scaleFactor
+                scaleY = scaleFactor
+            }
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier
-                .padding(horizontal = 32.dp)
-                .verticalScroll(rememberScrollState())
-        ) {
-            // Checkmark circle
-            Box(
-                modifier = Modifier
-                    .size(100.dp)
-                    .clip(CircleShape)
-                    .background(MintTeal.copy(alpha = 0.18f))
-                    .border(width = 3.dp, color = MintTeal, shape = CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Check,
-                    contentDescription = "Done",
-                    tint = MintTeal,
-                    modifier = Modifier.size(52.dp)
+        val w = size.width
+        val scale = w / 256f
+
+        // 1. Ambient soft mint glow behind center
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(
+                    Color(0xFFAFFE2).copy(alpha = 0.08f),
+                    Color.Transparent
+                ),
+                center = Offset(128f * scale, 128f * scale),
+                radius = 140f * scale
+            ),
+            radius = 140f * scale,
+            center = Offset(128f * scale, 128f * scale)
+        )
+
+        drawIntoCanvas { canvas ->
+            val nativeCanvas = canvas.nativeCanvas
+
+            // Shadow paint for Bauhaus shapes
+            val shadowPaint = android.graphics.Paint().apply {
+                isAntiAlias = true
+                style = android.graphics.Paint.Style.FILL
+                color = android.graphics.Color.BLACK
+                alpha = (0.42f * 255).toInt()
+                maskFilter = android.graphics.BlurMaskFilter(12f * scale, android.graphics.BlurMaskFilter.Blur.NORMAL)
+            }
+
+            val fillPaint = android.graphics.Paint().apply {
+                isAntiAlias = true
+                style = android.graphics.Paint.Style.FILL
+            }
+
+            // ─── SHAPE 1: Left Mint Capsule (rotated -12 deg) ───
+            val mintLeft = 24f * scale
+            val mintTop = 32f * scale
+            val mintWidth = 48f * scale
+            val mintHeight = 144f * scale
+            val mintCenterX = mintLeft + mintWidth / 2f
+            val mintCenterY = mintTop + mintHeight / 2f
+
+            // Shadow
+            nativeCanvas.save()
+            nativeCanvas.translate(0f, 10f * scale)
+            nativeCanvas.rotate(-12f, mintCenterX, mintCenterY)
+            nativeCanvas.drawRoundRect(
+                mintLeft, mintTop, mintLeft + mintWidth, mintTop + mintHeight,
+                mintWidth / 2f, mintWidth / 2f,
+                shadowPaint
+            )
+            nativeCanvas.restore()
+
+            // ─── SHAPE 2: Right Coral/Peach Arch (asymmetric rounded) ───
+            val coralLeft = 112f * scale
+            val coralTop = 24f * scale
+            val coralWidth = 112f * scale
+            val coralHeight = 144f * scale
+            val coralPath = android.graphics.Path().apply {
+                val radii = floatArrayOf(
+                    60f * scale, 60f * scale, // top-left
+                    60f * scale, 60f * scale, // top-right
+                    8f * scale, 8f * scale,   // bottom-right
+                    60f * scale, 60f * scale  // bottom-left
+                )
+                addRoundRect(
+                    android.graphics.RectF(coralLeft, coralTop, coralLeft + coralWidth, coralTop + coralHeight),
+                    radii,
+                    android.graphics.Path.Direction.CW
                 )
             }
 
-            Spacer(modifier = Modifier.height(36.dp))
+            // Shadow
+            nativeCanvas.save()
+            nativeCanvas.translate(0f, 12f * scale)
+            nativeCanvas.drawPath(coralPath, shadowPaint)
+            nativeCanvas.restore()
 
-            Text(
-                text = "You're all set!",
-                color = White,
-                fontWeight = FontWeight.ExtraBold,
-                fontSize = 32.sp,
-                textAlign = TextAlign.Center
+            // ─── SHAPE 3: Lower Left Cream Pill (with 2 dots) ───
+            val creamLeft = 64f * scale
+            val creamTop = 192f * scale
+            val creamWidth = 112f * scale
+            val creamHeight = 48f * scale
+
+            // Shadow
+            nativeCanvas.save()
+            nativeCanvas.translate(0f, 8f * scale)
+            nativeCanvas.drawRoundRect(
+                creamLeft, creamTop, creamLeft + creamWidth, creamTop + creamHeight,
+                creamHeight / 2f, creamHeight / 2f,
+                shadowPaint
+            )
+            nativeCanvas.restore()
+
+            // ─── SHAPE 4: Floating Accent Circles Shadows ───
+            val accentMintCx = (200f + 20f) * scale
+            val accentMintCy = (176f + 20f) * scale
+            val accentMintR = 20f * scale
+            nativeCanvas.save()
+            nativeCanvas.translate(0f, 6f * scale)
+            nativeCanvas.drawCircle(accentMintCx, accentMintCy, accentMintR, shadowPaint)
+            nativeCanvas.restore()
+
+            // ─── SHAPE 5: Center White Donut Shadow ───
+            val centerDonutCx = 128f * scale
+            val centerDonutCy = 128f * scale
+            val centerDonutR = 64f * scale
+            nativeCanvas.save()
+            nativeCanvas.translate(0f, 14f * scale)
+            nativeCanvas.drawCircle(centerDonutCx, centerDonutCy, centerDonutR, shadowPaint)
+            nativeCanvas.restore()
+
+            // ════════════════ DRAW VECTOR FILLS ════════════════
+
+            // 1. Fill Left Mint Capsule (#7CE5C4)
+            fillPaint.color = android.graphics.Color.parseColor("#7CE5C4")
+            nativeCanvas.save()
+            nativeCanvas.rotate(-12f, mintCenterX, mintCenterY)
+            nativeCanvas.drawRoundRect(
+                mintLeft, mintTop, mintLeft + mintWidth, mintTop + mintHeight,
+                mintWidth / 2f, mintWidth / 2f,
+                fillPaint
+            )
+            nativeCanvas.restore()
+
+            // 2. Fill Right Coral/Peach Arch (#FFB3AF)
+            fillPaint.color = android.graphics.Color.parseColor("#FFB3AF")
+            nativeCanvas.drawPath(coralPath, fillPaint)
+
+            // 3. Fill Cream Pill (#FAE0AA)
+            fillPaint.color = android.graphics.Color.parseColor("#FAE0AA")
+            nativeCanvas.drawRoundRect(
+                creamLeft, creamTop, creamLeft + creamWidth, creamTop + creamHeight,
+                creamHeight / 2f, creamHeight / 2f,
+                fillPaint
             )
 
-            Spacer(modifier = Modifier.height(14.dp))
+            // Cream Pill inner dots:
+            fillPaint.color = android.graphics.Color.parseColor("#0E0E10")
+            fillPaint.alpha = 255
+            nativeCanvas.drawCircle(78f * scale, 216f * scale, 6f * scale, fillPaint)
+            fillPaint.alpha = (0.40f * 255).toInt()
+            nativeCanvas.drawCircle(164f * scale, 216f * scale, 4f * scale, fillPaint)
 
-            Text(
-                text = "Your financial cockpit is ready.\nStart tracking your wealth.",
-                color = SubtleGray,
-                fontSize = 15.sp,
-                textAlign = TextAlign.Center,
-                lineHeight = 22.sp
-            )
+            // 4. Floating Accent Dots:
+            // - Mint circle (#70D9B9)
+            fillPaint.color = android.graphics.Color.parseColor("#70D9B9")
+            fillPaint.alpha = 255
+            nativeCanvas.drawCircle(accentMintCx, accentMintCy, accentMintR, fillPaint)
 
-            Spacer(modifier = Modifier.height(48.dp))
+            // - Upper Left dark grey dot (#353437)
+            fillPaint.color = android.graphics.Color.parseColor("#353437")
+            nativeCanvas.drawCircle(14f * scale, 86f * scale, 6f * scale, fillPaint)
 
-            PillButton(
-                text = "Open Fortis",
-                onClick = onNext,
-                modifier = Modifier.fillMaxWidth(0.75f)
-            )
+            // - Bottom Right subtle muted dot (#BDC9C3, 40% alpha)
+            fillPaint.color = android.graphics.Color.parseColor("#BDC9C3")
+            fillPaint.alpha = (0.40f * 255).toInt()
+            nativeCanvas.drawCircle(204f * scale, 244f * scale, 4f * scale, fillPaint)
 
-            Spacer(modifier = Modifier.height(20.dp))
+            // 5. Center Concentric Circle (On top of all layers)
+            // Outer white ring
+            fillPaint.color = android.graphics.Color.WHITE
+            fillPaint.alpha = 255
+            nativeCanvas.drawCircle(centerDonutCx, centerDonutCy, centerDonutR, fillPaint)
 
-            Text(
-                text = "This was just a preview of the Welcome Workflow",
-                color = SubtleGray.copy(alpha = 0.7f),
-                fontSize = 12.sp,
-                textAlign = TextAlign.Center,
-                fontStyle = FontStyle.Italic
-            )
+            // Middle dark circle
+            fillPaint.color = android.graphics.Color.parseColor("#0E0E10")
+            nativeCanvas.drawCircle(centerDonutCx, centerDonutCy, 32f * scale, fillPaint)
+
+            // Innermost mint pupil
+            fillPaint.color = android.graphics.Color.parseColor("#AAFFE2")
+            nativeCanvas.drawCircle(centerDonutCx, centerDonutCy, 12f * scale, fillPaint)
+        }
+    }
+}
+
+@Composable
+private fun Step6AllSet(
+    onNext: () -> Unit,
+    onBack: (() -> Unit)? = null
+) {
+    if (onBack != null) {
+        BackHandler(enabled = true) { onBack() }
+    }
+
+    var unlockState by remember { mutableStateOf(AllSetUnlockState.Idle) }
+    val coroutineScope = rememberCoroutineScope()
+    val view = LocalView.current
+
+    // Pulsing animation for the top green dot
+    val infiniteTransition = rememberInfiniteTransition(label = "pulseTransition")
+    val pulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 1.0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(900, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulseAlpha"
+    )
+
+    // Halo pulse animation for the unlock button
+    val haloScale by infiniteTransition.animateFloat(
+        initialValue = 1.0f,
+        targetValue = 1.55f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1300, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "haloScale"
+    )
+    val haloAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.5f,
+        targetValue = 0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1300, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "haloAlpha"
+    )
+
+    val artScale by animateFloatAsState(
+        targetValue = if (unlockState == AllSetUnlockState.Authenticating) 1.04f else 1.0f,
+        animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing),
+        label = "artScale"
+    )
+
+    fun triggerUnlock() {
+        if (unlockState != AllSetUnlockState.Idle) return
+        view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+        unlockState = AllSetUnlockState.Authenticating
+        coroutineScope.launch {
+            delay(500)
+            unlockState = AllSetUnlockState.Success
+            view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+            delay(400)
+            onNext()
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF131315))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) {
+                triggerUnlock()
+            }
+            .statusBarsPadding()
+            .navigationBarsPadding()
+    ) {
+        // Background wavy contour lines
+        SplashContourBackground(
+            modifier = Modifier.fillMaxSize()
+        )
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 24.dp, vertical = 20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            // ─── TOP BAR ───────────────────────────────────────
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Left: Glowing pulsing dot + FORTIS OS
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(7.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFFAFFE2).copy(alpha = pulseAlpha))
+                    )
+                    Text(
+                        text = "FORTIS OS",
+                        fontFamily = PlusJakartaSans,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 2.sp,
+                        color = Color(0xFFBDC9C3)
+                    )
+                }
+
+                // Right: Lock icon + v2.4
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Lock,
+                        contentDescription = null,
+                        tint = Color(0xFFBDC9C3),
+                        modifier = Modifier.size(15.dp)
+                    )
+                    Text(
+                        text = "v2.4",
+                        fontFamily = PlusJakartaSans,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 1.sp,
+                        color = Color(0xFFBDC9C3)
+                    )
+                }
+            }
+
+            // ─── CENTER HERO CONTENT ───────────────────────────
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                FortisAllSetArtwork(
+                    scaleFactor = artScale
+                )
+
+                Spacer(modifier = Modifier.height(32.dp))
+
+                Text(
+                    text = "Fortis",
+                    fontFamily = PlusJakartaSans,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 38.sp,
+                    letterSpacing = (-1.2).sp,
+                    color = Color(0xFFE5E1E4),
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = "PRIVATE WEALTH ENGINE",
+                    fontFamily = PlusJakartaSans,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 12.sp,
+                    letterSpacing = 1.8.sp,
+                    color = Color(0xFFBDC9C3),
+                    textAlign = TextAlign.Center
+                )
+            }
+
+            // ─── BOTTOM UNLOCK TRIGGER ─────────────────────────
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF2A2A2C))
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) {
+                            triggerUnlock()
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    // Pulsing halo ring (active when idle)
+                    if (unlockState == AllSetUnlockState.Idle) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer {
+                                    scaleX = haloScale
+                                    scaleY = haloScale
+                                    alpha = haloAlpha
+                                }
+                                .clip(CircleShape)
+                                .background(Color(0xFFAFFE2).copy(alpha = 0.25f))
+                        )
+                    }
+
+                    Icon(
+                        imageVector = if (unlockState != AllSetUnlockState.Idle) Icons.Rounded.LockOpen else Icons.Rounded.Face,
+                        contentDescription = "Unlock",
+                        tint = if (unlockState != AllSetUnlockState.Idle) Color(0xFFDCC490) else Color(0xFFAFFE2),
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) {
+                        triggerUnlock()
+                    }
+                ) {
+                    Text(
+                        text = when (unlockState) {
+                            AllSetUnlockState.Idle -> "TAP ANYWHERE TO UNLOCK"
+                            AllSetUnlockState.Authenticating -> "AUTHENTICATING..."
+                            AllSetUnlockState.Success -> "WELCOME BACK"
+                        },
+                        fontFamily = PlusJakartaSans,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 1.8.sp,
+                        color = Color(0xFFBDC9C3)
+                    )
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                        contentDescription = null,
+                        tint = Color(0xFFBDC9C3),
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+            }
         }
     }
 }
@@ -3481,4 +3963,10 @@ private fun Step4AccountsPreview() {
 @Composable
 private fun Step5PermissionsPreview() {
     Step5Permissions(onBack = {}, onNext = {})
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFF131315, device = "spec:width=390dp,height=844dp,dpi=460")
+@Composable
+private fun Step6AllSetPreview() {
+    Step6AllSet(onNext = {})
 }
