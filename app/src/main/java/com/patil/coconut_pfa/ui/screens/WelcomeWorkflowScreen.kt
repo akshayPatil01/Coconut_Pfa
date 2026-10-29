@@ -1,5 +1,6 @@
 package com.patil.coconut_pfa.ui.screens
 
+import android.view.HapticFeedbackConstants
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
@@ -12,10 +13,13 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -28,23 +32,34 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.automirrored.rounded.Backspace
+import androidx.compose.material.icons.rounded.CalendarToday
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Fingerprint
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -62,14 +77,21 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
@@ -81,6 +103,8 @@ import com.patil.coconut_pfa.data.local.datastore.UserSettingsDataStore
 import com.patil.coconut_pfa.navigation.Screen
 import com.patil.coconut_pfa.ui.theme.PlusJakartaSans
 import kotlinx.coroutines.launch
+import kotlin.math.abs
+import kotlin.math.roundToInt
 
 // ─── Design Tokens ───────────────────────────────────────────────────────────
 private val Obsidian = Color(0xFF0C0D0E)
@@ -828,103 +852,789 @@ private fun Step2Pin(onBack: () -> Unit, onNext: () -> Unit) {
 
 // ─── Step 3: Salary Cycle ────────────────────────────────────────────────────
 
+private enum class IncomeFrequency(val title: String) {
+    MONTHLY("Monthly"),
+    BI_WEEKLY("Bi-weekly"),
+    FREELANCE("Freelance")
+}
+
+private fun getOrdinalSuffix(day: Int): String {
+    return when {
+        day in 11..13 -> "th"
+        day % 10 == 1 -> "st"
+        day % 10 == 2 -> "nd"
+        day % 10 == 3 -> "rd"
+        else -> "th"
+    }
+}
+
+/**
+ * Creative Horizontal Payday Wheel Slider:
+ * - Big in the middle (~1.18x) and small at the edges (~0.74x).
+ * - Tactile mechanical clock tick haptic whenever a date moves across the center box.
+ * - Always keeps the middle date selected as the active payday.
+ * - Central Target Frame ("Middle Box") with top and bottom reticle alignment notches.
+ * - Precision calibrated tick marks moving in sync with the date reel.
+ * - Snapping so days settle squarely inside the middle box.
+ * - Tap any date to smoothly roll it directly into the center.
+ */
+@Composable
+private fun PaydayWheelSlider(
+    selectedDay: Int,
+    onDayChange: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val days = remember { (1..31).toList() }
+    val initialIndex = remember { (selectedDay - 1).coerceIn(0, days.size - 1) }
+    val lazyListState = rememberLazyListState(initialFirstVisibleItemIndex = initialIndex)
+    val snapFlingBehavior = rememberSnapFlingBehavior(lazyListState)
+    val coroutineScope = rememberCoroutineScope()
+    val view = LocalView.current
+    val haptic = LocalHapticFeedback.current
+
+    val itemWidth = 58.dp
+    val itemSpacing = 10.dp
+    val density = LocalDensity.current
+    val stepPx = with(density) { (itemWidth + itemSpacing).toPx() }
+
+    // Continuous scroll offset in fractional item units
+    val continuousPosition by remember {
+        derivedStateOf {
+            if (stepPx <= 0f) 0f
+            else lazyListState.firstVisibleItemIndex + (lazyListState.firstVisibleItemScrollOffset.toFloat() / stepPx)
+        }
+    }
+
+    // Centered index rounded to nearest day item
+    val centerIndex by remember {
+        derivedStateOf {
+            continuousPosition.roundToInt().coerceIn(0, days.size - 1)
+        }
+    }
+
+    // Trigger subtle tactile vibration whenever a new date crosses into the middle box
+    var lastHapticIndex by remember { mutableIntStateOf(initialIndex) }
+    LaunchedEffect(centerIndex) {
+        if (centerIndex != lastHapticIndex) {
+            lastHapticIndex = centerIndex
+            try {
+                view.performHapticFeedback(
+                    HapticFeedbackConstants.CLOCK_TICK,
+                    HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING
+                )
+            } catch (_: Exception) {
+                try {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                } catch (_: Exception) {}
+            }
+            onDayChange(days[centerIndex])
+        }
+    }
+
+    BoxWithConstraints(
+        modifier = modifier.fillMaxWidth(),
+        contentAlignment = Alignment.Center
+    ) {
+        val containerWidth = maxWidth
+        val horizontalPadding = (containerWidth - itemWidth) / 2
+
+        // 1. Center Target Frame ("Middle Box") - The target where the date is slotted
+        Box(
+            modifier = Modifier
+                .width(itemWidth + 12.dp)
+                .height(98.dp)
+                .clip(RoundedCornerShape(22.dp))
+                .background(MintTeal.copy(alpha = 0.12f))
+                .border(
+                    width = 1.5.dp,
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            MintTeal.copy(alpha = 0.85f),
+                            MintTeal.copy(alpha = 0.35f)
+                        )
+                    ),
+                    shape = RoundedCornerShape(22.dp)
+                )
+        )
+
+        // Top reticle pointer (▼) pointing into the middle box
+        Canvas(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 2.dp)
+                .size(width = 12.dp, height = 6.dp)
+        ) {
+            val trianglePath = Path().apply {
+                moveTo(0f, 0f)
+                lineTo(size.width, 0f)
+                lineTo(size.width / 2f, size.height)
+                close()
+            }
+            drawPath(trianglePath, MintTeal)
+        }
+
+        // Bottom reticle pointer (▲)
+        Canvas(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 2.dp)
+                .size(width = 12.dp, height = 6.dp)
+        ) {
+            val trianglePath = Path().apply {
+                moveTo(0f, size.height)
+                lineTo(size.width, size.height)
+                lineTo(size.width / 2f, 0f)
+                close()
+            }
+            drawPath(trianglePath, MintTeal)
+        }
+
+        // 2. Horizontal Reel with Snapping & Dynamic Scaling
+        LazyRow(
+            state = lazyListState,
+            flingBehavior = snapFlingBehavior,
+            contentPadding = PaddingValues(horizontal = horizontalPadding),
+            horizontalArrangement = Arrangement.spacedBy(itemSpacing),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(112.dp)
+        ) {
+            items(days.size) { index ->
+                val day = days[index]
+                val distance = abs(index - continuousPosition)
+
+                // Scale: Big in the middle (1.18f), dropping to 0.74f at edges
+                val scale = (1.18f - (distance * 0.16f)).coerceIn(0.74f, 1.18f)
+                // Opacity: 1f in the middle, drops down to 0.30f at the outer boundaries
+                val alpha = (1.0f - (distance * 0.22f)).coerceIn(0.30f, 1.0f)
+                // Highlight factor: 1f when centered (distance <= 0.65f), interpolating to 0f
+                val highlight = (1.0f - (distance / 0.65f)).coerceIn(0f, 1f)
+
+                Box(
+                    modifier = Modifier
+                        .graphicsLayer {
+                            scaleX = scale
+                            scaleY = scale
+                            this.alpha = alpha
+                        }
+                        .width(itemWidth)
+                        .height(84.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(if (highlight > 0.5f) MintTeal else Color.White)
+                        .border(
+                            width = if (highlight > 0.5f) 2.dp else 1.dp,
+                            color = if (highlight > 0.5f) Color.White else Color(0xFFE8EAED),
+                            shape = RoundedCornerShape(20.dp)
+                        )
+                        .clickable {
+                            coroutineScope.launch {
+                                lazyListState.animateScrollToItem(index)
+                            }
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = if (highlight > 0.5f) "PAYDAY" else "DAY",
+                            fontFamily = PlusJakartaSans,
+                            fontSize = 9.sp,
+                            fontWeight = if (highlight > 0.5f) FontWeight.ExtraBold else FontWeight.SemiBold,
+                            color = if (highlight > 0.5f) Color(0xFF00382B) else Color(0xFF8E95A0),
+                            letterSpacing = 0.6.sp
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = day.toString(),
+                            fontFamily = PlusJakartaSans,
+                            fontSize = if (highlight > 0.5f) 24.sp else 18.sp,
+                            fontWeight = if (highlight > 0.5f) FontWeight.Black else FontWeight.Bold,
+                            color = if (highlight > 0.5f) Color(0xFF00382B) else Color(0xFF131315),
+                            lineHeight = 24.sp
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    // 3. Precision Dial Ruler Track (synchronized with scroll reel)
+    Canvas(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(14.dp)
+            .padding(top = 2.dp)
+    ) {
+        val centerX = size.width / 2f
+        // Center anchor tick
+        drawLine(
+            color = MintTeal,
+            start = Offset(centerX, 0f),
+            end = Offset(centerX, size.height),
+            strokeWidth = 2.5.dp.toPx()
+        )
+        // Dynamic tick marks moving with continuous scroll position
+        val offsetFromNearest = (continuousPosition - continuousPosition.roundToInt()) * stepPx
+        for (i in -4..4) {
+            if (i == 0) continue
+            val tickX = centerX + (i * stepPx) - offsetFromNearest
+            if (tickX in 0f..size.width) {
+                val tickHeight = if (i % 2 == 0) size.height * 0.7f else size.height * 0.45f
+                drawLine(
+                    color = Color(0xFFD4D4D8),
+                    start = Offset(tickX, (size.height - tickHeight) / 2f),
+                    end = Offset(tickX, (size.height + tickHeight) / 2f),
+                    strokeWidth = 1.dp.toPx()
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun Step3SalaryCycle(onBack: () -> Unit, onNext: () -> Unit) {
-    var selectedDay by remember { mutableIntStateOf(25) }
-    val scrollState = rememberScrollState()
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    var selectedDay by remember { mutableIntStateOf(28) }
+    var selectedFrequency by remember { mutableStateOf(IncomeFrequency.MONTHLY) }
+    var expectedIncome by remember { mutableStateOf("4,500") }
+    var showInfoDialog by remember { mutableStateOf(false) }
+    var showIncomeDialog by remember { mutableStateOf(false) }
+
+    // Educational Info Dialog
+    if (showInfoDialog) {
+        AlertDialog(
+            onDismissRequest = { showInfoDialog = false },
+            title = {
+                Text(
+                    text = "Why Salary Cycle?",
+                    fontFamily = PlusJakartaSans,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF131315)
+                )
+            },
+            text = {
+                Text(
+                    text = "Fortis organizes your spending cycle, category budgets, and cash flow forecasts around your actual payday rather than arbitrary calendar months.\n\nThis keeps your Safe-to-Spend numbers accurate and prevents false overspend warnings right before payday.",
+                    fontFamily = PlusJakartaSans,
+                    fontSize = 13.sp,
+                    lineHeight = 20.sp,
+                    color = Color(0xFF666B72)
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showInfoDialog = false }) {
+                    Text(
+                        text = "Got it",
+                        fontFamily = PlusJakartaSans,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF131315)
+                    )
+                }
+            },
+            containerColor = Color.White,
+            shape = RoundedCornerShape(20.dp)
+        )
+    }
+
+    // Expected Income Edit Dialog
+    if (showIncomeDialog) {
+        var tempIncome by remember { mutableStateOf(expectedIncome) }
+        AlertDialog(
+            onDismissRequest = { showIncomeDialog = false },
+            title = {
+                Text(
+                    text = "Expected Monthly Income",
+                    fontFamily = PlusJakartaSans,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF131315)
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "Enter your estimated monthly net take-home salary:",
+                        fontFamily = PlusJakartaSans,
+                        fontSize = 13.sp,
+                        color = Color(0xFF666B72)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = tempIncome,
+                        onValueChange = { input ->
+                            tempIncome = input.filter { it.isDigit() || it == ',' }
+                        },
+                        label = { Text("Amount ($ / ₹)") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    expectedIncome = tempIncome.ifEmpty { "4,500" }
+                    showIncomeDialog = false
+                }) {
+                    Text(
+                        text = "Save",
+                        fontFamily = PlusJakartaSans,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF131315)
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showIncomeDialog = false }) {
+                    Text(
+                        text = "Cancel",
+                        fontFamily = PlusJakartaSans,
+                        color = Color(0xFF71717A)
+                    )
+                }
+            },
+            containerColor = Color.White,
+            shape = RoundedCornerShape(20.dp)
+        )
+    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(CardSurface)
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 28.dp, vertical = 32.dp),
+            .background(Color.White)
+            .statusBarsPadding()
+            .navigationBarsPadding(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                    contentDescription = "Back",
-                    tint = White
-                )
-            }
-            StepIndicator(total = 6, current = 2)
-            Spacer(modifier = Modifier.size(48.dp))
-        }
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        Text(
-            text = "When does your salary arrive?",
-            color = White,
-            fontWeight = FontWeight.Bold,
-            fontSize = 26.sp,
-            textAlign = TextAlign.Center
-        )
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        Text(
-            text = "We'll organize your spending cycle around this date.",
-            color = SubtleGray,
-            fontSize = 14.sp,
-            textAlign = TextAlign.Center,
-            lineHeight = 20.sp
-        )
-
-        Spacer(modifier = Modifier.height(36.dp))
-
-        // Horizontal day picker
-        Row(
+        // Scrollable Screen Content
+        Column(
             modifier = Modifier
+                .weight(1f)
                 .fillMaxWidth()
-                .horizontalScroll(scrollState),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            (1..31).forEach { day ->
-                val isSelected = day == selectedDay
+            // Header Row: Round Back Button, Step 3 Badge, Round Info Button
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 14.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Box(
                     modifier = Modifier
-                        .size(if (isSelected) 52.dp else 44.dp)
-                        .clip(RoundedCornerShape(if (isSelected) 26.dp else 22.dp))
-                        .background(if (isSelected) Cream else Obsidian)
-                        .clickable { selectedDay = day },
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(Color.White)
+                        .border(1.dp, Color(0xFFE4E4E7), CircleShape)
+                        .clickable { onBack() },
                     contentAlignment = Alignment.Center
                 ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                        contentDescription = "Back",
+                        tint = Color(0xFF27272A),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+
+                Row(
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(Color.White)
+                        .border(1.dp, Color(0xFFE8EAED), CircleShape)
+                        .padding(horizontal = 14.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF131315))
+                    )
                     Text(
-                        text = day.toString(),
-                        color = if (isSelected) Obsidian else SubtleGray,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                        fontSize = if (isSelected) 16.sp else 14.sp
+                        text = "STEP 3 OF 6",
+                        fontFamily = PlusJakartaSans,
+                        color = Color(0xFF131315).copy(alpha = 0.85f),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 0.6.sp
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(Color.White)
+                        .border(1.dp, Color(0xFFE4E4E7), CircleShape)
+                        .clickable { showInfoDialog = true },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Info,
+                        contentDescription = "Information",
+                        tint = Color(0xFF71717A),
+                        modifier = Modifier.size(18.dp)
                     )
                 }
             }
+
+            // Step Indicator Dots
+            StepIndicator(
+                total = 6,
+                current = 2,
+                activeColor = Color(0xFF18181B),
+                inactiveColor = Color(0xFFE4E4E7)
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Headline & Explainer Text
+            Text(
+                text = "Salary Cycle",
+                fontFamily = PlusJakartaSans,
+                color = Color(0xFF131315),
+                fontWeight = FontWeight.Bold,
+                fontSize = 28.sp,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Text(
+                text = "Calibrate your monthly budget & cash flow.",
+                fontFamily = PlusJakartaSans,
+                color = Color(0xFF71717A),
+                fontSize = 13.sp,
+                textAlign = TextAlign.Center,
+                lineHeight = 18.sp,
+                modifier = Modifier.padding(horizontal = 24.dp)
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // 1. Frequency Selector: Sleek Pill Switch
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+            ) {
+                Text(
+                    text = "INCOME FREQUENCY",
+                    fontFamily = PlusJakartaSans,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color(0xFF7C828A),
+                    letterSpacing = 0.8.sp
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color(0xFFECEEF2))
+                        .padding(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    IncomeFrequency.entries.forEach { freq ->
+                        val isSelected = selectedFrequency == freq
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(if (isSelected) Color(0xFF131315) else Color.Transparent)
+                                .clickable { selectedFrequency = freq }
+                                .padding(vertical = 10.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = freq.title,
+                                fontFamily = PlusJakartaSans,
+                                fontSize = 12.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isSelected) Color.White else Color(0xFF666B72)
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // 2. Payday Selector: Horizontal Slider with Center Middle Box & Dynamic Haptics
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "RECURRING PAYDAY",
+                        fontFamily = PlusJakartaSans,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF7C828A),
+                        letterSpacing = 0.8.sp
+                    )
+
+                    Row(
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(MintTeal.copy(alpha = 0.25f))
+                            .padding(horizontal = 10.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(5.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF006651))
+                        )
+                        Text(
+                            text = "${selectedDay}${getOrdinalSuffix(selectedDay)} of every month",
+                            fontFamily = PlusJakartaSans,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFF006651)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // The Horizontal Wheel Slider (edge-to-edge for smooth carousel sweep)
+                PaydayWheelSlider(
+                    selectedDay = selectedDay,
+                    onDayChange = { selectedDay = it }
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Dynamic Cycle Summary Card
+                val cycleEndDay = if (selectedDay == 1) 31 else selectedDay - 1
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color(0xFFF4F5F7))
+                        .border(1.dp, Color(0xFFE8EAED), RoundedCornerShape(16.dp))
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(CircleShape)
+                            .background(MintTeal.copy(alpha = 0.25f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.CalendarToday,
+                            contentDescription = null,
+                            tint = Color(0xFF006651),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Cycle runs from day $selectedDay to day $cycleEndDay",
+                            fontFamily = PlusJakartaSans,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 12.sp,
+                            color = Color(0xFF131315)
+                        )
+                        Text(
+                            text = "Budget limits reset every ${selectedDay}${getOrdinalSuffix(selectedDay)} of the month",
+                            fontFamily = PlusJakartaSans,
+                            fontSize = 11.sp,
+                            color = Color(0xFF71717A)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // 3. Expected Net Income: Prominent Light Input Card
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+                    .clip(RoundedCornerShape(22.dp))
+                    .background(Color.White)
+                    .border(1.dp, Color(0xFFE8EAED), RoundedCornerShape(22.dp))
+                    .clickable { showIncomeDialog = true }
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text(
+                        text = "EXPECTED NET INCOME",
+                        fontFamily = PlusJakartaSans,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF7C828A),
+                        letterSpacing = 0.8.sp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF006651))
+                        )
+                        Text(
+                            text = "Monthly take-home",
+                            fontFamily = PlusJakartaSans,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFF006651)
+                        )
+                    }
+                }
+
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color(0xFFF4F5F7))
+                        .border(1.dp, Color(0xFFE8EAED), RoundedCornerShape(16.dp))
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = "$$expectedIncome",
+                        fontFamily = PlusJakartaSans,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF131315)
+                    )
+                    Text(
+                        text = ".00",
+                        fontFamily = PlusJakartaSans,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFF8E95A0)
+                    )
+                    Spacer(modifier = Modifier.width(2.dp))
+                    Icon(
+                        imageVector = Icons.Rounded.Edit,
+                        contentDescription = "Edit income",
+                        tint = Color(0xFF8E95A0),
+                        modifier = Modifier.size(13.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        // Bottom CTA Footer with Black Button (matching 1st page dimensions, typography & vertical line)
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0f),
+                            Color.White.copy(alpha = 0.95f),
+                            Color.White
+                        )
+                    )
+                )
+                .padding(top = 8.dp, bottom = 16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // Primary Black Pill Button: Same style, dimensions, typography, and vertical line (32.dp) as 1st page
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 32.dp)
+                    .drawBehind {
+                        drawRoundRect(
+                            color = Color(0xFF131315).copy(alpha = 0.20f),
+                            topLeft = Offset(0f, 6.dp.toPx()),
+                            size = Size(size.width, size.height),
+                            cornerRadius = CornerRadius(size.height / 2f, size.height / 2f)
+                        )
+                    }
+                    .clip(RoundedCornerShape(percent = 50))
+                    .background(Color(0xFF131315))
+                    .clickable {
+                        coroutineScope.launch {
+                            try {
+                                UserSettingsDataStore(context).updateSalaryCycleStartDay(selectedDay)
+                            } catch (_: Exception) {}
+                        }
+                        onNext()
+                    }
+                    .padding(vertical = 17.dp, horizontal = 24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = "Continue",
+                        fontFamily = PlusJakartaSans,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                        letterSpacing = (-0.2).sp,
+                        color = Color.White
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
 
-        val nextDay = if (selectedDay == 1) 31 else selectedDay - 1
-        Text(
-            text = "Your cycle runs from day $selectedDay to day $nextDay of next month.",
-            color = MintTeal,
-            fontSize = 14.sp,
-            textAlign = TextAlign.Center,
-            lineHeight = 20.sp,
-            fontStyle = FontStyle.Italic
-        )
+            Spacer(modifier = Modifier.height(10.dp))
 
-        Spacer(modifier = Modifier.height(48.dp))
+            Text(
+                text = "Skip for now",
+                fontFamily = PlusJakartaSans,
+                color = Color(0xFF71717A),
+                fontSize = 13.sp,
+                textDecoration = TextDecoration.Underline,
+                modifier = Modifier
+                    .clickable { onNext() }
+                    .padding(vertical = 4.dp, horizontal = 12.dp)
+            )
 
-        PillButton(
-            text = "Set Cycle",
-            onClick = onNext,
-            modifier = Modifier.fillMaxWidth()
-        )
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // Home Indicator Bar
+            Box(
+                modifier = Modifier
+                    .width(134.dp)
+                    .height(4.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF131315).copy(alpha = 0.18f))
+            )
+        }
     }
 }
 
@@ -1251,4 +1961,10 @@ private fun Step1WelcomePreview() {
 @Composable
 private fun Step2PinPreview() {
     Step2Pin(onBack = {}, onNext = {})
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFFFFFFF, device = "spec:width=390dp,height=844dp,dpi=460")
+@Composable
+private fun Step3SalaryCyclePreview() {
+    Step3SalaryCycle(onBack = {}, onNext = {})
 }
