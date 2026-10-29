@@ -334,12 +334,11 @@ fun VaultMainScreen(
                                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                         Button(
                                             onClick = {
-                                                currentScreenMode = VaultScreenMode.CardList
-                                                credentialsViewModel.copyField(context, "Scanner", "Card scanner coming in Phase 16 Step 3")
+                                                currentScreenMode = VaultScreenMode.CardScan
                                             },
                                             modifier = Modifier.fillMaxWidth()
                                         ) {
-                                            Text("Scan Card (Placeholder)")
+                                            Text("Scan Card")
                                         }
                                         Button(
                                             onClick = {
@@ -356,6 +355,30 @@ fun VaultMainScreen(
                                     TextButton(onClick = { currentScreenMode = VaultScreenMode.CardList }) {
                                         Text("Cancel")
                                     }
+                                }
+                            )
+                        }
+                        is VaultScreenMode.CardScan -> {
+                            CardScanScreen(
+                                onNavigateBack = { currentScreenMode = VaultScreenMode.ChooseCardAddMethod },
+                                onCardScanned = { number, expiry, name ->
+                                    currentScreenMode = VaultScreenMode.CardAddScanned(number, expiry, name)
+                                }
+                            )
+                        }
+                        is VaultScreenMode.CardAddScanned -> {
+                            CardAddEditScreen(
+                                existingItem = null,
+                                existingMeta = null,
+                                existingSecret = null,
+                                initialNumber = mode.number,
+                                initialExpiry = mode.expiry,
+                                initialCardholderName = mode.name,
+                                accounts = credentialsUiState.accounts,
+                                onNavigateBack = { currentScreenMode = VaultScreenMode.ChooseCardAddMethod },
+                                onSaveCard = { nickname, bank, cardType, network, cardNumber, expiry, cardholderName, colour, notes, cvv, linkedAccountId, favourite ->
+                                    credentialsViewModel.saveCard(null, nickname, bank, null, cardType, network, cardNumber, expiry, cardholderName, colour, notes, cvv, linkedAccountId, favourite)
+                                    currentScreenMode = VaultScreenMode.CardList
                                 }
                             )
                         }
@@ -515,6 +538,8 @@ sealed interface VaultScreenMode {
     data object CardAdd : VaultScreenMode
     data class CardEdit(val itemId: String) : VaultScreenMode
     data object ChooseCardAddMethod : VaultScreenMode
+    data object CardScan : VaultScreenMode
+    data class CardAddScanned(val number: String, val expiry: String, val name: String) : VaultScreenMode
 }
 
 @Composable

@@ -8,6 +8,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -27,6 +29,9 @@ fun CardAddEditScreen(
     existingItem: VaultItem?,
     existingMeta: CardMeta?,
     existingSecret: CardSecret?,
+    initialNumber: String = "",
+    initialExpiry: String = "",
+    initialCardholderName: String = "",
     accounts: List<Account> = emptyList(),
     onNavigateBack: () -> Unit,
     onSaveCard: (
@@ -51,14 +56,21 @@ fun CardAddEditScreen(
     var bank by remember { mutableStateOf(existingMeta?.bank ?: "HDFC") }
     var cardType by remember { mutableStateOf(existingMeta?.cardType ?: CardType.CREDIT) }
     var network by remember { mutableStateOf(existingMeta?.network ?: CardNetwork.VISA) }
-    var cardNumber by remember { mutableStateOf(existingSecret?.number ?: "") }
-    var expiry by remember { mutableStateOf(existingMeta?.expiry ?: "") }
-    var cardholderName by remember { mutableStateOf(existingMeta?.cardholderName ?: "") }
+    var cardNumber by remember { mutableStateOf(existingSecret?.number ?: initialNumber) }
+    var expiry by remember { mutableStateOf(existingMeta?.expiry ?: initialExpiry) }
+    var cardholderName by remember { mutableStateOf(existingMeta?.cardholderName ?: initialCardholderName) }
     var colour by remember { mutableStateOf(existingMeta?.colour ?: "GRADIENT_1") }
     var notes by remember { mutableStateOf(existingMeta?.notes ?: "") }
     var cvv by remember { mutableStateOf(existingSecret?.cvv ?: "") }
     var linkedAccountId by remember { mutableStateOf(existingItem?.linkedAccountId) }
     var favourite by remember { mutableStateOf(existingItem?.favourite ?: false) }
+
+    val cvvFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(initialNumber) {
+        if (initialNumber.isNotBlank()) {
+            cvvFocusRequester.requestFocus()
+        }
+    }
 
     val detectedNetwork = remember(cardNumber) {
         CardRules.detectNetwork(cardNumber)
@@ -160,7 +172,9 @@ fun CardAddEditScreen(
                     label = { Text("CVV") },
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .focusRequester(cvvFocusRequester),
                     singleLine = true
                 )
             }
