@@ -1,0 +1,194 @@
+package com.patil.coconut_pfa.data.local.db
+
+import android.content.Context
+import androidx.room.Database
+import androidx.room.Room
+import androidx.room.RoomDatabase
+import androidx.room.TypeConverters
+import androidx.sqlite.db.SupportSQLiteDatabase
+import androidx.room.migration.Migration
+import com.patil.coconut_pfa.data.local.dao.AccountDao
+import com.patil.coconut_pfa.data.local.dao.BillDao
+import com.patil.coconut_pfa.data.local.dao.BillOccurrenceDao
+import com.patil.coconut_pfa.data.local.dao.CardDetailsDao
+import com.patil.coconut_pfa.data.local.dao.CardStatementDao
+import com.patil.coconut_pfa.data.local.dao.CategoryDao
+import com.patil.coconut_pfa.data.local.dao.FdDetailsDao
+import com.patil.coconut_pfa.data.local.dao.GoalContributionDao
+import com.patil.coconut_pfa.data.local.dao.GoalDao
+import com.patil.coconut_pfa.data.local.dao.LedgerEntryDao
+import com.patil.coconut_pfa.data.local.dao.LoanDetailsDao
+import com.patil.coconut_pfa.data.local.dao.MerchantMemoryDao
+import com.patil.coconut_pfa.data.local.dao.NetWorthSnapshotDao
+import com.patil.coconut_pfa.data.local.dao.PersonDao
+import com.patil.coconut_pfa.data.local.dao.SmsItemDao
+import com.patil.coconut_pfa.data.local.dao.TxnDao
+import com.patil.coconut_pfa.data.local.dao.ValuationDao
+import com.patil.coconut_pfa.data.local.dao.VaultItemDao
+import com.patil.coconut_pfa.data.local.dao.VaultKeysetDao
+import com.patil.coconut_pfa.data.local.entity.AccountEntity
+import com.patil.coconut_pfa.data.local.entity.BillEntity
+import com.patil.coconut_pfa.data.local.entity.BillOccurrenceEntity
+import com.patil.coconut_pfa.data.local.entity.CardDetailsEntity
+import com.patil.coconut_pfa.data.local.entity.CardStatementEntity
+import com.patil.coconut_pfa.data.local.entity.CategoryEntity
+import com.patil.coconut_pfa.data.local.entity.FdDetailsEntity
+import com.patil.coconut_pfa.data.local.entity.GoalContributionEntity
+import com.patil.coconut_pfa.data.local.entity.GoalEntity
+import com.patil.coconut_pfa.data.local.entity.LedgerEntryEntity
+import com.patil.coconut_pfa.data.local.entity.LoanDetailsEntity
+import com.patil.coconut_pfa.data.local.entity.MerchantMemoryEntity
+import com.patil.coconut_pfa.data.local.entity.NetWorthSnapshotEntity
+import com.patil.coconut_pfa.data.local.entity.PersonEntity
+import com.patil.coconut_pfa.data.local.entity.SmsItemEntity
+import com.patil.coconut_pfa.data.local.entity.TxnEntity
+import com.patil.coconut_pfa.data.local.entity.ValuationEntity
+import com.patil.coconut_pfa.data.local.entity.VaultItem
+import com.patil.coconut_pfa.data.local.entity.VaultKeyset
+import com.patil.coconut_pfa.data.local.security.PassphraseManager
+import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
+
+@Database(
+    entities = [
+        AccountEntity::class,
+        CardDetailsEntity::class,
+        CardStatementEntity::class,
+        LoanDetailsEntity::class,
+        FdDetailsEntity::class,
+        ValuationEntity::class,
+        CategoryEntity::class,
+        TxnEntity::class,
+        BillEntity::class,
+        BillOccurrenceEntity::class,
+        PersonEntity::class,
+        LedgerEntryEntity::class,
+        GoalEntity::class,
+        GoalContributionEntity::class,
+        SmsItemEntity::class,
+        MerchantMemoryEntity::class,
+        NetWorthSnapshotEntity::class,
+        VaultKeyset::class,
+        VaultItem::class
+    ],
+    version = 2,
+    exportSchema = false
+)
+@TypeConverters(Converters::class)
+abstract class CoconutDatabase : RoomDatabase() {
+
+    abstract fun accountDao(): AccountDao
+    abstract fun cardDetailsDao(): CardDetailsDao
+    abstract fun cardStatementDao(): CardStatementDao
+    abstract fun loanDetailsDao(): LoanDetailsDao
+    abstract fun fdDetailsDao(): FdDetailsDao
+    abstract fun valuationDao(): ValuationDao
+    abstract fun categoryDao(): CategoryDao
+    abstract fun txnDao(): TxnDao
+    abstract fun billDao(): BillDao
+    abstract fun billOccurrenceDao(): BillOccurrenceDao
+    abstract fun personDao(): PersonDao
+    abstract fun ledgerEntryDao(): LedgerEntryDao
+    abstract fun goalDao(): GoalDao
+    abstract fun goalContributionDao(): GoalContributionDao
+    abstract fun smsItemDao(): SmsItemDao
+    abstract fun merchantMemoryDao(): MerchantMemoryDao
+    abstract fun netWorthSnapshotDao(): NetWorthSnapshotDao
+    abstract fun vaultKeysetDao(): VaultKeysetDao
+    abstract fun vaultItemDao(): VaultItemDao
+
+    companion object {
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `vault_keysets` (
+                        `id` INTEGER NOT NULL PRIMARY KEY,
+                        `kdf` TEXT NOT NULL,
+                        `salt` BLOB NOT NULL,
+                        `memoryKiB` INTEGER NOT NULL,
+                        `iterations` INTEGER NOT NULL,
+                        `parallelism` INTEGER NOT NULL,
+                        `vkByMaster` BLOB NOT NULL,
+                        `vkByRecovery` BLOB NOT NULL,
+                        `recoverySalt` BLOB NOT NULL,
+                        `keyVersion` INTEGER NOT NULL,
+                        `createdAt` INTEGER NOT NULL,
+                        `masterChangedAt` INTEGER NOT NULL
+                    )
+                """.trimIndent())
+
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `vault_items` (
+                        `id` TEXT NOT NULL PRIMARY KEY,
+                        `type` TEXT NOT NULL,
+                        `metaBlob` BLOB NOT NULL,
+                        `secretBlob` BLOB NOT NULL,
+                        `favourite` INTEGER NOT NULL,
+                        `linkedAccountId` TEXT,
+                        `createdAt` INTEGER NOT NULL,
+                        `updatedAt` INTEGER NOT NULL,
+                        `lastUsedAt` INTEGER,
+                        `deletedAt` INTEGER,
+                        `keyVersion` INTEGER NOT NULL
+                    )
+                """.trimIndent())
+            }
+        }
+
+        @Volatile
+        private var INSTANCE: CoconutDatabase? = null
+
+        fun getInstance(context: Context): CoconutDatabase {
+            return INSTANCE ?: synchronized(this) {
+                INSTANCE ?: buildDatabase(context.applicationContext).also { INSTANCE = it }
+            }
+        }
+
+        private fun buildDatabase(context: Context): CoconutDatabase {
+            try {
+                System.loadLibrary("sqlcipher")
+            } catch (e: Throwable) {
+                e.printStackTrace()
+            }
+            val passphraseBytes = PassphraseManager.getOrCreatePassphrase(context)
+            val factory = SupportOpenHelperFactory(passphraseBytes)
+
+            return Room.databaseBuilder(
+                context,
+                CoconutDatabase::class.java,
+                "coconut.db"
+            )
+                .openHelperFactory(factory)
+                .addMigrations(MIGRATION_1_2)
+                .addCallback(object : Callback() {
+                    override fun onCreate(db: SupportSQLiteDatabase) {
+                        super.onCreate(db)
+                        db.beginTransaction()
+                        try {
+                            val stmt = db.compileStatement(
+                                "INSERT INTO categories (id, name, parentId, kind, icon, colour, isPreset, archived, sortOrder) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                            )
+                            for (category in CategoryPresets.presets) {
+                                stmt.clearBindings()
+                                stmt.bindString(1, category.id)
+                                stmt.bindString(2, category.name)
+                                if (category.parentId != null) stmt.bindString(3, category.parentId) else stmt.bindNull(3)
+                                stmt.bindString(4, category.kind.name)
+                                stmt.bindString(5, category.icon)
+                                stmt.bindLong(6, category.colour)
+                                stmt.bindLong(7, if (category.isPreset) 1L else 0L)
+                                stmt.bindLong(8, if (category.archived) 1L else 0L)
+                                stmt.bindLong(9, category.sortOrder.toLong())
+                                stmt.executeInsert()
+                            }
+                            db.setTransactionSuccessful()
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        } finally {
+                            db.endTransaction()
+                        }
+                    }
+                })
+                .build()
+        }
+    }
+}
