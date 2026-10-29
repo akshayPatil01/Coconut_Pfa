@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+    <!-- Deep Navy Royal Sapphire Background -->
+    <path
+        android:fillColor="#02050D"
+        android:pathData="M0,0h512v512h-512z" />
+    <path
+        android:fillColor="#081329"
+        android:pathData="M256,256m-220,0a220,220 0 1,1 440,0a220,220 0 1,1 -440,0" />
+    <path
+        android:fillColor="#0E244D"
+        android:pathData="M256,256m-160,0a160,160 0 1,1 320,0a160,160 0 1,1 -320,0" />
+</vector>
