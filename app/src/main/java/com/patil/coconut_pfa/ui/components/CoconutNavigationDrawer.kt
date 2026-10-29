@@ -71,7 +71,7 @@ fun CoconutNavigationDrawer(
         ),
         DrawerMenuItem(
             screen = Screen.SplitAndIOUs,
-            title = "Split & IOUs",
+            title = "Split",
             icon = Icons.AutoMirrored.Rounded.CallSplit
         ),
         DrawerMenuItem(

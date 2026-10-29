@@ -31,7 +31,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
@@ -41,7 +40,6 @@ import com.patil.coconut_pfa.ui.components.GradientFloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -58,7 +56,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -71,7 +72,11 @@ import com.patil.coconut_pfa.data.model.PersonIOU
 import com.patil.coconut_pfa.navigation.Screen
 import com.patil.coconut_pfa.ui.components.CoconutExposedDropdownMenu
 import com.patil.coconut_pfa.ui.components.AmountText
+import com.patil.coconut_pfa.ui.components.EmptyState
 import com.patil.coconut_pfa.ui.theme.Coconut_PfaTheme
+import com.patil.coconut_pfa.ui.theme.ExpenseRed
+import com.patil.coconut_pfa.ui.theme.GradientOrangeCoralStart
+import com.patil.coconut_pfa.ui.theme.IncomeGreen
 import com.patil.coconut_pfa.ui.viewmodel.SplitAndIOUsUiState
 import com.patil.coconut_pfa.ui.viewmodel.SplitAndIOUsViewModel
 import com.patil.coconut_pfa.util.MoneyFormatter
@@ -109,6 +114,7 @@ fun SplitAndIOUsScreen(
 
     var selectedPersonForLedger by remember { mutableStateOf<PersonIOU?>(null) }
     var selectedPersonForSettleUp by remember { mutableStateOf<PersonIOU?>(null) }
+    var selectedPersonForRecordIou by remember { mutableStateOf<PersonIOU?>(null) }
     var showAddPersonDialog by remember { mutableStateOf(false) }
 
     val totalOwesYou = uiState.totalOwesYouPaise
@@ -163,12 +169,25 @@ fun SplitAndIOUsScreen(
                 )
             }
 
-            items(peopleList, key = { it.id }) { person ->
-                PersonCard(
-                    person = person,
-                    onClick = { selectedPersonForLedger = person },
-                    onSettleUp = { selectedPersonForSettleUp = person }
-                )
+            if (peopleList.isEmpty()) {
+                item {
+                    EmptyState(
+                        title = "No Shared Expenses Yet",
+                        description = "Add people or log split transactions to keep track of shared balances and group expenses.",
+                        icon = Icons.AutoMirrored.Rounded.CallSplit,
+                        actionLabel = "Add Person",
+                        onActionClick = { showAddPersonDialog = true },
+                        modifier = Modifier.padding(vertical = 16.dp)
+                    )
+                }
+            } else {
+                items(peopleList, key = { it.id }) { person ->
+                    PersonCard(
+                        person = person,
+                        onClick = { selectedPersonForLedger = person },
+                        onSettleUp = { selectedPersonForSettleUp = person }
+                    )
+                }
             }
         }
     }
@@ -179,6 +198,10 @@ fun SplitAndIOUsScreen(
             onDismiss = { selectedPersonForLedger = null },
             onSettleUpClick = {
                 selectedPersonForSettleUp = person
+                selectedPersonForLedger = null
+            },
+            onRecordIouClick = {
+                selectedPersonForRecordIou = person
                 selectedPersonForLedger = null
             }
         )
@@ -213,92 +236,202 @@ private fun SplitOverviewCard(
     totalYouOwe: Long,
     modifier: Modifier = Modifier,
 ) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f)
+    val netBalance = totalOwesYou - totalYouOwe
+    val cardBgColor = Color(0xFF121518)
+    val innerCardBgColor = Color(0xFF1C2026)
+    val labelTextColor = Color(0xFF9EA3A8)
+    val primaryTextColor = Color.White
+
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .shadow(
+                elevation = 8.dp,
+                shape = RoundedCornerShape(28.dp),
+                ambientColor = Color.Black.copy(alpha = 0.5f)
+            ),
+        shape = RoundedCornerShape(28.dp),
+        color = cardBgColor,
+        border = BorderStroke(
+            width = 1.dp,
+            brush = Brush.horizontalGradient(
+                colors = listOf(
+                    Color(0xFF262A30),
+                    GradientOrangeCoralStart.copy(alpha = 0.35f),
+                    Color(0xFF262A30)
+                )
+            )
         )
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.secondary),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Rounded.CallSplit,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSecondary,
-                            modifier = Modifier.size(20.dp)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            Color(0xFF1B1E22),
+                            cardBgColor
                         )
-                    }
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text(
-                        text = "Split & IOUs Summary",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
                     )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                )
+        ) {
+            Column(
+                modifier = Modifier.padding(22.dp)
             ) {
-                Surface(
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(14.dp),
-                    color = Color(0xFFE8F5E9)
+                // Header Row: Split Overview & Icon
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF262A30)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.CallSplit,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
                         Text(
-                            text = "You are owed",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color(0xFF2E7D32),
-                            fontWeight = FontWeight.SemiBold
+                            text = "Split Overview",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Medium,
+                            color = labelTextColor
                         )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        AmountText(
-                            amountInPaise = totalOwesYou,
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF2E7D32)
+                    }
+
+                    // Net Status Badge
+                    val netBadgeText = when {
+                        netBalance > 0 -> "Owed +${MoneyFormatter.format(netBalance)}"
+                        netBalance < 0 -> "Owe ${MoneyFormatter.format(kotlin.math.abs(netBalance))}"
+                        else -> "Settled Up"
+                    }
+                    val netBadgeBg = when {
+                        netBalance > 0 -> Color(0xFF12392B)
+                        netBalance < 0 -> Color(0xFF3B181A)
+                        else -> Color(0xFF262A30)
+                    }
+                    val netBadgeFg = when {
+                        netBalance > 0 -> IncomeGreen
+                        netBalance < 0 -> ExpenseRed
+                        else -> labelTextColor
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = netBadgeBg
+                    ) {
+                        Text(
+                            text = netBadgeText,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = netBadgeFg,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
+                // Primary Net Position Display
+                Text(
+                    text = "Net Position",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = labelTextColor
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                AmountText(
+                    amountInPaise = kotlin.math.abs(netBalance),
+                    style = MaterialTheme.typography.displaySmall,
+                    fontWeight = FontWeight.Bold,
+                    color = if (netBalance >= 0) primaryTextColor else ExpenseRed
+                )
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // Inner Container with Owed to You & You Owe details
                 Surface(
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(14.dp),
-                    color = Color(0xFFFFEBEE)
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    color = innerCardBgColor
                 ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Text(
-                            text = "You owe",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color(0xFFC62828),
-                            fontWeight = FontWeight.SemiBold
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // People Owe You
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .background(IncomeGreen, CircleShape)
+                                )
+                                Text(
+                                    text = "People owe you",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = labelTextColor
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            AmountText(
+                                amountInPaise = totalOwesYou,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = IncomeGreen
+                            )
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .height(36.dp)
+                                .width(1.dp)
+                                .background(Color(0xFF2E343D))
                         )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        AmountText(
-                            amountInPaise = totalYouOwe,
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFFC62828)
-                        )
+
+                        // You Owe People
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(start = 16.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .background(ExpenseRed, CircleShape)
+                                )
+                                Text(
+                                    text = "You owe people",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = labelTextColor
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            AmountText(
+                                amountInPaise = totalYouOwe,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = ExpenseRed
+                            )
+                        }
                     }
                 }
             }
@@ -440,6 +573,7 @@ private fun PersonLedgerBottomSheet(
     person: PersonIOU,
     onDismiss: () -> Unit,
     onSettleUpClick: () -> Unit,
+    onRecordIouClick: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -471,12 +605,24 @@ private fun PersonLedgerBottomSheet(
                     )
                 }
 
-                if (person.netBalanceInPaise != 0L) {
-                    Button(
-                        onClick = onSettleUpClick,
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onRecordIouClick,
                         shape = RoundedCornerShape(12.dp)
                     ) {
-                        Text("Settle Up")
+                        Text("Record IOU")
+                    }
+
+                    if (person.netBalanceInPaise != 0L) {
+                        Button(
+                            onClick = onSettleUpClick,
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("Settle Up")
+                        }
                     }
                 }
             }

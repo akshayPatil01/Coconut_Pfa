@@ -67,7 +67,7 @@ sealed interface Screen {
 
     @Serializable
     data object SplitAndIOUs : Screen {
-        override val title: String = "Split & IOUs"
+        override val title: String = "Split"
         override val subtitle: String = "Shared balances and group expenses"
     }
 

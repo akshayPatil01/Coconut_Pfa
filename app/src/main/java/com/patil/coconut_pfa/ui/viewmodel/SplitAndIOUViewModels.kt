@@ -121,6 +121,7 @@ class SplitAndIOUsViewModel(
         personId: String,
         accountId: String,
         amountPaise: Long,
+        isSettlingYourDebt: Boolean = false,
         dateMillis: Long = System.currentTimeMillis()
     ) {
         if (amountPaise <= 0L) return
@@ -141,10 +142,12 @@ class SplitAndIOUsViewModel(
             )
             transactionRepository.saveTransaction(txn)
 
+            val ledgerAmt = if (isSettlingYourDebt) -amountPaise else amountPaise
+
             val entry = LedgerEntryEntity(
                 id = UUID.randomUUID().toString(),
                 personId = personId,
-                amountPaise = amountPaise,
+                amountPaise = ledgerAmt,
                 kind = DbLedgerEntryKind.SETTLEMENT,
                 date = dateStr,
                 note = "Settlement",

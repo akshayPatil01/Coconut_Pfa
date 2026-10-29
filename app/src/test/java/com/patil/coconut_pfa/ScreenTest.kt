@@ -29,7 +29,7 @@ class ScreenTest {
         assertEquals("Subscriptions", Screen.Subscriptions.title)
         assertEquals("Recurring plans and auto-debits", Screen.Subscriptions.subtitle)
 
-        assertEquals("Split & IOUs", Screen.SplitAndIOUs.title)
+        assertEquals("Split", Screen.SplitAndIOUs.title)
         assertEquals("Shared balances and group expenses", Screen.SplitAndIOUs.subtitle)
 
         assertEquals("Reports & Analytics", Screen.Reports.title)
