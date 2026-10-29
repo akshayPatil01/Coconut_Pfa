@@ -4,7 +4,7 @@ import java.security.SecureRandom
 
 object RecoveryCode {
     private const val ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
-    private const val INFO_STRING = "coconut-vault-recovery-v1"
+    private const val INFO_STRING = "fortis-vault-recovery-v1"
     private val random = SecureRandom()
 
     fun generateBytes(): ByteArray {

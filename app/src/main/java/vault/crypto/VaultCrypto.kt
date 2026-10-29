@@ -79,12 +79,12 @@ object VaultCrypto {
     }
 
     fun wrapKey(kek: ByteArray, vk: ByteArray, slot: Slot): ByteArray {
-        val aad = "coconut-vk-wrap-v1|${slot.name}".toByteArray(Charsets.UTF_8)
+        val aad = "fortis-vk-wrap-v1|${slot.name}".toByteArray(Charsets.UTF_8)
         return encrypt(kek, vk, aad)
     }
 
     fun unwrapKey(kek: ByteArray, blob: ByteArray, slot: Slot): ByteArray {
-        val aad = "coconut-vk-wrap-v1|${slot.name}".toByteArray(Charsets.UTF_8)
+        val aad = "fortis-vk-wrap-v1|${slot.name}".toByteArray(Charsets.UTF_8)
         return decrypt(kek, blob, aad)
     }
 }

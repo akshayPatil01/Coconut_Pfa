@@ -18,7 +18,7 @@ class VaultCryptoTest {
     @Test
     fun testEncryptDecryptRoundTrip() {
         val key = VaultCrypto.newKey()
-        val plaintext = "Hello Coconut Vault!".toByteArray(Charsets.UTF_8)
+        val plaintext = "Hello Fortis Vault!".toByteArray(Charsets.UTF_8)
         val aad = "user-123".toByteArray(Charsets.UTF_8)
 
         val blob = VaultCrypto.encrypt(key, plaintext, aad)

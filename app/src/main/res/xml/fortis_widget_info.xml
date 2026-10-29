@@ -6,4 +6,4 @@
     android:targetCellHeight="2"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"
-    android:initialLayout="@layout/coconut_widget_loading" />
+    android:initialLayout="@layout/fortis_widget_loading" />
