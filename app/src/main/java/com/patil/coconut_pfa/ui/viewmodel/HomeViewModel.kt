@@ -18,6 +18,7 @@ import com.patil.coconut_pfa.data.local.entity.NetWorthSnapshotEntity
 import com.patil.coconut_pfa.data.local.entity.PersonEntity
 import com.patil.coconut_pfa.data.local.entity.SmsItemEntity
 import com.patil.coconut_pfa.data.local.entity.TxnEntity
+import com.patil.coconut_pfa.data.local.entity.ValuationEntity
 import com.patil.coconut_pfa.data.model.Account
 import com.patil.coconut_pfa.data.model.AccountType
 import com.patil.coconut_pfa.data.model.BillKind
@@ -104,14 +105,27 @@ class HomeViewModel(
         }
     }
 
-    private val baseDataFlow = combine(
+    private data class HomeAccountAndValuationsTuple(
+        val accounts: List<AccountEntity>,
+        val txns: List<TxnEntity>,
+        val valuations: List<ValuationEntity>
+    )
+
+    private val accountDataFlow = combine(
         accountRepository.getAllAccounts(),
         transactionRepository.getAllActiveTransactions(),
+        accountRepository.getAllValuations()
+    ) { accounts, txns, valuations ->
+        HomeAccountAndValuationsTuple(accounts, txns, valuations)
+    }
+
+    private val baseDataFlow = combine(
+        accountDataFlow,
         netWorthRepository.getAllSnapshots(),
         personLedgerRepository.getAllPersons(),
         personLedgerRepository.getAllLedgerEntries()
-    ) { accounts, txns, snapshots, persons, ledgerEntries ->
-        HomeDataTuple(accounts, txns, snapshots, persons, ledgerEntries)
+    ) { accTuple, snapshots, persons, ledgerEntries ->
+        HomeDataTuple(accTuple.accounts, accTuple.txns, accTuple.valuations, snapshots, persons, ledgerEntries)
     }
 
     private val secondaryDataFlow = combine(
@@ -132,6 +146,7 @@ class HomeViewModel(
     ) { tuple1, tuple2, settings, isRefreshing ->
         val accounts = tuple1.accounts
         val txns = tuple1.txns
+        val allValuations = tuple1.valuations
         val snapshots = tuple1.snapshots
         val persons = tuple1.persons
         val ledgerEntries = tuple1.ledgerEntries
@@ -147,7 +162,7 @@ class HomeViewModel(
             val cardDetails = if (entity.type == DbAccountType.CREDIT_CARD) accountRepository.getCardDetails(entity.id) else null
             val loanDetails = if (entity.type == DbAccountType.LOAN) accountRepository.getLoanDetails(entity.id) else null
             val fdDetails = if (entity.type == DbAccountType.FD) accountRepository.getFdDetails(entity.id) else null
-            val valuations = accountRepository.getValuationsList(entity.id)
+            val valuations = allValuations.filter { it.accountId == entity.id }
             val accTxns = txns.filter { it.accountId == entity.id || it.toAccountId == entity.id }
 
             AccountDomainEngine.buildAccountModel(
@@ -351,6 +366,7 @@ class HomeViewModel(
     private data class HomeDataTuple(
         val accounts: List<AccountEntity>,
         val txns: List<TxnEntity>,
+        val valuations: List<ValuationEntity>,
         val snapshots: List<NetWorthSnapshotEntity>,
         val persons: List<PersonEntity>,
         val ledgerEntries: List<LedgerEntryEntity>

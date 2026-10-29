@@ -23,6 +23,9 @@ interface TxnDao {
     @Query("SELECT * FROM transactions WHERE (accountId = :accountId OR toAccountId = :accountId) AND deletedAt IS NULL ORDER BY occurredAt DESC")
     fun getTxnsForAccountFlow(accountId: String): Flow<List<TxnEntity>>
 
+    @Query("SELECT * FROM transactions WHERE (accountId = :accountId OR toAccountId = :accountId) AND deletedAt IS NULL ORDER BY occurredAt DESC")
+    suspend fun getTxnsForAccountList(accountId: String): List<TxnEntity>
+
     @Query("SELECT * FROM transactions WHERE deletedAt IS NOT NULL ORDER BY deletedAt DESC")
     fun getTrashTxnsFlow(): Flow<List<TxnEntity>>
 

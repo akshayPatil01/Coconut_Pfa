@@ -15,6 +15,7 @@ class TransactionRepository(
 ) {
     fun getAllActiveTransactions(): Flow<List<TxnEntity>> = txnDao.getAllActiveTxnsFlow()
     fun getTransactionsForAccount(accountId: String): Flow<List<TxnEntity>> = txnDao.getTxnsForAccountFlow(accountId)
+    suspend fun getTransactionsForAccountList(accountId: String): List<TxnEntity> = txnDao.getTxnsForAccountList(accountId)
     fun getTrashTransactions(): Flow<List<TxnEntity>> = txnDao.getTrashTxnsFlow()
     fun getDistinctPayees(): Flow<List<String>> = txnDao.getDistinctPayeesFlow()
     suspend fun getTransactionById(id: String): TxnEntity? = txnDao.getTxnById(id)

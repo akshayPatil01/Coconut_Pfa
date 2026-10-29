@@ -38,9 +38,16 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.util.UUID
 
+private data class AccountAndValuationsTuple(
+    val accounts: List<AccountEntity>,
+    val txns: List<TxnEntity>,
+    val valuations: List<ValuationEntity>
+)
+
 private data class AccountsDataTuple(
     val accounts: List<AccountEntity>,
     val txns: List<TxnEntity>,
+    val valuations: List<ValuationEntity>,
     val snapshots: List<NetWorthSnapshotEntity>,
     val persons: List<PersonEntity>,
     val ledgerEntries: List<LedgerEntryEntity>
@@ -64,14 +71,21 @@ class AccountsViewModel(
     private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
-    private val baseDataFlow = combine(
+    private val accountDataFlow = combine(
         accountRepository.getAllAccounts(),
         transactionRepository.getAllActiveTransactions(),
+        accountRepository.getAllValuations()
+    ) { accounts, txns, valuations ->
+        AccountAndValuationsTuple(accounts, txns, valuations)
+    }
+
+    private val baseDataFlow = combine(
+        accountDataFlow,
         netWorthRepository.getAllSnapshots(),
         personLedgerRepository.getAllPersons(),
         personLedgerRepository.getAllLedgerEntries()
-    ) { accounts, txns, snapshots, persons, ledgerEntries ->
-        AccountsDataTuple(accounts, txns, snapshots, persons, ledgerEntries)
+    ) { accTuple, snapshots, persons, ledgerEntries ->
+        AccountsDataTuple(accTuple.accounts, accTuple.txns, accTuple.valuations, snapshots, persons, ledgerEntries)
     }
 
     val uiState: StateFlow<AccountsScreenUiState> = combine(
@@ -80,6 +94,7 @@ class AccountsViewModel(
     ) { tuple, settings ->
         val accounts = tuple.accounts
         val txns = tuple.txns
+        val allValuations = tuple.valuations
         val snapshots = tuple.snapshots
         val persons = tuple.persons
         val ledgerEntries = tuple.ledgerEntries
@@ -88,7 +103,7 @@ class AccountsViewModel(
             val cardDetails = if (entity.type == DbAccountType.CREDIT_CARD) accountRepository.getCardDetails(entity.id) else null
             val loanDetails = if (entity.type == DbAccountType.LOAN) accountRepository.getLoanDetails(entity.id) else null
             val fdDetails = if (entity.type == DbAccountType.FD) accountRepository.getFdDetails(entity.id) else null
-            val valuations = accountRepository.getValuationsList(entity.id)
+            val valuations = allValuations.filter { it.accountId == entity.id }
             val accTxns = txns.filter { it.accountId == entity.id || it.toAccountId == entity.id }
 
             AccountDomainEngine.buildAccountModel(
@@ -221,15 +236,15 @@ class AccountDetailViewModel(
 
     val uiState: StateFlow<AccountDetailScreenUiState> = combine(
         accountRepository.getAccountByIdFlow(accountId),
-        transactionRepository.getTransactionsForAccount(accountId)
-    ) { entity, txns ->
+        transactionRepository.getTransactionsForAccount(accountId),
+        accountRepository.getValuations(accountId)
+    ) { entity, txns, valuations ->
         if (entity == null) {
             AccountDetailScreenUiState(isLoading = false)
         } else {
             val cardDetails = if (entity.type == DbAccountType.CREDIT_CARD) accountRepository.getCardDetails(entity.id) else null
             val loanDetails = if (entity.type == DbAccountType.LOAN) accountRepository.getLoanDetails(entity.id) else null
             val fdDetails = if (entity.type == DbAccountType.FD) accountRepository.getFdDetails(entity.id) else null
-            val valuations = accountRepository.getValuationsList(entity.id)
 
             val domainAccount = AccountDomainEngine.buildAccountModel(
                 entity = entity,
@@ -255,23 +270,38 @@ class AccountDetailViewModel(
     fun reconcileBalance(newRealBalancePaise: Long) {
         viewModelScope.launch {
             val entity = accountRepository.getAccountById(accountId) ?: return@launch
+            if (entity.type == DbAccountType.INVESTMENT || entity.type == DbAccountType.FD) {
+                updateInvestmentValue(newRealBalancePaise)
+                return@launch
+            }
+
             val cardDetails = if (entity.type == DbAccountType.CREDIT_CARD) accountRepository.getCardDetails(entity.id) else null
             val loanDetails = if (entity.type == DbAccountType.LOAN) accountRepository.getLoanDetails(entity.id) else null
-            val fdDetails = if (entity.type == DbAccountType.FD) accountRepository.getFdDetails(entity.id) else null
             val valuations = accountRepository.getValuationsList(entity.id)
-            val txns = transactionRepository.getTransactionById(accountId)?.let { listOf(it) } ?: emptyList()
+            val txns = transactionRepository.getTransactionsForAccountList(accountId)
 
             val currentAccount = AccountDomainEngine.buildAccountModel(
                 entity = entity,
                 cardDetails = cardDetails,
                 loanDetails = loanDetails,
-                fdDetails = fdDetails,
+                fdDetails = null,
                 valuations = valuations,
                 transactions = txns
             )
 
             val currentCalcBalance = currentAccount.balanceInPaise
-            val delta = newRealBalancePaise - currentCalcBalance
+            val isLiability = entity.type == DbAccountType.CREDIT_CARD || entity.type == DbAccountType.LOAN
+
+            var targetBalancePaise = newRealBalancePaise
+            if (isLiability && currentCalcBalance <= 0 && newRealBalancePaise > 0) {
+                targetBalancePaise = -newRealBalancePaise
+            }
+
+            val delta = if (isLiability) {
+                currentCalcBalance - targetBalancePaise
+            } else {
+                targetBalancePaise - currentCalcBalance
+            }
 
             if (delta != 0L) {
                 val adjustmentTxn = TxnEntity(

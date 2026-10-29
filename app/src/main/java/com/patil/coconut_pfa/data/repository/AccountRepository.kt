@@ -52,6 +52,7 @@ class AccountRepository(
     suspend fun saveFdDetails(fdDetails: FdDetailsEntity) = fdDetailsDao.insert(fdDetails)
 
     fun getValuations(accountId: String): Flow<List<ValuationEntity>> = valuationDao.getValuationsForAccountFlow(accountId)
+    fun getAllValuations(): Flow<List<ValuationEntity>> = valuationDao.getAllValuationsFlow()
     suspend fun getValuationsList(accountId: String): List<ValuationEntity> = valuationDao.getValuationsForAccount(accountId)
     suspend fun saveValuation(valuation: ValuationEntity) = valuationDao.insert(valuation)
 

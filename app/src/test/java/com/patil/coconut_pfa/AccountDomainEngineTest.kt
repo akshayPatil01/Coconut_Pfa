@@ -209,4 +209,41 @@ class AccountDomainEngineTest {
         assertEquals(5500000L, domainAccount.balanceInPaise)
         assertEquals(5500000L, domainAccount.currentValueInPaise)
     }
+
+    @Test
+    fun buildAccountModel_forInvestment_withMultipleValuations_picksLatestValuation() {
+        val invEntity = AccountEntity(
+            id = "acc_inv_2",
+            name = "Stocks Portfolio",
+            type = DbAccountType.INVESTMENT,
+            institution = DbAccountInstitution.OTHER,
+            openingBalancePaise = 10000000L, // ₹100,000
+            openingDate = "2024-01-01",
+            icon = "trending_up",
+            colour = 0xFF2E7D32L
+        )
+
+        val valuations = listOf(
+            ValuationEntity(
+                id = "val_old",
+                accountId = "acc_inv_2",
+                date = "2024-02-01",
+                valuePaise = 11000000L // ₹110,000
+            ),
+            ValuationEntity(
+                id = "val_new",
+                accountId = "acc_inv_2",
+                date = "2024-03-01",
+                valuePaise = 12500000L // ₹125,000
+            )
+        )
+
+        val domainAccount = AccountDomainEngine.buildAccountModel(
+            entity = invEntity,
+            valuations = valuations
+        )
+
+        assertEquals(12500000L, domainAccount.balanceInPaise)
+        assertEquals(12500000L, domainAccount.currentValueInPaise)
+    }
 }

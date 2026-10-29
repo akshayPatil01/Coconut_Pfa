@@ -14,6 +14,9 @@ interface ValuationDao {
     @Query("SELECT * FROM valuations WHERE accountId = :accountId ORDER BY date DESC")
     fun getValuationsForAccountFlow(accountId: String): Flow<List<ValuationEntity>>
 
+    @Query("SELECT * FROM valuations ORDER BY date DESC")
+    fun getAllValuationsFlow(): Flow<List<ValuationEntity>>
+
     @Query("SELECT * FROM valuations")
     suspend fun getAll(): List<ValuationEntity>
 
