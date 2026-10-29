@@ -102,6 +102,24 @@ class VaultRepository(
         itemDao.deleteItem(id)
     }
 
+    suspend fun softDeleteItem(id: String) {
+        if (VaultSession.isLocked) {
+            throw VaultLockedException("Vault is locked")
+        }
+        val item = itemDao.getItemById(id) ?: return
+        val updated = item.copy(deletedAt = System.currentTimeMillis(), updatedAt = System.currentTimeMillis())
+        itemDao.updateItem(updated)
+    }
+
+    suspend fun restoreItem(id: String) {
+        if (VaultSession.isLocked) {
+            throw VaultLockedException("Vault is locked")
+        }
+        val item = itemDao.getItemById(id) ?: return
+        val updated = item.copy(deletedAt = null, updatedAt = System.currentTimeMillis())
+        itemDao.updateItem(updated)
+    }
+
     suspend fun verifyMasterPassword(password: String): Boolean {
         val keyset = keysetDao.getKeyset() ?: return false
         val kdfParams = KdfParams(
