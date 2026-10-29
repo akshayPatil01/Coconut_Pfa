@@ -157,112 +157,33 @@ private fun AvailableBalanceCard(
     netWorthInPaise: Long,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(200.dp),
-        shape = RoundedCornerShape(24.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    brush = Brush.linearGradient(
-                        colors = listOf(GradientBlueCyanStart, GradientBlueCyanEnd)
-                    )
+    com.patil.coconut_pfa.ui.components.PaymentCardView(
+        bankName = null,
+        networkLogo = com.patil.coconut_pfa.domain.CardNetwork.MASTERCARD,
+        cardTypeLabel = "",
+        nickname = null,
+        numberText = "•••• •••• •••• 8635",
+        cardholderName = "Will Jonas",
+        expiry = "12/28",
+        colour = "blue",
+        modifier = modifier,
+        headerContent = {
+            Column {
+                Text(
+                    text = "Available Balance",
+                    color = Color.White.copy(alpha = 0.8f),
+                    style = MaterialTheme.typography.titleMedium
                 )
-                .padding(24.dp)
-        ) {
-            Column(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Top
-                ) {
-                    Column {
-                        Text(
-                            text = "Available Balance",
-                            color = Color.White.copy(alpha = 0.8f),
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        AmountText(
-                            amountInPaise = netWorthInPaise,
-                            style = MaterialTheme.typography.headlineLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                    }
-                    Icon(
-                        imageVector = Icons.Rounded.CreditCard,
-                        contentDescription = "Chip",
-                        tint = Color.White.copy(alpha = 0.8f),
-                        modifier = Modifier.size(32.dp)
-                    )
-                }
-
-                Column {
-                    Text(
-                        text = "•••• •••• •••• 8635",
-                        color = Color.White,
-                        style = MaterialTheme.typography.titleLarge,
-                        letterSpacing = 2.sp
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text(
-                                text = "VALID THRU",
-                                color = Color.White.copy(alpha = 0.5f),
-                                style = MaterialTheme.typography.labelSmall
-                            )
-                            Text(
-                                text = "12/28",
-                                color = Color.White,
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-                        Column {
-                            Text(
-                                text = "CARDHOLDER",
-                                color = Color.White.copy(alpha = 0.5f),
-                                style = MaterialTheme.typography.labelSmall
-                            )
-                            Text(
-                                text = "Will Jonas",
-                                color = Color.White,
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-                        // Mastercard/Visa Mock Icons
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(24.dp)
-                                    .background(Color.Red.copy(alpha = 0.8f), CircleShape)
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .size(24.dp)
-                                    .offset(x = (-12).dp)
-                                    .background(Color.Yellow.copy(alpha = 0.8f), CircleShape)
-                            )
-                        }
-                    }
-                }
+                Spacer(modifier = Modifier.height(4.dp))
+                AmountText(
+                    amountInPaise = netWorthInPaise,
+                    style = MaterialTheme.typography.headlineLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
             }
         }
-    }
+    )
 }
 
 @Composable

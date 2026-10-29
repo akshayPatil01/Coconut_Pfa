@@ -19,6 +19,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import java.util.UUID
+import com.patil.coconut_pfa.vault.PasswordHealthAnalyzer
+import com.patil.coconut_pfa.vault.PasswordHealthReport
 
 data class CredentialDisplayItem(
     val item: VaultItem,
@@ -28,6 +30,13 @@ data class CredentialDisplayItem(
     val type: VaultItemType,
     val favourite: Boolean,
     val lastUsedAt: Long?,
+    val updatedAt: Long,
+    val deletedAt: Long?
+)
+
+data class CardDisplayItem(
+    val item: VaultItem,
+    val meta: CardMeta,
     val updatedAt: Long,
     val deletedAt: Long?
 )
@@ -57,6 +66,8 @@ data class CredentialImportPreview(
 data class VaultCredentialsUiState(
     val items: List<CredentialDisplayItem> = emptyList(),
     val deletedItems: List<CredentialDisplayItem> = emptyList(),
+    val cards: List<CardDisplayItem> = emptyList(),
+    val deletedCards: List<CardDisplayItem> = emptyList(),
     val searchQuery: String = "",
     val activeFilter: CredentialFilter = CredentialFilter.ALL,
     val activeSort: CredentialSort = CredentialSort.NAME,
@@ -64,10 +75,15 @@ data class VaultCredentialsUiState(
     val selectedItemDetail: VaultItem? = null,
     val selectedItemMeta: Any? = null,
     val selectedItemSecret: Any? = null,
+    val selectedCardMeta: CardMeta? = null,
+    val selectedCardSecret: CardSecret? = null,
     val revealedFields: Map<String, Boolean> = emptyMap(),
     val snackbarMessage: String? = null,
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
+    val showHealthDialog: Boolean = false,
+    val healthReport: PasswordHealthReport? = null,
+    val showPasswordGenerator: Boolean = false,
     val showImportPreviewDialog: Boolean = false,
     val importPreviewData: CredentialImportPreview? = null,
     val importFileUri: android.net.Uri? = null,
@@ -91,6 +107,9 @@ class VaultCredentialsViewModel(
 
     private val _uiState = MutableStateFlow(VaultCredentialsUiState())
     val uiState: StateFlow<VaultCredentialsUiState> = _uiState.asStateFlow()
+
+    private val _generatedPassword = MutableStateFlow<String?>(null)
+    val generatedPassword: StateFlow<String?> = _generatedPassword.asStateFlow()
 
     private val revealJobs = mutableMapOf<String, Job>()
 
@@ -222,8 +241,10 @@ class VaultCredentialsViewModel(
                     _uiState.value = _uiState.value.copy(
                         selectedItemId = itemId,
                         selectedItemDetail = updatedItem,
-                        selectedItemMeta = metaObj,
-                        selectedItemSecret = secretObj,
+                        selectedItemMeta = if (item.type == VaultItemType.CARD) null else metaObj,
+                        selectedItemSecret = if (item.type == VaultItemType.CARD) null else secretObj,
+                        selectedCardMeta = if (item.type == VaultItemType.CARD) metaObj as? CardMeta else null,
+                        selectedCardSecret = if (item.type == VaultItemType.CARD) secretObj as? CardSecret else null,
                         revealedFields = emptyMap()
                     )
                 } catch (e: Exception) {
@@ -446,39 +467,41 @@ class VaultCredentialsViewModel(
 
     fun saveCard(
         id: String?,
-        title: String,
-        cardHolderName: String,
+        nickname: String,
+        bank: String,
+        bankCustom: String? = null,
+        cardType: com.patil.coconut_pfa.domain.CardType,
+        network: com.patil.coconut_pfa.domain.CardNetwork,
         cardNumber: String,
-        expiryMonth: String,
-        expiryYear: String,
-        cvv: String,
-        pin: String,
-        billingAddress: String,
-        phone: String,
+        expiry: String,
+        cardholderName: String,
+        colour: String,
         notes: String,
+        cvv: String,
+        linkedAccountId: String?,
         favourite: Boolean
     ) {
         viewModelScope.launch {
             val itemId = id ?: UUID.randomUUID().toString()
             val cleanNumber = cardNumber.filter { it.isDigit() }
             val last4 = if (cleanNumber.length >= 4) cleanNumber.takeLast(4) else cleanNumber
-            val network = CardRules.detectNetwork(cleanNumber).name
 
             val meta = CardMeta(
-                title = title,
-                cardHolderName = cardHolderName,
-                last4 = last4,
+                title = cardholderName.ifBlank { nickname.ifBlank { bank } },
+                nickname = nickname,
+                bank = bank,
+                bankCustom = bankCustom,
+                cardType = cardType,
                 network = network,
-                expiryMonth = expiryMonth,
-                expiryYear = expiryYear
+                last4 = last4,
+                expiry = expiry,
+                cardholderName = cardholderName,
+                colour = colour,
+                notes = notes
             )
             val secret = CardSecret(
-                cardNumber = cleanNumber,
-                cvv = cvv,
-                pin = pin,
-                billingAddress = billingAddress,
-                phone = phone,
-                notes = notes
+                number = cleanNumber,
+                cvv = cvv
             )
 
             vaultRepository.saveItem(
@@ -486,6 +509,7 @@ class VaultCredentialsViewModel(
                 metaJson = cardMetaAdapter.toJson(meta),
                 secretJson = cardSecretAdapter.toJson(secret),
                 id = itemId,
+                linkedAccountId = linkedAccountId,
                 favourite = favourite
             )
             selectItem(itemId)
@@ -496,6 +520,40 @@ class VaultCredentialsViewModel(
         val chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$!%*?&"
         val random = java.security.SecureRandom()
         return (1..16).map { chars[random.nextInt(chars.length)] }.joinToString("")
+    }
+
+    fun showPasswordGenerator() {
+        _uiState.value = _uiState.value.copy(showPasswordGenerator = true)
+    }
+
+    fun dismissPasswordGenerator() {
+        _uiState.value = _uiState.value.copy(showPasswordGenerator = false)
+    }
+
+    fun setGeneratedPassword(pwd: String) {
+        _generatedPassword.value = pwd
+        dismissPasswordGenerator()
+    }
+
+    fun clearGeneratedPassword() {
+        _generatedPassword.value = null
+    }
+
+    fun showHealthDialog(report: PasswordHealthReport) {
+        _uiState.value = _uiState.value.copy(showHealthDialog = true, healthReport = report)
+    }
+
+    fun dismissHealthDialog() {
+        _uiState.value = _uiState.value.copy(showHealthDialog = false, healthReport = null)
+    }
+
+    suspend fun computePasswordHealth(): PasswordHealthReport {
+        val rawItems = vaultRepository.getAllRawItems()
+        return PasswordHealthAnalyzer.analyze(
+            items = rawItems,
+            secretReader = { item -> kotlinx.coroutines.runBlocking { vaultRepository.readSecret(item) } },
+            metaReader = { item -> kotlinx.coroutines.runBlocking { vaultRepository.readMeta(item) } }
+        )
     }
 
     fun prepareCsvImport(context: Context, uri: android.net.Uri) {

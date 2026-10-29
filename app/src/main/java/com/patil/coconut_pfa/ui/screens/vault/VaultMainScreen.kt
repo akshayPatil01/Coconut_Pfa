@@ -13,8 +13,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.patil.coconut_pfa.data.local.entity.VaultItemType
 import com.patil.coconut_pfa.navigation.VaultTab
-import com.patil.coconut_pfa.ui.viewmodel.VaultCredentialsViewModel
-import com.patil.coconut_pfa.ui.viewmodel.VaultViewModel
+import com.patil.coconut_pfa.ui.viewmodel.*
+import kotlinx.coroutines.launch
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 
@@ -28,13 +28,15 @@ fun VaultMainScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     val credentialsUiState by credentialsViewModel.uiState.collectAsState()
+    val generatedPassword by credentialsViewModel.generatedPassword.collectAsState()
 
     var selectedTabIndex by remember { mutableIntStateOf(if (initialTab == VaultTab.CARDS) 0 else 1) }
     val tabs = listOf("Payment Cards", "Credentials & Logins")
 
-    var currentScreenMode by remember { mutableStateOf<VaultScreenMode>(VaultScreenMode.List) }
+    var currentScreenMode by remember { mutableStateOf<VaultScreenMode>(if (initialTab == VaultTab.CARDS) VaultScreenMode.CardList else VaultScreenMode.List) }
 
     val csvPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -49,6 +51,25 @@ fun VaultMainScreen(
             snackbarHostState.showSnackbar(msg)
             credentialsViewModel.clearSnackbar()
         }
+    }
+
+    if (credentialsUiState.showPasswordGenerator) {
+        PasswordGeneratorBottomSheet(
+            onDismiss = credentialsViewModel::dismissPasswordGenerator,
+            onUsePassword = { generated ->
+                credentialsViewModel.setGeneratedPassword(generated)
+            }
+        )
+    }
+
+    if (credentialsUiState.showHealthDialog && credentialsUiState.healthReport != null) {
+        PasswordHealthDialog(
+            report = credentialsUiState.healthReport!!,
+            onDismiss = credentialsViewModel::dismissHealthDialog,
+            onItemClick = { itemId ->
+                currentScreenMode = VaultScreenMode.Detail(itemId)
+            }
+        )
     }
 
     if (credentialsUiState.showImportPreviewDialog && credentialsUiState.importPreviewData != null) {
@@ -154,31 +175,54 @@ fun VaultMainScreen(
                                 contentDescription = "Import CSV Logins"
                             )
                         }
-                    }
-                    if (currentScreenMode is VaultScreenMode.List) {
+                        IconButton(onClick = {
+                            scope.launch {
+                                val report = credentialsViewModel.computePasswordHealth()
+                                credentialsViewModel.showHealthDialog(report)
+                            }
+                        }) {
+                            Icon(
+                                imageVector = Icons.Rounded.Security,
+                                contentDescription = "Password Health Check"
+                            )
+                        }
+                        IconButton(onClick = credentialsViewModel::showPasswordGenerator) {
+                            Icon(
+                                imageVector = Icons.Rounded.VpnKey,
+                                contentDescription = "Password Generator"
+                            )
+                        }
                         IconButton(onClick = { currentScreenMode = VaultScreenMode.RecentlyDeleted }) {
-                            Icon(imageVector = Icons.Rounded.DeleteOutline, contentDescription = "Recently Deleted")
+                            Icon(
+                                imageVector = Icons.Rounded.DeleteOutline,
+                                contentDescription = "Recently Deleted"
+                            )
                         }
                     }
                     IconButton(onClick = { vaultViewModel.lockVault(context) }) {
-                        Icon(imageVector = Icons.Rounded.Lock, contentDescription = "Lock Vault", tint = MaterialTheme.colorScheme.primary)
+                        Icon(
+                            imageVector = Icons.Rounded.Lock,
+                            contentDescription = "Lock Vault",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
                     }
                 }
             )
         },
         floatingActionButton = {
-            if (currentScreenMode is VaultScreenMode.List) {
+            if (selectedTabIndex == 0 && (currentScreenMode is VaultScreenMode.CardList || currentScreenMode is VaultScreenMode.List)) {
                 FloatingActionButton(
-                    onClick = {
-                        if (selectedTabIndex == 0) {
-                            currentScreenMode = VaultScreenMode.AddCard
-                        } else {
-                            currentScreenMode = VaultScreenMode.ChooseTypeForAdd
-                        }
-                    },
+                    onClick = { currentScreenMode = VaultScreenMode.ChooseCardAddMethod },
                     containerColor = MaterialTheme.colorScheme.primary
                 ) {
-                    Icon(imageVector = Icons.Rounded.Add, contentDescription = "Add")
+                    Icon(imageVector = Icons.Rounded.Add, contentDescription = "Add Card")
+                }
+            } else if (selectedTabIndex == 1 && currentScreenMode is VaultScreenMode.List) {
+                FloatingActionButton(
+                    onClick = { currentScreenMode = VaultScreenMode.ChooseTypeForAdd },
+                    containerColor = MaterialTheme.colorScheme.primary
+                ) {
+                    Icon(imageVector = Icons.Rounded.Add, contentDescription = "Add Credential")
                 }
             }
         },
@@ -199,7 +243,7 @@ fun VaultMainScreen(
                         selected = selectedTabIndex == index,
                         onClick = {
                             selectedTabIndex = index
-                            currentScreenMode = VaultScreenMode.List
+                            currentScreenMode = if (index == 0) VaultScreenMode.CardList else VaultScreenMode.List
                             vaultViewModel.updateLastTouchTime()
                         },
                         text = {
@@ -215,18 +259,16 @@ fun VaultMainScreen(
             Box(modifier = Modifier.weight(1f)) {
                 if (selectedTabIndex == 0) {
                     when (val mode = currentScreenMode) {
-                        is VaultScreenMode.List -> {
+                        is VaultScreenMode.CardList, is VaultScreenMode.List -> {
                             CardsListTab(
-                                uiState = credentialsUiState,
-                                onSearchQueryChanged = credentialsViewModel::setSearchQuery,
-                                onItemClick = { itemId ->
+                                cards = credentialsUiState.cards,
+                                onCardClick = { itemId ->
                                     credentialsViewModel.selectItem(itemId)
                                     currentScreenMode = VaultScreenMode.CardDetail(itemId)
                                 },
-                                onCopyCardNumber = { num -> credentialsViewModel.copyField(context, "Card Number", num) },
-                                onCopyCvv = { cvv -> credentialsViewModel.copyField(context, "CVV", cvv) },
-                                onToggleFavourite = credentialsViewModel::toggleFavourite,
-                                onAddCardClick = { currentScreenMode = VaultScreenMode.AddCard }
+                                onAddCardClick = {
+                                    currentScreenMode = VaultScreenMode.ChooseCardAddMethod
+                                }
                             )
                         }
                         is VaultScreenMode.CardDetail -> {
@@ -234,74 +276,95 @@ fun VaultMainScreen(
                                 uiState = credentialsUiState,
                                 onNavigateBack = {
                                     credentialsViewModel.selectItem(null)
-                                    currentScreenMode = VaultScreenMode.List
+                                    currentScreenMode = VaultScreenMode.CardList
                                 },
                                 onEdit = { itemId ->
-                                    currentScreenMode = VaultScreenMode.EditCard(itemId)
+                                    currentScreenMode = VaultScreenMode.CardEdit(itemId)
                                 },
                                 onToggleFavourite = credentialsViewModel::toggleFavourite,
                                 onMoveToTrash = { itemId ->
                                     credentialsViewModel.moveToRecentlyDeleted(itemId)
-                                    currentScreenMode = VaultScreenMode.List
+                                    currentScreenMode = VaultScreenMode.CardList
                                 },
                                 onRevealField = credentialsViewModel::revealField,
                                 onCopyField = { label, value -> credentialsViewModel.copyField(context, label, value) }
                             )
                         }
-                        is VaultScreenMode.AddCard -> {
+                        is VaultScreenMode.CardAdd -> {
                             CardAddEditScreen(
                                 existingItem = null,
                                 existingMeta = null,
                                 existingSecret = null,
-                                onNavigateBack = { currentScreenMode = VaultScreenMode.List },
-                                onSaveCard = { title, holder, num, mm, yy, cvv, pin, addr, phone, notes, fav ->
-                                    credentialsViewModel.saveCard(null, title, holder, num, mm, yy, cvv, pin, addr, phone, notes, fav)
-                                    currentScreenMode = VaultScreenMode.List
-                                },
-                                onScanCardClick = { currentScreenMode = VaultScreenMode.ScanCard }
-                            )
-                        }
-                        is VaultScreenMode.EditCard -> {
-                            CardAddEditScreen(
-                                existingItem = credentialsUiState.selectedItemDetail,
-                                existingMeta = credentialsUiState.selectedItemMeta,
-                                existingSecret = credentialsUiState.selectedItemSecret,
-                                onNavigateBack = { currentScreenMode = VaultScreenMode.CardDetail(mode.itemId) },
-                                onSaveCard = { title, holder, num, mm, yy, cvv, pin, addr, phone, notes, fav ->
-                                    credentialsViewModel.saveCard(mode.itemId, title, holder, num, mm, yy, cvv, pin, addr, phone, notes, fav)
-                                    currentScreenMode = VaultScreenMode.CardDetail(mode.itemId)
-                                },
-                                onScanCardClick = { currentScreenMode = VaultScreenMode.ScanCard }
-                            )
-                        }
-                        is VaultScreenMode.ScanCard -> {
-                            CardScanScreen(
-                                onNavigateBack = { currentScreenMode = VaultScreenMode.AddCard },
-                                onCardScanned = { num, mm, yy ->
-                                    currentScreenMode = VaultScreenMode.AddCard
+                                accounts = emptyList(),
+                                onNavigateBack = { currentScreenMode = VaultScreenMode.CardList },
+                                onSaveCard = { nickname, bank, cardType, network, cardNumber, expiry, cardholderName, colour, notes, cvv, linkedAccountId, favourite ->
+                                    credentialsViewModel.saveCard(null, nickname, bank, null, cardType, network, cardNumber, expiry, cardholderName, colour, notes, cvv, linkedAccountId, favourite)
+                                    currentScreenMode = VaultScreenMode.CardList
                                 }
                             )
                         }
-                        is VaultScreenMode.RecentlyDeleted -> {
-                            RecentlyDeletedCredentialsScreen(
-                                deletedItems = credentialsUiState.deletedItems,
-                                onNavigateBack = { currentScreenMode = VaultScreenMode.List },
-                                onRestore = credentialsViewModel::restoreItem,
-                                onDeleteForever = credentialsViewModel::deleteForever
+                        is VaultScreenMode.CardEdit -> {
+                            CardAddEditScreen(
+                                existingItem = credentialsUiState.selectedItemDetail,
+                                existingMeta = credentialsUiState.selectedCardMeta,
+                                existingSecret = credentialsUiState.selectedCardSecret,
+                                accounts = emptyList(),
+                                onNavigateBack = { currentScreenMode = VaultScreenMode.CardDetail(mode.itemId) },
+                                onSaveCard = { nickname, bank, cardType, network, cardNumber, expiry, cardholderName, colour, notes, cvv, linkedAccountId, favourite ->
+                                    credentialsViewModel.saveCard(mode.itemId, nickname, bank, null, cardType, network, cardNumber, expiry, cardholderName, colour, notes, cvv, linkedAccountId, favourite)
+                                    currentScreenMode = VaultScreenMode.CardDetail(mode.itemId)
+                                }
+                            )
+                        }
+                        is VaultScreenMode.ChooseCardAddMethod -> {
+                            CardsListTab(
+                                cards = credentialsUiState.cards,
+                                onCardClick = { itemId ->
+                                    credentialsViewModel.selectItem(itemId)
+                                    currentScreenMode = VaultScreenMode.CardDetail(itemId)
+                                },
+                                onAddCardClick = { currentScreenMode = VaultScreenMode.ChooseCardAddMethod }
+                            )
+                            AlertDialog(
+                                onDismissRequest = { currentScreenMode = VaultScreenMode.CardList },
+                                title = { Text("Add Payment Card") },
+                                text = {
+                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Button(
+                                            onClick = {
+                                                currentScreenMode = VaultScreenMode.CardList
+                                                credentialsViewModel.copyField(context, "Scanner", "Card scanner coming in Phase 16 Step 3")
+                                            },
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Text("Scan Card (Placeholder)")
+                                        }
+                                        Button(
+                                            onClick = {
+                                                currentScreenMode = VaultScreenMode.CardAdd
+                                            },
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Text("Enter Manually")
+                                        }
+                                    }
+                                },
+                                confirmButton = {},
+                                dismissButton = {
+                                    TextButton(onClick = { currentScreenMode = VaultScreenMode.CardList }) {
+                                        Text("Cancel")
+                                    }
+                                }
                             )
                         }
                         else -> {
                             CardsListTab(
-                                uiState = credentialsUiState,
-                                onSearchQueryChanged = credentialsViewModel::setSearchQuery,
-                                onItemClick = { itemId ->
+                                cards = credentialsUiState.cards,
+                                onCardClick = { itemId ->
                                     credentialsViewModel.selectItem(itemId)
                                     currentScreenMode = VaultScreenMode.CardDetail(itemId)
                                 },
-                                onCopyCardNumber = { num -> credentialsViewModel.copyField(context, "Card Number", num) },
-                                onCopyCvv = { cvv -> credentialsViewModel.copyField(context, "CVV", cvv) },
-                                onToggleFavourite = credentialsViewModel::toggleFavourite,
-                                onAddCardClick = { currentScreenMode = VaultScreenMode.AddCard }
+                                onAddCardClick = { currentScreenMode = VaultScreenMode.ChooseCardAddMethod }
                             )
                         }
                     }
@@ -317,8 +380,12 @@ fun VaultMainScreen(
                                     credentialsViewModel.selectItem(itemId)
                                     currentScreenMode = VaultScreenMode.Detail(itemId)
                                 },
-                                onCopyUsername = { username -> credentialsViewModel.copyField(context, "Username", username) },
-                                onCopyPassword = { password -> credentialsViewModel.copyField(context, "Password", password) },
+                                onCopyUsername = { username ->
+                                    credentialsViewModel.copyField(context, "Username", username)
+                                },
+                                onCopyPassword = { password ->
+                                    credentialsViewModel.copyField(context, "Password", password)
+                                },
                                 onToggleFavourite = credentialsViewModel::toggleFavourite
                             )
                         }
@@ -360,7 +427,10 @@ fun VaultMainScreen(
                                     credentialsViewModel.saveNote(null, title, noteText, tags, fav, fields, hiddens)
                                     currentScreenMode = VaultScreenMode.List
                                 },
-                                onGeneratePassword = credentialsViewModel::generatePlaceholderPassword
+                                onGeneratePassword = credentialsViewModel::generatePlaceholderPassword,
+                                onOpenGenerator = credentialsViewModel::showPasswordGenerator,
+                                generatedPassword = generatedPassword,
+                                onClearGeneratedPassword = credentialsViewModel::clearGeneratedPassword
                             )
                         }
                         is VaultScreenMode.Edit -> {
@@ -382,7 +452,10 @@ fun VaultMainScreen(
                                     credentialsViewModel.saveNote(mode.itemId, title, noteText, tags, fav, fields, hiddens)
                                     currentScreenMode = VaultScreenMode.Detail(mode.itemId)
                                 },
-                                onGeneratePassword = credentialsViewModel::generatePlaceholderPassword
+                                onGeneratePassword = credentialsViewModel::generatePlaceholderPassword,
+                                onOpenGenerator = credentialsViewModel::showPasswordGenerator,
+                                generatedPassword = generatedPassword,
+                                onClearGeneratedPassword = credentialsViewModel::clearGeneratedPassword
                             )
                         }
                         is VaultScreenMode.ChooseTypeForAdd -> {
@@ -411,8 +484,12 @@ fun VaultMainScreen(
                                     credentialsViewModel.selectItem(itemId)
                                     currentScreenMode = VaultScreenMode.Detail(itemId)
                                 },
-                                onCopyUsername = { username -> credentialsViewModel.copyField(context, "Username", username) },
-                                onCopyPassword = { password -> credentialsViewModel.copyField(context, "Password", password) },
+                                onCopyUsername = { username ->
+                                    credentialsViewModel.copyField(context, "Username", username)
+                                },
+                                onCopyPassword = { password ->
+                                    credentialsViewModel.copyField(context, "Password", password)
+                                },
                                 onToggleFavourite = credentialsViewModel::toggleFavourite
                             )
                         }
@@ -428,12 +505,14 @@ sealed interface VaultScreenMode {
     data class Detail(val itemId: String) : VaultScreenMode
     data class Add(val type: VaultItemType) : VaultScreenMode
     data class Edit(val itemId: String, val type: VaultItemType) : VaultScreenMode
-    data class CardDetail(val itemId: String) : VaultScreenMode
-    data object AddCard : VaultScreenMode
-    data class EditCard(val itemId: String) : VaultScreenMode
-    data object ScanCard : VaultScreenMode
     data object ChooseTypeForAdd : VaultScreenMode
     data object RecentlyDeleted : VaultScreenMode
+
+    data object CardList : VaultScreenMode
+    data class CardDetail(val itemId: String) : VaultScreenMode
+    data object CardAdd : VaultScreenMode
+    data class CardEdit(val itemId: String) : VaultScreenMode
+    data object ChooseCardAddMethod : VaultScreenMode
 }
 
 @Composable

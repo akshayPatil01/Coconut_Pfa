@@ -88,23 +88,24 @@ data class NoteSecret(
 @JsonClass(generateAdapter = true)
 data class CardMeta(
     val title: String,
-    val cardHolderName: String,
+    val nickname: String,
+    val bank: String,
+    val bankCustom: String? = null,
+    val cardType: com.patil.coconut_pfa.domain.CardType,
+    val network: com.patil.coconut_pfa.domain.CardNetwork,
     val last4: String,
-    val network: String,
-    val expiryMonth: String,
-    val expiryYear: String
+    val expiry: String,
+    val cardholderName: String,
+    val colour: String,
+    val notes: String = ""
 ) {
     override fun toString(): String = "<redacted>"
 }
 
 @JsonClass(generateAdapter = true)
 data class CardSecret(
-    val cardNumber: String,
-    val cvv: String,
-    val pin: String = "",
-    val billingAddress: String = "",
-    val phone: String = "",
-    val notes: String = ""
+    val number: String,
+    val cvv: String
 ) {
     override fun toString(): String = "<redacted>"
 }

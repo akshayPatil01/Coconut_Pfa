@@ -31,6 +31,9 @@ fun CredentialAddEditScreen(
     onSaveBankLogin: (String, String, String, String, String, String, String?, List<String>, Boolean, List<Pair<String, String>>, List<Boolean>) -> Unit,
     onSaveNote: (String, String, List<String>, Boolean, List<Pair<String, String>>, List<Boolean>) -> Unit,
     onGeneratePassword: () -> String,
+    onOpenGenerator: () -> Unit = {},
+    generatedPassword: String? = null,
+    onClearGeneratedPassword: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val isEdit = existingItem != null
