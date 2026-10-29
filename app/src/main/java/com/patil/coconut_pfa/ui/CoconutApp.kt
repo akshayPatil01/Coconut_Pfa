@@ -660,6 +660,13 @@ fun CoconutApp(
                                 modifier = screenModifier
                             )
                             is Screen.Vault -> {
+                                val vaultCredentialsViewModel: com.patil.coconut_pfa.ui.viewmodel.VaultCredentialsViewModel = viewModel(
+                                    factory = com.patil.coconut_pfa.ui.viewmodel.VaultCredentialsViewModel.Factory(
+                                        vaultRepository = vaultRepository,
+                                        accountRepository = accountRepository,
+                                        transactionRepository = transactionRepository
+                                    )
+                                )
                                 if (vaultUiState.screenState == com.patil.coconut_pfa.ui.viewmodel.VaultScreenState.NOT_SETUP) {
                                     com.patil.coconut_pfa.ui.screens.vault.VaultSetupScreen(
                                         viewModel = vaultViewModel,
@@ -681,10 +688,12 @@ fun CoconutApp(
                                         )
                                     }
                                 } else {
-                                    com.patil.coconut_pfa.ui.screens.vault.VaultPlaceholderScreen(
+                                    com.patil.coconut_pfa.ui.screens.vault.VaultMainScreen(
                                         initialTab = dest.tab,
-                                        viewModel = vaultViewModel,
+                                        vaultViewModel = vaultViewModel,
+                                        credentialsViewModel = vaultCredentialsViewModel,
                                         onNavigateBack = { navigateTo(Screen.Home) },
+                                        onNavigateToAccount = { accountId -> navigateTo(Screen.AccountDetail(accountId)) },
                                         modifier = screenModifier
                                     )
                                 }

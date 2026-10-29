@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.CallSplit
 import androidx.compose.material.icons.rounded.BarChart
 import androidx.compose.material.icons.rounded.Inbox
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.rounded.Savings
 import androidx.compose.material.icons.rounded.Settings
@@ -59,6 +60,11 @@ fun CoconutNavigationDrawer(
     modifier: Modifier = Modifier,
 ) {
     val drawerItems = listOf(
+        DrawerMenuItem(
+            screen = Screen.Vault(),
+            title = "Coconut Vault",
+            icon = Icons.Rounded.Lock
+        ),
         DrawerMenuItem(
             screen = Screen.Goals,
             title = "Goals",

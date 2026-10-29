@@ -2,6 +2,7 @@ package com.patil.coconut_pfa.ui.viewmodel
 
 import android.content.Context
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.patil.coconut_pfa.data.local.entity.VaultItem
 import com.patil.coconut_pfa.data.local.entity.VaultItemType
@@ -102,6 +103,17 @@ class VaultCredentialsViewModel(
     private val accountRepository: AccountRepository? = null,
     private val transactionRepository: TransactionRepository? = null
 ) : ViewModel() {
+
+    class Factory(
+        private val vaultRepository: VaultRepository,
+        private val accountRepository: AccountRepository? = null,
+        private val transactionRepository: TransactionRepository? = null
+    ) : ViewModelProvider.Factory {
+        @Suppress("UNCHECKED_CAST")
+        override fun <T : ViewModel> create(modelClass: Class<T>): T {
+            return VaultCredentialsViewModel(vaultRepository, accountRepository, transactionRepository) as T
+        }
+    }
 
     private val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
     private val loginMetaAdapter = moshi.adapter(LoginMeta::class.java)
@@ -290,7 +302,7 @@ class VaultCredentialsViewModel(
                         revealedFields = emptyMap()
                     )
                 } catch (e: Exception) {
-                    _uiState.value = _uiState.value.copy(errorMessage = "Failed to load item detail: ${e.message}")
+                    _uiState.value = _uiState.value.copy(errorMessage = "Failed to load item detail")
                 }
             }
         }
@@ -626,7 +638,7 @@ class VaultCredentialsViewModel(
                     importDeleteErrorMessage = null
                 )
             } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(snackbarMessage = "Failed to read CSV: ${e.message}")
+                _uiState.value = _uiState.value.copy(snackbarMessage = "Failed to read CSV")
             }
         }
     }
@@ -693,7 +705,7 @@ class VaultCredentialsViewModel(
                     snackbarMessage = "Imported $importedCount logins."
                 )
             } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(snackbarMessage = "Import failed: ${e.message}")
+                _uiState.value = _uiState.value.copy(snackbarMessage = "Import failed")
             }
         }
     }
@@ -715,7 +727,7 @@ class VaultCredentialsViewModel(
             }
         } catch (e: Exception) {
             _uiState.value = _uiState.value.copy(
-                importDeleteErrorMessage = e.message ?: "Failed to delete file. Please delete the CSV file manually using your File Manager app."
+                importDeleteErrorMessage = "Failed to delete file. Please delete the CSV file manually using your File Manager app."
             )
         }
     }
