@@ -15,6 +15,8 @@ import com.patil.coconut_pfa.data.local.entity.VaultItemType
 import com.patil.coconut_pfa.navigation.VaultTab
 import com.patil.coconut_pfa.ui.viewmodel.VaultCredentialsViewModel
 import com.patil.coconut_pfa.ui.viewmodel.VaultViewModel
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -34,11 +36,100 @@ fun VaultMainScreen(
 
     var currentScreenMode by remember { mutableStateOf<VaultScreenMode>(VaultScreenMode.List) }
 
+    val csvPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            credentialsViewModel.prepareCsvImport(context, uri)
+        }
+    }
+
     LaunchedEffect(credentialsUiState.snackbarMessage) {
         credentialsUiState.snackbarMessage?.let { msg ->
             snackbarHostState.showSnackbar(msg)
             credentialsViewModel.clearSnackbar()
         }
+    }
+
+    if (credentialsUiState.showImportPreviewDialog && credentialsUiState.importPreviewData != null) {
+        val preview = credentialsUiState.importPreviewData!!
+        AlertDialog(
+            onDismissRequest = credentialsViewModel::dismissImportPreview,
+            title = { Text("Import Logins from CSV") },
+            text = {
+                Column {
+                    Text("Found ${preview.totalCount} logins in the selected CSV file.")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("First items (passwords hidden):", fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    preview.previewTitles.forEach { title ->
+                        Text("• $title")
+                    }
+                    if (preview.totalCount > 5) {
+                        Text("... and ${preview.totalCount - 5} more")
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        "Duplicates (same title + username) will be skipped automatically.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        credentialsViewModel.executeCsvImport()
+                    }
+                ) {
+                    Text("Import ${preview.totalCount} Logins")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = credentialsViewModel::dismissImportPreview) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    if (credentialsUiState.importSuccessCount != null) {
+        val count = credentialsUiState.importSuccessCount!!
+        val fileUri = credentialsUiState.importFileUri
+        AlertDialog(
+            onDismissRequest = credentialsViewModel::dismissImportSuccess,
+            title = { Text("Import Complete") },
+            text = {
+                Column {
+                    Text("Imported $count logins. This CSV holds your passwords in plain text - delete it now.")
+                    if (credentialsUiState.importDeleteErrorMessage != null) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            credentialsUiState.importDeleteErrorMessage!!,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                if (fileUri != null) {
+                    Button(
+                        onClick = {
+                            credentialsViewModel.deleteCsvFile(context, fileUri)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Text("Delete file")
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = credentialsViewModel::dismissImportSuccess) {
+                    Text("Done")
+                }
+            }
+        )
     }
 
     Scaffold(
@@ -54,6 +145,16 @@ fun VaultMainScreen(
             TopAppBar(
                 title = { Text(if (selectedTabIndex == 0) "Vault Cards" else "Coconut Vault") },
                 actions = {
+                    if (selectedTabIndex == 1 && currentScreenMode is VaultScreenMode.List) {
+                        IconButton(onClick = {
+                            csvPickerLauncher.launch(arrayOf("text/csv", "text/comma-separated-values", "text/plain", "*/*"))
+                        }) {
+                            Icon(
+                                imageVector = Icons.Rounded.UploadFile,
+                                contentDescription = "Import CSV Logins"
+                            )
+                        }
+                    }
                     if (currentScreenMode is VaultScreenMode.List) {
                         IconButton(onClick = { currentScreenMode = VaultScreenMode.RecentlyDeleted }) {
                             Icon(imageVector = Icons.Rounded.DeleteOutline, contentDescription = "Recently Deleted")

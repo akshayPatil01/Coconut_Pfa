@@ -37,6 +37,8 @@ class VaultRepository(
 
     fun getAllItemsFlow(): Flow<List<VaultItem>> = itemDao.getAllItems()
 
+    suspend fun getAllRawItems(): List<VaultItem> = itemDao.getAllRawItems()
+
     suspend fun getItemById(id: String): VaultItem? = itemDao.getItemById(id)
 
     suspend fun saveItem(

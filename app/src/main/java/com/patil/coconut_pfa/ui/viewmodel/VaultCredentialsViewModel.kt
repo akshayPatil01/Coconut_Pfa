@@ -40,6 +40,20 @@ enum class CredentialSort {
     NAME, RECENTLY_USED
 }
 
+data class ParsedLoginRecord(
+    val title: String,
+    val username: String,
+    val url: String,
+    val password: String,
+    val notes: String
+)
+
+data class CredentialImportPreview(
+    val totalCount: Int,
+    val previewTitles: List<String>,
+    val records: List<ParsedLoginRecord>
+)
+
 data class VaultCredentialsUiState(
     val items: List<CredentialDisplayItem> = emptyList(),
     val deletedItems: List<CredentialDisplayItem> = emptyList(),
@@ -53,7 +67,12 @@ data class VaultCredentialsUiState(
     val revealedFields: Map<String, Boolean> = emptyMap(),
     val snackbarMessage: String? = null,
     val isLoading: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val showImportPreviewDialog: Boolean = false,
+    val importPreviewData: CredentialImportPreview? = null,
+    val importFileUri: android.net.Uri? = null,
+    val importSuccessCount: Int? = null,
+    val importDeleteErrorMessage: String? = null
 )
 
 class VaultCredentialsViewModel(
@@ -477,5 +496,189 @@ class VaultCredentialsViewModel(
         val chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$!%*?&"
         val random = java.security.SecureRandom()
         return (1..16).map { chars[random.nextInt(chars.length)] }.joinToString("")
+    }
+
+    fun prepareCsvImport(context: Context, uri: android.net.Uri) {
+        viewModelScope.launch {
+            try {
+                val records = context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                    parseLoginsCsv(inputStream)
+                } ?: emptyList()
+
+                if (records.isEmpty()) {
+                    _uiState.value = _uiState.value.copy(snackbarMessage = "No login records found in CSV file.")
+                    return@launch
+                }
+
+                val preview = CredentialImportPreview(
+                    totalCount = records.size,
+                    previewTitles = records.take(5).map { it.title },
+                    records = records
+                )
+
+                _uiState.value = _uiState.value.copy(
+                    showImportPreviewDialog = true,
+                    importPreviewData = preview,
+                    importFileUri = uri,
+                    importDeleteErrorMessage = null
+                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(snackbarMessage = "Failed to read CSV: ${e.message}")
+            }
+        }
+    }
+
+    fun dismissImportPreview() {
+        _uiState.value = _uiState.value.copy(
+            showImportPreviewDialog = false,
+            importPreviewData = null,
+            importFileUri = null
+        )
+    }
+
+    fun executeCsvImport() {
+        val preview = _uiState.value.importPreviewData ?: return
+        viewModelScope.launch {
+            try {
+                val rawItems = vaultRepository.getAllRawItems()
+                val existingLogins = mutableSetOf<Pair<String, String>>()
+                for (item in rawItems) {
+                    if (item.type == VaultItemType.LOGIN) {
+                        try {
+                            val metaJson = vaultRepository.readMeta(item)
+                            val meta = loginMetaAdapter.fromJson(metaJson)
+                            if (meta != null) {
+                                existingLogins.add(Pair(meta.title.trim().lowercase(), meta.username.trim().lowercase()))
+                            }
+                        } catch (e: Exception) {}
+                    }
+                }
+
+                var importedCount = 0
+                for (record in preview.records) {
+                    val key = Pair(record.title.trim().lowercase(), record.username.trim().lowercase())
+                    if (existingLogins.contains(key)) {
+                        continue
+                    }
+                    existingLogins.add(key)
+
+                    val meta = LoginMeta(
+                        title = record.title,
+                        username = record.username,
+                        website = record.url,
+                        tags = emptyList(),
+                        customFields = emptyList()
+                    )
+                    val secret = LoginSecret(
+                        password = record.password,
+                        notes = record.notes,
+                        passwordHistory = emptyList(),
+                        customFields = emptyList()
+                    )
+
+                    vaultRepository.saveItem(
+                        type = VaultItemType.LOGIN,
+                        metaJson = loginMetaAdapter.toJson(meta),
+                        secretJson = loginSecretAdapter.toJson(secret)
+                    )
+                    importedCount++
+                }
+
+                dismissImportPreview()
+                _uiState.value = _uiState.value.copy(
+                    importSuccessCount = importedCount,
+                    snackbarMessage = "Imported $importedCount logins."
+                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(snackbarMessage = "Import failed: ${e.message}")
+            }
+        }
+    }
+
+    fun deleteCsvFile(context: Context, uri: android.net.Uri) {
+        try {
+            val deleted = android.provider.DocumentsContract.deleteDocument(context.contentResolver, uri)
+            if (deleted) {
+                _uiState.value = _uiState.value.copy(
+                    importSuccessCount = null,
+                    importFileUri = null,
+                    importDeleteErrorMessage = null,
+                    snackbarMessage = "CSV file deleted successfully."
+                )
+            } else {
+                _uiState.value = _uiState.value.copy(
+                    importDeleteErrorMessage = "System provider denied file deletion. Please delete the CSV file manually using your File Manager app."
+                )
+            }
+        } catch (e: Exception) {
+            _uiState.value = _uiState.value.copy(
+                importDeleteErrorMessage = e.message ?: "Failed to delete file. Please delete the CSV file manually using your File Manager app."
+            )
+        }
+    }
+
+    fun dismissImportSuccess() {
+        _uiState.value = _uiState.value.copy(
+            importSuccessCount = null,
+            importFileUri = null,
+            importDeleteErrorMessage = null
+        )
+    }
+
+    private fun parseLoginsCsv(inputStream: java.io.InputStream): List<ParsedLoginRecord> {
+        val reader = java.io.BufferedReader(java.io.InputStreamReader(inputStream, Charsets.UTF_8))
+        val lines = reader.readLines()
+        if (lines.isEmpty()) return emptyList()
+
+        val headerLine = lines.first()
+        val headers = parseCsvLine(headerLine).map { it.lowercase().replace(" ", "_").trim('"') }
+
+        val titleIdx = headers.indexOfFirst { it in listOf("name", "title") }
+        val urlIdx = headers.indexOfFirst { it in listOf("url", "login_uri", "uri", "website") }
+        val userIdx = headers.indexOfFirst { it in listOf("username", "login_username", "user", "email") }
+        val passIdx = headers.indexOfFirst { it in listOf("password", "login_password", "pass") }
+        val noteIdx = headers.indexOfFirst { it in listOf("note", "notes") }
+
+        val records = mutableListOf<ParsedLoginRecord>()
+        for (i in 1 until lines.size) {
+            val line = lines[i].trim()
+            if (line.isEmpty()) continue
+            val cols = parseCsvLine(line)
+
+            val title = if (titleIdx in cols.indices) cols[titleIdx].trim('"') else if (cols.isNotEmpty()) cols[0].trim('"') else "Untitled"
+            val url = if (urlIdx in cols.indices) cols[urlIdx].trim('"') else if (cols.size > 1) cols[1].trim('"') else ""
+            val username = if (userIdx in cols.indices) cols[userIdx].trim('"') else if (cols.size > 2) cols[2].trim('"') else ""
+            val password = if (passIdx in cols.indices) cols[passIdx].trim('"') else if (cols.size > 3) cols[3].trim('"') else ""
+            val notes = if (noteIdx in cols.indices) cols[noteIdx].trim('"') else if (cols.size > 4) cols[4].trim('"') else ""
+
+            if (title.isNotBlank() || username.isNotBlank() || password.isNotBlank()) {
+                records.add(ParsedLoginRecord(
+                    title = if (title.isBlank()) "Untitled" else title,
+                    username = username,
+                    url = url,
+                    password = password,
+                    notes = notes
+                ))
+            }
+        }
+        return records
+    }
+
+    private fun parseCsvLine(line: String): List<String> {
+        val result = mutableListOf<String>()
+        var cur = StringBuilder()
+        var inQuotes = false
+        for (char in line) {
+            when {
+                char == '"' -> inQuotes = !inQuotes
+                char == ',' && !inQuotes -> {
+                    result.add(cur.toString().trim())
+                    cur = StringBuilder()
+                }
+                else -> cur.append(char)
+            }
+        }
+        result.add(cur.toString().trim())
+        return result
     }
 }
