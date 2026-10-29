@@ -1,6 +1,7 @@
 package com.patil.coconut_pfa.ui.screens
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -36,6 +37,8 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.automirrored.rounded.Backspace
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Fingerprint
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Switch
@@ -48,6 +51,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -61,6 +65,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
@@ -72,8 +77,10 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.PathParser
+import com.patil.coconut_pfa.data.local.datastore.UserSettingsDataStore
 import com.patil.coconut_pfa.navigation.Screen
 import com.patil.coconut_pfa.ui.theme.PlusJakartaSans
+import kotlinx.coroutines.launch
 
 // ─── Design Tokens ───────────────────────────────────────────────────────────
 private val Obsidian = Color(0xFF0C0D0E)
@@ -121,7 +128,12 @@ fun WelcomeWorkflowScreen(
 // ─── Step Indicator ──────────────────────────────────────────────────────────
 
 @Composable
-private fun StepIndicator(total: Int, current: Int) {
+private fun StepIndicator(
+    total: Int,
+    current: Int,
+    activeColor: Color = Cream,
+    inactiveColor: Color = SubtleGray.copy(alpha = 0.4f)
+) {
     Row(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -132,7 +144,7 @@ private fun StepIndicator(total: Int, current: Int) {
                     .height(4.dp)
                     .width(if (index == current) 24.dp else 8.dp)
                     .clip(CircleShape)
-                    .background(if (index == current) Cream else SubtleGray.copy(alpha = 0.4f))
+                    .background(if (index == current) activeColor else inactiveColor)
             )
         }
     }
@@ -428,137 +440,389 @@ private fun Step1Welcome(
 
 // ─── Step 2: PIN Setup ───────────────────────────────────────────────────────
 
+private sealed interface PinKeypadItem {
+    data class Digit(val number: Int, val letters: String) : PinKeypadItem
+    data class Action(val label: String) : PinKeypadItem
+    data object Backspace : PinKeypadItem
+}
+
 @Composable
 private fun Step2Pin(onBack: () -> Unit, onNext: () -> Unit) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val pinDigits = remember { mutableStateListOf<Int>() }
+    var biometricEnabled by remember { mutableStateOf(true) }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(CardSurface)
+            .background(Color.White)
+            .statusBarsPadding()
+            .navigationBarsPadding()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 28.dp, vertical = 32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .padding(horizontal = 24.dp, vertical = 16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.SpaceBetween
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.fillMaxWidth()
         ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                    contentDescription = "Back",
-                    tint = White
-                )
-            }
-            StepIndicator(total = 6, current = 1)
-            Spacer(modifier = Modifier.size(48.dp))
-        }
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        Text(
-            text = "Create your Master PIN",
-            color = White,
-            fontWeight = FontWeight.Bold,
-            fontSize = 26.sp,
-            textAlign = TextAlign.Center
-        )
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        Text(
-            text = "Your PIN protects all of Fortis.\nIt's stored only on this device.",
-            color = SubtleGray,
-            fontSize = 14.sp,
-            textAlign = TextAlign.Center,
-            lineHeight = 20.sp
-        )
-
-        Spacer(modifier = Modifier.height(36.dp))
-
-        // PIN indicator circles
-        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            repeat(4) { index ->
+            // Header Row: Back button, Vault Setup badge, Lock icon
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Box(
                     modifier = Modifier
-                        .size(18.dp)
+                        .size(40.dp)
                         .clip(CircleShape)
-                        .background(
-                            if (index < pinDigits.size) MintTeal
-                            else Color.Transparent
-                        )
-                        .border(
-                            width = 2.dp,
-                            color = if (index < pinDigits.size) MintTeal else SubtleGray,
-                            shape = CircleShape
-                        )
-                )
-            }
-        }
+                        .background(Color.White)
+                        .border(1.dp, Color(0xFFE4E4E7), CircleShape)
+                        .clickable { onBack() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                        contentDescription = "Back",
+                        tint = Color(0xFF27272A),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
 
-        Spacer(modifier = Modifier.height(40.dp))
-
-        // Keypad
-        val keys = listOf(
-            listOf(1, 2, 3),
-            listOf(4, 5, 6),
-            listOf(7, 8, 9),
-            listOf(-2, 0, -1) // -2 = *, -1 = backspace
-        )
-        keys.forEach { row ->
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(24.dp),
-                modifier = Modifier.padding(vertical = 6.dp)
-            ) {
-                row.forEach { key ->
+                Row(
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(Color(0xFFECFDF5))
+                        .border(1.dp, Color(0xFFA7F3D0).copy(alpha = 0.6f), CircleShape)
+                        .padding(horizontal = 14.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
                     Box(
                         modifier = Modifier
-                            .size(68.dp)
+                            .size(6.dp)
                             .clip(CircleShape)
-                            .background(Obsidian)
-                            .clickable {
-                                when {
-                                    key == -1 -> if (pinDigits.isNotEmpty()) pinDigits.removeAt(pinDigits.lastIndex)
-                                    key == -2 -> { /* * key — no-op */ }
-                                    pinDigits.size < 4 -> {
-                                        pinDigits.add(key)
-                                        if (pinDigits.size == 4) onNext()
-                                    }
-                                }
-                            },
+                            .background(Color(0xFF10B981))
+                    )
+                    Text(
+                        text = "VAULT SETUP",
+                        fontFamily = PlusJakartaSans,
+                        color = Color(0xFF065F46),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 0.6.sp
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(Color.White)
+                        .border(1.dp, Color(0xFFE4E4E7), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Lock,
+                        contentDescription = null,
+                        tint = Color(0xFF059669),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Step Indicator (showing step 2 of 6 in workflow)
+            StepIndicator(
+                total = 6,
+                current = 1,
+                activeColor = Color(0xFF18181B),
+                inactiveColor = Color(0xFFE4E4E7)
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Title & Subtitle (Black & Light Grey text on White background)
+            Text(
+                text = "Create your Master PIN",
+                fontFamily = PlusJakartaSans,
+                color = Color(0xFF18181B),
+                fontWeight = FontWeight.Bold,
+                fontSize = 26.sp,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "Enter a 4-digit master PIN for local biometric encryption.",
+                fontFamily = PlusJakartaSans,
+                color = Color(0xFF71717A),
+                fontSize = 13.sp,
+                textAlign = TextAlign.Center,
+                lineHeight = 18.sp,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+
+            Spacer(modifier = Modifier.height(28.dp))
+
+            // PIN Indicator Dots
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                repeat(4) { index ->
+                    val isFilled = index < pinDigits.size
+                    Box(
+                        modifier = Modifier
+                            .size(15.dp)
+                            .clip(CircleShape)
+                            .background(if (isFilled) Color(0xFF18181B) else Color.White)
+                            .border(
+                                width = if (isFilled) 0.dp else 2.dp,
+                                color = if (isFilled) Color.Transparent else Color(0xFFD4D4D8),
+                                shape = CircleShape
+                            )
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(28.dp))
+
+            // Biometric Unlock Dark Card
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(22.dp))
+                    .background(Color(0xFF18181B))
+                    .border(1.dp, Color(0xFF27272A), RoundedCornerShape(22.dp))
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    // Biometric icon in rounded container
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(Color(0xFF27272A))
+                            .border(1.dp, Color(0xFF3F3F46).copy(alpha = 0.6f), RoundedCornerShape(14.dp)),
                         contentAlignment = Alignment.Center
                     ) {
-                        when (key) {
-                            -1 -> Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.Backspace,
-                                contentDescription = "Backspace",
-                                tint = White,
-                                modifier = Modifier.size(22.dp)
-                            )
-                            -2 -> Text("*", color = SubtleGray, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                            else -> Text(
-                                text = key.toString(),
-                                color = White,
-                                fontSize = 22.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
+                        Icon(
+                            imageVector = Icons.Rounded.Fingerprint,
+                            contentDescription = "Biometrics",
+                            tint = MintTeal,
+                            modifier = Modifier.size(24.dp)
+                        )
                     }
+
+                    Column {
+                        Text(
+                            text = "Enable Biometric Unlock",
+                            fontFamily = PlusJakartaSans,
+                            color = Color.White,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Fast access via Face ID / Fingerprint",
+                            fontFamily = PlusJakartaSans,
+                            color = Color(0xFFA1A1AA),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Normal
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                // Toggle switch (dark card toggle with mint track & dark thumb)
+                val thumbOffset by animateDpAsState(
+                    targetValue = if (biometricEnabled) 24.dp else 4.dp,
+                    animationSpec = tween(durationMillis = 200),
+                    label = "biometricThumb"
+                )
+
+                Box(
+                    modifier = Modifier
+                        .width(48.dp)
+                        .height(26.dp)
+                        .clip(CircleShape)
+                        .background(if (biometricEnabled) MintTeal else Color(0xFF27272A))
+                        .border(
+                            width = 1.dp,
+                            color = if (biometricEnabled) Color.Transparent else Color(0xFF3F3F46),
+                            shape = CircleShape
+                        )
+                        .clickable {
+                            val newValue = !biometricEnabled
+                            biometricEnabled = newValue
+                            coroutineScope.launch {
+                                try {
+                                    UserSettingsDataStore(context).updateBiometricEnabled(newValue)
+                                } catch (_: Exception) {}
+                            }
+                        },
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .padding(start = thumbOffset)
+                            .size(20.dp)
+                            .clip(CircleShape)
+                            .background(if (biometricEnabled) Color(0xFF18181B) else Color(0xFFA1A1AA))
+                    )
                 }
             }
         }
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        Text(
-            text = "Skip for now",
-            color = SubtleGray,
-            fontSize = 13.sp,
-            textDecoration = TextDecoration.Underline,
-            modifier = Modifier.clickable { onNext() }
-        )
+        // Keypad Section on White Background
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            val keyRows = listOf(
+                listOf(
+                    PinKeypadItem.Digit(1, ""),
+                    PinKeypadItem.Digit(2, "ABC"),
+                    PinKeypadItem.Digit(3, "DEF")
+                ),
+                listOf(
+                    PinKeypadItem.Digit(4, "GHI"),
+                    PinKeypadItem.Digit(5, "JKL"),
+                    PinKeypadItem.Digit(6, "MNO")
+                ),
+                listOf(
+                    PinKeypadItem.Digit(7, "PQRS"),
+                    PinKeypadItem.Digit(8, "TUV"),
+                    PinKeypadItem.Digit(9, "WXYZ")
+                ),
+                listOf(
+                    PinKeypadItem.Action("Cancel"),
+                    PinKeypadItem.Digit(0, ""),
+                    PinKeypadItem.Backspace
+                )
+            )
+
+            keyRows.forEach { row ->
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(20.dp),
+                    modifier = Modifier.padding(vertical = 5.dp)
+                ) {
+                    row.forEach { item ->
+                        when (item) {
+                            is PinKeypadItem.Digit -> {
+                                Box(
+                                    modifier = Modifier
+                                        .size(64.dp)
+                                        .clip(CircleShape)
+                                        .background(Color.White)
+                                        .border(1.dp, Color(0xFFE4E4E7), CircleShape)
+                                        .clickable {
+                                            if (pinDigits.size < 4) {
+                                                pinDigits.add(item.number)
+                                                if (pinDigits.size == 4) onNext()
+                                            }
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center
+                                    ) {
+                                        Text(
+                                            text = item.number.toString(),
+                                            fontFamily = PlusJakartaSans,
+                                            color = Color(0xFF18181B),
+                                            fontSize = 24.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                        if (item.letters.isNotEmpty()) {
+                                            Text(
+                                                text = item.letters,
+                                                fontFamily = PlusJakartaSans,
+                                                color = Color(0xFFA1A1AA),
+                                                fontSize = 8.sp,
+                                                fontWeight = FontWeight.Medium,
+                                                letterSpacing = 1.sp
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                            is PinKeypadItem.Action -> {
+                                Box(
+                                    modifier = Modifier
+                                        .size(64.dp)
+                                        .clip(CircleShape)
+                                        .clickable {
+                                            if (pinDigits.isNotEmpty()) {
+                                                pinDigits.clear()
+                                            } else {
+                                                onBack()
+                                            }
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = item.label,
+                                        fontFamily = PlusJakartaSans,
+                                        color = Color(0xFF71717A),
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                            }
+                            is PinKeypadItem.Backspace -> {
+                                Box(
+                                    modifier = Modifier
+                                        .size(64.dp)
+                                        .clip(CircleShape)
+                                        .clickable {
+                                            if (pinDigits.isNotEmpty()) {
+                                                pinDigits.removeAt(pinDigits.lastIndex)
+                                            }
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Rounded.Backspace,
+                                        contentDescription = "Backspace",
+                                        tint = Color(0xFF52525B),
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            Text(
+                text = "Skip for now",
+                fontFamily = PlusJakartaSans,
+                color = Color(0xFF71717A),
+                fontSize = 13.sp,
+                textDecoration = TextDecoration.Underline,
+                modifier = Modifier
+                    .clickable { onNext() }
+                    .padding(vertical = 6.dp, horizontal = 12.dp)
+            )
+        }
     }
 }
 
@@ -981,4 +1245,10 @@ private fun Step6AllSet(onNext: () -> Unit) {
 @Composable
 private fun Step1WelcomePreview() {
     Step1Welcome(onNext = {})
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFFFFFFF, device = "spec:width=390dp,height=844dp,dpi=460")
+@Composable
+private fun Step2PinPreview() {
+    Step2Pin(onBack = {}, onNext = {})
 }
