@@ -1035,11 +1035,11 @@ fun SettingsScreen(
                                                     verticalArrangement = Arrangement.spacedBy(10.dp)
                                                 ) {
                                                     OutlinedButton(
-                                                        onClick = { onNavigate(Screen.Onboarding) },
+                                                        onClick = { onNavigate(Screen.WelcomeWorkflow) },
                                                         modifier = Modifier.fillMaxWidth(),
                                                         shape = RoundedCornerShape(12.dp)
                                                     ) {
-                                                        Text("Replay Onboarding Flow")
+                                                        Text("Replay Welcome Workflow")
                                                     }
 
                                                     Button(

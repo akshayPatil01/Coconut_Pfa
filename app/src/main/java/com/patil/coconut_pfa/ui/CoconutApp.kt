@@ -63,7 +63,6 @@ import com.patil.coconut_pfa.ui.screens.GoalsScreen
 import com.patil.coconut_pfa.ui.screens.HomeScreen
 import com.patil.coconut_pfa.ui.screens.ImportStatementScreen
 import com.patil.coconut_pfa.ui.screens.LockScreen
-import com.patil.coconut_pfa.ui.screens.OnboardingScreen
 import com.patil.coconut_pfa.ui.screens.ParserTestScreen
 import com.patil.coconut_pfa.ui.screens.PaymentsScreen
 import com.patil.coconut_pfa.ui.screens.ReceiptScanScreen
@@ -264,26 +263,6 @@ fun CoconutApp(
         }
     }
 
-    val handleCompleteOnboarding = { pin: String, enableBiometric: Boolean, salaryDay: Int, addBank: Boolean, addCard: Boolean, addCash: Boolean, addLoan: Boolean, addFd: Boolean ->
-        val effectivePin = if (pin.length == 4) pin else "1234"
-        val salt = PinHasher.generateSalt()
-        val hashB64 = PinHasher.hashPin(effectivePin, salt)
-        val saltB64 = PinHasher.saltToBase64(salt)
-
-        scope.launch {
-            try {
-                settingsRepository.setPin(hashB64, saltB64)
-                settingsRepository.setBiometricEnabled(enableBiometric)
-                settingsRepository.setSalaryCycleStartDay(salaryDay)
-                accountRepository.createOnboardingAccounts(addBank, addCard, addCash, addLoan, addFd)
-                settingsRepository.setOnboardingDone(true)
-                LockManager.unlock()
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
-    }
-
     val handleWipeAndReset = {
         scope.launch {
             settingsRepository.setOnboardingDone(false)
@@ -292,16 +271,19 @@ fun CoconutApp(
         }
     }
 
-    val isFullScreenOverlay = !userSettings.onboardingDone || isLocked || currentDestination == Screen.Onboarding || currentDestination == Screen.LockScreen
+    val isFullScreenOverlay = !userSettings.onboardingDone || isLocked || currentDestination == Screen.Onboarding || currentDestination == Screen.WelcomeWorkflow || currentDestination == Screen.LockScreen
 
     com.patil.coconut_pfa.ui.theme.Coconut_PfaTheme(themeMode = userSettings.themeMode) {
         if (isFullScreenOverlay) {
             when {
-                !userSettings.onboardingDone || currentDestination == Screen.Onboarding -> {
-                    OnboardingScreen(
+                !userSettings.onboardingDone || currentDestination == Screen.Onboarding || currentDestination == Screen.WelcomeWorkflow -> {
+                    WelcomeWorkflowScreen(
                         onNavigate = navigateTo,
-                        onCompleteOnboarding = { pin, bio, day, b, c, ca, l, fd ->
-                            handleCompleteOnboarding(pin, bio, day, b, c, ca, l, fd)
+                        onCompleteWelcomeWorkflow = {
+                            scope.launch {
+                                settingsRepository.setOnboardingDone(true)
+                                LockManager.unlock()
+                            }
                         },
                         modifier = modifier
                     )
@@ -647,13 +629,22 @@ fun CoconutApp(
                             Screen.ParserTest -> ParserTestScreen(onNavigate = navigateTo, modifier = screenModifier)
                             Screen.WelcomeWorkflow -> WelcomeWorkflowScreen(
                                 onNavigate = navigateTo,
+                                onCompleteWelcomeWorkflow = {
+                                    scope.launch {
+                                        settingsRepository.setOnboardingDone(true)
+                                        LockManager.unlock()
+                                    }
+                                },
                                 modifier = screenModifier
                             )
 
-                            Screen.Onboarding -> OnboardingScreen(
+                            Screen.Onboarding -> WelcomeWorkflowScreen(
                                 onNavigate = navigateTo,
-                                onCompleteOnboarding = { pin, bio, day, b, c, ca, l, fd ->
-                                    handleCompleteOnboarding(pin, bio, day, b, c, ca, l, fd)
+                                onCompleteWelcomeWorkflow = {
+                                    scope.launch {
+                                        settingsRepository.setOnboardingDone(true)
+                                        LockManager.unlock()
+                                    }
                                 },
                                 modifier = screenModifier
                             )
