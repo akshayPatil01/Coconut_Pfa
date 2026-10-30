@@ -687,6 +687,43 @@ private fun Step2Pin(onBack: () -> Unit, onNext: () -> Unit) {
     val coroutineScope = rememberCoroutineScope()
     val pinDigits = remember { mutableStateListOf<Int>() }
     var biometricEnabled by remember { mutableStateOf(true) }
+    var showInfoDialog by remember { mutableStateOf(false) }
+
+    // Educational Info Dialog
+    if (showInfoDialog) {
+        AlertDialog(
+            onDismissRequest = { showInfoDialog = false },
+            title = {
+                Text(
+                    text = "Master PIN & Vault",
+                    fontFamily = PlusJakartaSans,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF131315)
+                )
+            },
+            text = {
+                Text(
+                    text = "Your Master PIN encrypts your financial data locally on this device using Android's hardware Secure Element.\n\nIt ensures offline privacy and enables seamless biometric access.",
+                    fontFamily = PlusJakartaSans,
+                    fontSize = 13.sp,
+                    lineHeight = 20.sp,
+                    color = Color(0xFF666B72)
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showInfoDialog = false }) {
+                    Text(
+                        text = "Got it",
+                        fontFamily = PlusJakartaSans,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF131315)
+                    )
+                }
+            },
+            containerColor = Color.White,
+            shape = RoundedCornerShape(20.dp)
+        )
+    }
 
     Column(
         modifier = Modifier
@@ -703,7 +740,7 @@ private fun Step2Pin(onBack: () -> Unit, onNext: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.fillMaxWidth()
         ) {
-            // Header Row: Back button, Vault Setup badge, Lock icon
+            // Header Row: Round Back Button, Step 1 Badge, Round Info Button
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -729,8 +766,8 @@ private fun Step2Pin(onBack: () -> Unit, onNext: () -> Unit) {
                 Row(
                     modifier = Modifier
                         .clip(CircleShape)
-                        .background(Color(0xFFECFDF5))
-                        .border(1.dp, Color(0xFFA7F3D0).copy(alpha = 0.6f), CircleShape)
+                        .background(Color.White)
+                        .border(1.dp, Color(0xFFE8EAED), CircleShape)
                         .padding(horizontal = 14.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -739,12 +776,12 @@ private fun Step2Pin(onBack: () -> Unit, onNext: () -> Unit) {
                         modifier = Modifier
                             .size(6.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFF10B981))
+                            .background(Color(0xFF131315))
                     )
                     Text(
-                        text = "VAULT SETUP",
+                        text = "STEP 1 OF 6",
                         fontFamily = PlusJakartaSans,
-                        color = Color(0xFF065F46),
+                        color = Color(0xFF131315).copy(alpha = 0.85f),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
                         letterSpacing = 0.6.sp
@@ -756,29 +793,20 @@ private fun Step2Pin(onBack: () -> Unit, onNext: () -> Unit) {
                         .size(40.dp)
                         .clip(CircleShape)
                         .background(Color.White)
-                        .border(1.dp, Color(0xFFE4E4E7), CircleShape),
+                        .border(1.dp, Color(0xFFE4E4E7), CircleShape)
+                        .clickable { showInfoDialog = true },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Rounded.Lock,
-                        contentDescription = null,
-                        tint = Color(0xFF059669),
+                        imageVector = Icons.Rounded.Info,
+                        contentDescription = "Information",
+                        tint = Color(0xFF71717A),
                         modifier = Modifier.size(18.dp)
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // Step Indicator (showing step 2 of 6 in workflow)
-            StepIndicator(
-                total = 6,
-                current = 1,
-                activeColor = Color(0xFF18181B),
-                inactiveColor = Color(0xFFE4E4E7)
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(42.dp))
 
             // Title & Subtitle (Black & Light Grey text on White background)
             Text(
@@ -825,7 +853,7 @@ private fun Step2Pin(onBack: () -> Unit, onNext: () -> Unit) {
                 }
             }
 
-            Spacer(modifier = Modifier.height(28.dp))
+            Spacer(modifier = Modifier.height(40.dp))
 
             // Biometric Unlock Dark Card
             Row(
