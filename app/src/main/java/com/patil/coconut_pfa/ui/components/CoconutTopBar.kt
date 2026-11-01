@@ -39,6 +39,7 @@ fun CoconutTopBar(
     onSettingsClick: () -> Unit,
     modifier: Modifier = Modifier,
     subtitle: String? = null,
+    navigationIcon: (@Composable () -> Unit)? = null,
     titleContent: (@Composable () -> Unit)? = null,
     actionsContent: (@Composable RowScope.() -> Unit)? = null,
 ) {
@@ -71,12 +72,16 @@ fun CoconutTopBar(
             }
         },
         navigationIcon = {
-            IconButton(onClick = onMenuClick) {
-                Icon(
-                    imageVector = Icons.Rounded.Menu,
-                    contentDescription = "Open drawer",
-                    tint = MaterialTheme.colorScheme.onSurface
-                )
+            if (navigationIcon != null) {
+                navigationIcon()
+            } else {
+                IconButton(onClick = onMenuClick) {
+                    Icon(
+                        imageVector = Icons.Rounded.Menu,
+                        contentDescription = "Open drawer",
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                }
             }
         },
         actions = {

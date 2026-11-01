@@ -13,27 +13,34 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Alarm
+import androidx.compose.material.icons.rounded.AutoMode
 import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.Category
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.CloudSync
 import androidx.compose.material.icons.rounded.DeleteSweep
@@ -41,15 +48,22 @@ import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.Key
 import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.LockOpen
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.NotificationsActive
+import androidx.compose.material.icons.rounded.Palette
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.QrCodeScanner
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Security
+import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.Sms
+import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.VerifiedUser
+import androidx.compose.material.icons.rounded.Widgets
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -81,6 +95,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -89,6 +106,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.google.android.gms.common.AccountPicker
 import com.patil.coconut_pfa.data.local.datastore.ThemeMode
@@ -189,6 +207,8 @@ fun SettingsScreen(
     onGenerateFakeTransactions: () -> Unit = {},
     vaultViewModel: com.patil.coconut_pfa.ui.viewmodel.VaultViewModel? = null,
     vaultUiState: com.patil.coconut_pfa.ui.viewmodel.VaultUiState? = null,
+    activeSection: SettingsSection? = null,
+    onActiveSectionChange: (SettingsSection?) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -196,10 +216,15 @@ fun SettingsScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val isPrivacyEnabled by PrivacyManager.isPrivacyEnabled.collectAsState()
 
-    var activeSection by remember { mutableStateOf<SettingsSection?>(null) }
+    var internalActiveSection by remember { mutableStateOf<SettingsSection?>(null) }
+    val currentActiveSection = activeSection ?: internalActiveSection
+    val setActiveSection: (SettingsSection?) -> Unit = { section ->
+        internalActiveSection = section
+        onActiveSectionChange(section)
+    }
 
-    BackHandler(enabled = activeSection != null) {
-        activeSection = null
+    BackHandler(enabled = currentActiveSection != null) {
+        setActiveSection(null)
     }
 
     var hasBackupPwd by remember { mutableStateOf(BackupPassphraseManager.hasBackupPassword(context)) }
@@ -367,31 +392,132 @@ fun SettingsScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            // Sub-section Header Bar (shown only when viewing a specific settings section)
-            if (activeSection != null) {
+            // Sub-section Header Bar (shown only when viewing a specific settings section without parent topBar back arrow)
+            if (activeSection == null && internalActiveSection != null) {
+                val s = internalActiveSection!!
+                val tagText = when (s) {
+                    SettingsSection.APPEARANCE -> "APPEARANCE"
+                    SettingsSection.SECURITY -> "SECURITY"
+                    SettingsSection.VAULT -> "VAULT"
+                    SettingsSection.SALARY_CYCLE -> "SALARY CYCLE"
+                    SettingsSection.WIDGET -> "WIDGET"
+                    SettingsSection.CATEGORIES -> "CATEGORIES"
+                    SettingsSection.SMS_PARSER -> "SMS PARSER"
+                    SettingsSection.REMINDERS -> "REMINDERS"
+                    SettingsSection.BACKUP -> "BACKUP"
+                    SettingsSection.TOOLS -> "TOOLS"
+                    SettingsSection.ABOUT -> "ABOUT"
+                }
+                val badgeText = when (s) {
+                    SettingsSection.APPEARANCE -> "Dynamic"
+                    SettingsSection.SECURITY -> "Active"
+                    SettingsSection.VAULT -> "Enclave"
+                    SettingsSection.SALARY_CYCLE -> "Active"
+                    SettingsSection.WIDGET -> "Live"
+                    SettingsSection.CATEGORIES -> "Taxonomy"
+                    SettingsSection.SMS_PARSER -> "Parser"
+                    SettingsSection.REMINDERS -> "Alerts"
+                    SettingsSection.BACKUP -> "Cloud"
+                    SettingsSection.TOOLS -> "Utility"
+                    SettingsSection.ABOUT -> "v1.0.4"
+                }
+
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    IconButton(onClick = { activeSection = null }) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                            contentDescription = "Back to Settings"
-                        )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f).padding(end = 12.dp)
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = Color.White,
+                            border = BorderStroke(1.dp, Color(0xFFE2E8F0).copy(alpha = 0.8f)),
+                            shadowElevation = 0.5.dp
+                        ) {
+                            IconButton(
+                                onClick = { setActiveSection(null) },
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                                    contentDescription = "Back to Settings",
+                                    tint = Color(0xFF334155),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    text = "SETTINGS",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF94A3B8),
+                                    letterSpacing = 1.sp
+                                )
+                                Text(
+                                    text = "/",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFCBD5E1)
+                                )
+                                Text(
+                                    text = tagText,
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = Color(0xFFD97706),
+                                    letterSpacing = 1.sp
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(1.dp))
+                            Text(
+                                text = s.title,
+                                style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp),
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF0F172A),
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            )
+                        }
                     }
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = activeSection?.title.orEmpty(),
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
+
+                    Surface(
+                        shape = RoundedCornerShape(percent = 50),
+                        color = Color(0xFFF1F5F9),
+                        border = BorderStroke(1.dp, Color(0xFFE2E8F0).copy(alpha = 0.8f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(6.dp)
+                                    .background(Color(0xFF10B981), CircleShape)
+                            )
+                            Text(
+                                text = badgeText,
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF475569)
+                            )
+                        }
+                    }
                 }
             }
 
             AnimatedContent(
-                targetState = activeSection,
+                targetState = currentActiveSection,
                 transitionSpec = { fadeIn() togetherWith fadeOut() },
                 label = "SettingsSectionTransition"
             ) { section ->
@@ -425,181 +551,420 @@ fun SettingsScreen(
                             MainSettingOptionCard(
                                 section = s,
                                 badgeText = badge,
-                                onClick = { activeSection = s }
+                                onClick = { setActiveSection(s) }
                             )
                         }
                     }
                 } else {
                     // SUB-OPTIONS VIEW for the selected section
                     LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color(0xFFF8F9FC)),
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 28.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         when (section) {
                             SettingsSection.APPEARANCE -> {
                                 item {
-                                    SettingsCategoryCard(title = "Appearance & Customization", icon = Icons.Rounded.LightMode) {
-                                        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                                            Text(
-                                                text = "Theme Mode",
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                fontWeight = FontWeight.SemiBold
-                                            )
-                                            Spacer(modifier = Modifier.height(8.dp))
+                                    SubTabBentoBanner(
+                                        tagText = "Adaptive Obsidian Engine",
+                                        headline = "Real-Time Fluid Theme",
+                                        description = "Dynamically mirrors system display schedule with soft OLED blacks and warm ambient accents.",
+                                        statusIcon = Icons.Rounded.AutoMode,
+                                        statusLabel = "SYNCED",
+                                        statusDotColor = Color(0xFFFBBF24),
+                                        statusIconTint = Color(0xFFFBBF24)
+                                    )
+                                }
+                                item {
+                                    SubTabCardContainer {
+                                        // 1. Theme Mode
+                                        SubTabSectionHeader(
+                                            title = "Theme Mode",
+                                            subtitle = "Auto-adapts to your environment",
+                                            icon = Icons.Rounded.LightMode
+                                        )
+                                        SubTabSegmentedSwitch(
+                                            options = listOf(ThemeMode.SYSTEM, ThemeMode.LIGHT, ThemeMode.DARK),
+                                            selectedOption = userSettings.themeMode,
+                                            onOptionSelected = { onUpdateThemeMode(it) },
+                                            labelProvider = { mode ->
+                                                when (mode) {
+                                                    ThemeMode.SYSTEM -> "System"
+                                                    ThemeMode.LIGHT -> "Light"
+                                                    ThemeMode.DARK -> "Dark"
+                                                }
+                                            }
+                                        )
+
+                                        HorizontalDivider(color = Color(0xFFF1F3F6), thickness = 1.dp)
+
+                                        // 2. In-App Toast Style
+                                        SubTabSectionHeader(
+                                            title = "In-App Toast Style",
+                                            subtitle = "Dark Slate in Light Mode / Soft Warm Tint in Dark Mode",
+                                            icon = Icons.Rounded.NotificationsActive
+                                        )
+
+                                        // Featured Active Toast Style Card (Gold Adaptive)
+                                        val isGoldAdaptive = userSettings.toastStyle == ToastStyle.ORANGE_ADAPTIVE
+                                        Surface(
+                                            onClick = { onUpdateToastStyle(ToastStyle.ORANGE_ADAPTIVE) },
+                                            shape = RoundedCornerShape(16.dp),
+                                            color = if (isGoldAdaptive) Color(0xFFFFFBEB) else Color(0xFFF8FAFC),
+                                            border = BorderStroke(
+                                                if (isGoldAdaptive) 2.dp else 1.dp,
+                                                if (isGoldAdaptive) Color(0xFFF59E0B) else Color(0xFFE2E8F0)
+                                            ),
+                                            shadowElevation = if (isGoldAdaptive) 0.5.dp else 0.dp,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    modifier = Modifier.weight(1f)
+                                                ) {
+                                                    Surface(
+                                                        shape = RoundedCornerShape(10.dp),
+                                                        color = Color(0xFFF59E0B).copy(alpha = 0.12f),
+                                                        modifier = Modifier.size(32.dp)
+                                                    ) {
+                                                        Box(contentAlignment = Alignment.Center) {
+                                                            Text(text = "✨", fontSize = 14.sp)
+                                                        }
+                                                    }
+                                                    Spacer(modifier = Modifier.width(10.dp))
+                                                    Column {
+                                                        Text(
+                                                            text = "Gold Adaptive",
+                                                            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.5.sp),
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = Color(0xFF0F172A)
+                                                        )
+                                                        Spacer(modifier = Modifier.height(1.dp))
+                                                        Text(
+                                                            text = "Recommended for high visibility",
+                                                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.5.sp),
+                                                            fontWeight = FontWeight.SemiBold,
+                                                            color = Color(0xFFD97706)
+                                                        )
+                                                    }
+                                                }
+
+                                                if (isGoldAdaptive) {
+                                                    Surface(
+                                                        shape = CircleShape,
+                                                        color = Color(0xFFF59E0B),
+                                                        modifier = Modifier.size(20.dp)
+                                                    ) {
+                                                        Box(contentAlignment = Alignment.Center) {
+                                                            Icon(
+                                                                imageVector = Icons.Rounded.Check,
+                                                                contentDescription = "Selected",
+                                                                tint = Color.White,
+                                                                modifier = Modifier.size(13.dp)
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        // Toast Preset Options 2x2 Grid
+                                        val presetList = listOf(
+                                            Pair(ToastStyle.DARK_SLATE_ORANGE, Pair("Dark Slate", Color(0xFF1E293B))),
+                                            Pair(ToastStyle.SOFT_ORANGE_TINT, Pair("Soft Gold", Color(0xFFF59E0B))),
+                                            Pair(ToastStyle.DEEP_ROYAL, Pair("Deep Royal", Color(0xFF4F46E5))),
+                                            Pair(ToastStyle.CRISP_BORDERED, Pair("Crisp Bordered", Color.White))
+                                        )
+
+                                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                             Row(
                                                 modifier = Modifier.fillMaxWidth(),
                                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                                             ) {
-                                                ThemeOptionChip(
-                                                    text = "System",
-                                                    selected = userSettings.themeMode == ThemeMode.SYSTEM,
-                                                    onClick = { onUpdateThemeMode(ThemeMode.SYSTEM) },
-                                                    modifier = Modifier.weight(1f)
-                                                )
-                                                ThemeOptionChip(
-                                                    text = "Light",
-                                                    selected = userSettings.themeMode == ThemeMode.LIGHT,
-                                                    onClick = { onUpdateThemeMode(ThemeMode.LIGHT) },
-                                                    modifier = Modifier.weight(1f)
-                                                )
-                                                ThemeOptionChip(
-                                                    text = "Dark",
-                                                    selected = userSettings.themeMode == ThemeMode.DARK,
-                                                    onClick = { onUpdateThemeMode(ThemeMode.DARK) },
-                                                    modifier = Modifier.weight(1f)
-                                                )
-                                            }
-
-                                            Spacer(modifier = Modifier.height(16.dp))
-                                            Text(
-                                                text = "In-App Toast Style",
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                fontWeight = FontWeight.SemiBold
-                                            )
-                                            Spacer(modifier = Modifier.height(4.dp))
-                                            Text(
-                                                text = userSettings.toastStyle.description,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                            Spacer(modifier = Modifier.height(10.dp))
-                                            Column(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                                            ) {
-                                                ThemeOptionChip(
-                                                    text = "🍊 Orange Adaptive (Recommended)",
-                                                    selected = userSettings.toastStyle == ToastStyle.ORANGE_ADAPTIVE,
-                                                    onClick = { onUpdateToastStyle(ToastStyle.ORANGE_ADAPTIVE) },
-                                                    modifier = Modifier.fillMaxWidth()
-                                                )
-                                                Row(
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                                ) {
-                                                    ThemeOptionChip(
-                                                        text = "🌑 Dark Slate",
-                                                        selected = userSettings.toastStyle == ToastStyle.DARK_SLATE_ORANGE,
-                                                        onClick = { onUpdateToastStyle(ToastStyle.DARK_SLATE_ORANGE) },
+                                                presetList.take(2).forEach { (style, meta) ->
+                                                    val (label, dotColor) = meta
+                                                    val isSelected = userSettings.toastStyle == style
+                                                    Surface(
+                                                        onClick = { onUpdateToastStyle(style) },
+                                                        shape = RoundedCornerShape(14.dp),
+                                                        color = if (isSelected) Color(0xFFFFFBEB) else Color(0xFFF8FAFC),
+                                                        border = BorderStroke(
+                                                            if (isSelected) 2.dp else 1.dp,
+                                                            if (isSelected) Color(0xFFF59E0B) else Color(0xFFE2E8F0)
+                                                        ),
                                                         modifier = Modifier.weight(1f)
-                                                    )
-                                                    ThemeOptionChip(
-                                                        text = "📙 Soft Orange",
-                                                        selected = userSettings.toastStyle == ToastStyle.SOFT_ORANGE_TINT,
-                                                        onClick = { onUpdateToastStyle(ToastStyle.SOFT_ORANGE_TINT) },
-                                                        modifier = Modifier.weight(1f)
-                                                    )
-                                                }
-                                                Row(
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                                ) {
-                                                    ThemeOptionChip(
-                                                        text = "👑 Deep Royal",
-                                                        selected = userSettings.toastStyle == ToastStyle.DEEP_ROYAL,
-                                                        onClick = { onUpdateToastStyle(ToastStyle.DEEP_ROYAL) },
-                                                        modifier = Modifier.weight(1f)
-                                                    )
-                                                    ThemeOptionChip(
-                                                        text = "◽ Crisp Bordered",
-                                                        selected = userSettings.toastStyle == ToastStyle.CRISP_BORDERED,
-                                                        onClick = { onUpdateToastStyle(ToastStyle.CRISP_BORDERED) },
-                                                        modifier = Modifier.weight(1f)
-                                                    )
-                                                }
-                                            }
-
-                                            Spacer(modifier = Modifier.height(16.dp))
-                                            OutlinedButton(
-                                                onClick = {
-                                                    scope.launch {
-                                                        snackbarHostState.showSnackbar(
-                                                            message = "Export Complete\noctober-report.pdf · 2.4 MB",
-                                                            actionLabel = "Open"
-                                                        )
+                                                    ) {
+                                                        Row(
+                                                            modifier = Modifier
+                                                                .fillMaxWidth()
+                                                                .padding(horizontal = 12.dp, vertical = 11.dp),
+                                                            verticalAlignment = Alignment.CenterVertically,
+                                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                        ) {
+                                                            Box(
+                                                                modifier = Modifier
+                                                                    .size(10.dp)
+                                                                    .background(dotColor, CircleShape)
+                                                                    .then(
+                                                                        if (dotColor == Color.White) Modifier.border(1.dp, Color(0xFF64748B), CircleShape) else Modifier
+                                                                    )
+                                                            )
+                                                            Text(
+                                                                text = label,
+                                                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.5.sp),
+                                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
+                                                                color = Color(0xFF0F172A),
+                                                                maxLines = 1,
+                                                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                                            )
+                                                        }
                                                     }
-                                                },
+                                                }
+                                            }
+                                            Row(
                                                 modifier = Modifier.fillMaxWidth(),
-                                                shape = RoundedCornerShape(12.dp)
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                                             ) {
-                                                Icon(
-                                                    imageVector = Icons.Rounded.NotificationsActive,
-                                                    contentDescription = null,
-                                                    modifier = Modifier.size(18.dp)
-                                                )
-                                                Spacer(modifier = Modifier.width(8.dp))
-                                                Text(
-                                                    text = "Generate Test Notification",
-                                                    fontWeight = FontWeight.Bold
-                                                )
+                                                presetList.drop(2).take(2).forEach { (style, meta) ->
+                                                    val (label, dotColor) = meta
+                                                    val isSelected = userSettings.toastStyle == style
+                                                    Surface(
+                                                        onClick = { onUpdateToastStyle(style) },
+                                                        shape = RoundedCornerShape(14.dp),
+                                                        color = if (isSelected) Color(0xFFFFFBEB) else Color(0xFFF8FAFC),
+                                                        border = BorderStroke(
+                                                            if (isSelected) 2.dp else 1.dp,
+                                                            if (isSelected) Color(0xFFF59E0B) else Color(0xFFE2E8F0)
+                                                        ),
+                                                        modifier = Modifier.weight(1f)
+                                                    ) {
+                                                        Row(
+                                                            modifier = Modifier
+                                                                .fillMaxWidth()
+                                                                .padding(horizontal = 12.dp, vertical = 11.dp),
+                                                            verticalAlignment = Alignment.CenterVertically,
+                                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                        ) {
+                                                            Box(
+                                                                modifier = Modifier
+                                                                    .size(10.dp)
+                                                                    .background(dotColor, CircleShape)
+                                                                    .then(
+                                                                        if (dotColor == Color.White) Modifier.border(1.dp, Color(0xFF64748B), CircleShape) else Modifier
+                                                                    )
+                                                            )
+                                                            Text(
+                                                                text = label,
+                                                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.5.sp),
+                                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
+                                                                color = Color(0xFF0F172A),
+                                                                maxLines = 1,
+                                                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                                            )
+                                                        }
+                                                    }
+                                                }
                                             }
                                         }
+
+                                        HorizontalDivider(color = Color(0xFFF1F3F6), thickness = 1.dp)
+
+                                        // 3. Accent & Tint Palette (Signature Fortis Tokens)
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = "Active Accent Tint",
+                                                style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp),
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF0F172A)
+                                            )
+                                            Text(
+                                                text = "Fortis Primary",
+                                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = Color(0xFF94A3B8)
+                                            )
+                                        }
+
+                                        val accents = listOf(
+                                            Pair("Gold", Color(0xFFF59E0B)),
+                                            Pair("Mint", Color(0xFF10B981)),
+                                            Pair("Butter", Color(0xFFFBBF24)),
+                                            Pair("Slate", Color(0xFF334155))
+                                        )
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            accents.forEachIndexed { i, (name, color) ->
+                                                val isActive = i == 0 // Gold is active signature
+                                                Surface(
+                                                    shape = RoundedCornerShape(12.dp),
+                                                    color = if (isActive) Color(0xFFFFFBEB) else Color(0xFFF8FAFC),
+                                                    border = BorderStroke(
+                                                        if (isActive) 2.dp else 1.dp,
+                                                        if (isActive) Color(0xFFF59E0B) else Color(0xFFE2E8F0)
+                                                    ),
+                                                    modifier = Modifier.weight(1f)
+                                                ) {
+                                                    Column(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .padding(vertical = 10.dp),
+                                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                                        verticalArrangement = Arrangement.Center
+                                                    ) {
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .size(16.dp)
+                                                                .background(color, CircleShape)
+                                                                .then(
+                                                                    if (isActive) Modifier.border(2.dp, Color.White, CircleShape) else Modifier
+                                                                )
+                                                        )
+                                                        Spacer(modifier = Modifier.height(4.dp))
+                                                        Text(
+                                                            text = name,
+                                                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                                            fontWeight = if (isActive) FontWeight.Bold else FontWeight.SemiBold,
+                                                            color = if (isActive) Color(0xFF0F172A) else Color(0xFF64748B)
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        HorizontalDivider(color = Color(0xFFF1F3F6), thickness = 1.dp)
+
+                                        // 4. Interactive Demo Action Button
+                                        SubTabBlackButton(
+                                            text = "Generate Test Notification",
+                                            icon = Icons.Rounded.NotificationsActive,
+                                            onClick = {
+                                                scope.launch {
+                                                    snackbarHostState.showSnackbar(
+                                                        message = "Export Complete\noctober-report.pdf · 2.4 MB",
+                                                        actionLabel = "Open"
+                                                    )
+                                                }
+                                            }
+                                        )
                                     }
                                 }
                             }
 
                             SettingsSection.SECURITY -> {
                                 item {
-                                    SettingsCategoryCard(title = "Security & Privacy", icon = Icons.Rounded.Security) {
-                                        SettingsSwitchRow(
-                                            title = "PIN Protection",
-                                            subtitle = "Require 4-digit PIN to open app",
-                                            checked = pinLockEnabled,
-                                            onCheckedChange = { checked -> pinLockEnabled = checked }
+                                    SubTabBentoBanner(
+                                        tagText = "Fortis Defense Enclave",
+                                        headline = "Hardware & Biometric Shield",
+                                        description = "Military-grade sandbox security. Multi-layer PIN hashing, hardware biometric gating, and customizable auto-lock intervals.",
+                                        statusIcon = Icons.Rounded.Shield,
+                                        statusLabel = if (pinLockEnabled || fingerprintEnabled) "ARMED" else "UNPROTECTED",
+                                        statusDotColor = if (pinLockEnabled || fingerprintEnabled) Color(0xFF10B981) else Color(0xFFF59E0B),
+                                        statusIconTint = if (pinLockEnabled || fingerprintEnabled) Color(0xFF10B981) else Color(0xFFF59E0B)
+                                    )
+                                }
+                                item {
+                                    SubTabCardContainer {
+                                        SubTabSectionHeader(
+                                            title = "Authentication Credentials",
+                                            subtitle = "Control who can unlock Fortis on this device",
+                                            icon = Icons.Rounded.Security
                                         )
-                                        SettingsSwitchRow(
-                                            title = "Fingerprint / Biometric",
-                                            subtitle = "Use device biometric unlock",
+                                        SubTabSwitchRow(
+                                            title = "4-Digit PIN Protection",
+                                            subtitle = "Require PIN verification whenever app is launched",
+                                            checked = pinLockEnabled,
+                                            onCheckedChange = { checked ->
+                                                if (checked) {
+                                                    showNewPinDialog = true
+                                                } else {
+                                                    scope.launch {
+                                                        settingsDataStore.updatePin(null, null)
+                                                        pinLockEnabled = false
+                                                        snackbarHostState.showSnackbar("PIN protection disabled.")
+                                                    }
+                                                }
+                                            }
+                                        )
+                                        SubTabSwitchRow(
+                                            title = "Fingerprint / Biometric Unlock",
+                                            subtitle = "Fast authentication using device biometric sensors",
                                             checked = fingerprintEnabled,
                                             onCheckedChange = { checked ->
                                                 fingerprintEnabled = checked
                                                 onUpdateBiometricEnabled(checked)
                                             }
                                         )
-                                        SettingsDropdownRow(
-                                            title = "Auto-lock Timeout",
-                                            currentValue = autoLockTimeout,
-                                            options = listOf("Immediately", "After 1 minute", "After 5 minutes", "After 15 minutes"),
+
+                                        HorizontalDivider(color = Color(0xFFF1F3F6), thickness = 1.dp)
+
+                                        SubTabSectionHeader(
+                                            title = "Auto-Lock Policy",
+                                            subtitle = "App automatically locks when left unattended in background",
+                                            icon = Icons.Rounded.Schedule
+                                        )
+                                        val lockTimeouts = listOf("Immediately", "After 1 minute", "After 5 minutes", "After 15 minutes")
+                                        SubTabSegmentedSwitch(
+                                            options = lockTimeouts,
+                                            selectedOption = autoLockTimeout,
                                             onOptionSelected = { selected ->
                                                 autoLockTimeout = selected
                                                 onUpdateAutoLockSeconds(timeoutLabelToSeconds(selected))
+                                            },
+                                            labelProvider = { opt ->
+                                                when (opt) {
+                                                    "Immediately" -> "Instant"
+                                                    "After 1 minute" -> "1 min"
+                                                    "After 5 minutes" -> "5 min"
+                                                    "After 15 minutes" -> "15 min"
+                                                    else -> opt
+                                                }
                                             }
                                         )
-                                        SettingsSwitchRow(
-                                            title = "Privacy Mode (Mask Balances)",
-                                            subtitle = "Hide sensitive numbers on screen",
+
+                                        HorizontalDivider(color = Color(0xFFF1F3F6), thickness = 1.dp)
+
+                                        SubTabSectionHeader(
+                                            title = "Screen Privacy & Masking",
+                                            subtitle = "Obscure account balances and transaction totals from observers",
+                                            icon = Icons.Rounded.Tune
+                                        )
+                                        SubTabSwitchRow(
+                                            title = "Privacy Mode (Mask Figures)",
+                                            subtitle = "Replaces numbers with '••••' across all screens",
                                             checked = isPrivacyEnabled,
                                             onCheckedChange = { PrivacyManager.togglePrivacy() }
                                         )
-                                        SettingsSwitchRow(
+                                        SubTabSwitchRow(
                                             title = "Privacy Mode by Default",
-                                            subtitle = "Always launch app in privacy mode",
+                                            subtitle = "Always boot Fortis in masked privacy mode",
                                             checked = privacyByDefault,
                                             onCheckedChange = { checked ->
                                                 privacyByDefault = checked
                                                 onUpdatePrivacyByDefault(checked)
                                             }
+                                        )
+
+                                        HorizontalDivider(color = Color(0xFFF1F3F6), thickness = 1.dp)
+
+                                        SubTabBlackButton(
+                                            text = "Lock App Now",
+                                            icon = Icons.Rounded.Lock,
+                                            onClick = { onNavigate(Screen.LockScreen) }
                                         )
                                     }
                                 }
@@ -617,9 +982,37 @@ fun SettingsScreen(
 
                             SettingsSection.SALARY_CYCLE -> {
                                 item {
-                                    SettingsCategoryCard(title = "Salary Cycle Settings", icon = Icons.Rounded.Schedule) {
-                                        SettingsDropdownRow(
+                                    SubTabBentoBanner(
+                                        tagText = "Smart Cash Flow Engine",
+                                        headline = "Payday & Accounting Cycle",
+                                        description = "Align monthly analytics, budget burn rates, and spending summaries directly to the exact day your salary hits your account.",
+                                        statusIcon = Icons.Rounded.Schedule,
+                                        statusLabel = "DAY $salaryStartDay OF MONTH",
+                                        statusDotColor = Color(0xFFF59E0B),
+                                        statusIconTint = Color(0xFFF59E0B)
+                                    )
+                                }
+                                item {
+                                    SubTabCardContainer {
+                                        SubTabSectionHeader(
                                             title = "Salary Cycle Start Day",
+                                            subtitle = "Select when your monthly accounting period begins",
+                                            icon = Icons.Rounded.Schedule
+                                        )
+
+                                        val popularSalaryDays = listOf(1, 25, 28, 30)
+                                        SubTabSegmentedSwitch(
+                                            options = popularSalaryDays,
+                                            selectedOption = if (salaryStartDay in popularSalaryDays) salaryStartDay else 25,
+                                            onOptionSelected = { day ->
+                                                salaryStartDay = day
+                                                onUpdateSalaryStartDay(day)
+                                            },
+                                            labelProvider = { "Day $it" }
+                                        )
+
+                                        SubTabDropdownRow(
+                                            title = "Custom Calendar Day",
                                             currentValue = "Day $salaryStartDay of the month",
                                             options = (1..31).map { "Day $it of the month" },
                                             onOptionSelected = { selected ->
@@ -628,21 +1021,134 @@ fun SettingsScreen(
                                                 onUpdateSalaryStartDay(day)
                                             }
                                         )
+
+                                        Surface(
+                                            shape = RoundedCornerShape(16.dp),
+                                            color = Color(0xFFFFFBEB),
+                                            border = BorderStroke(1.dp, Color(0xFFFEF3C7)),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(14.dp),
+                                                verticalAlignment = Alignment.Top,
+                                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Rounded.Info,
+                                                    contentDescription = null,
+                                                    tint = Color(0xFFD97706),
+                                                    modifier = Modifier.size(18.dp).offset(y = 2.dp)
+                                                )
+                                                Column {
+                                                    Text(
+                                                        text = "How Salary Cycle Works",
+                                                        style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.5.sp),
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = Color(0xFF92400E)
+                                                    )
+                                                    Spacer(modifier = Modifier.height(2.dp))
+                                                    val endDay = if (salaryStartDay == 1) 31 else salaryStartDay - 1
+                                                    Text(
+                                                        text = "Budgets and monthly charts will compute expenses from Day $salaryStartDay of the month through Day $endDay of the following month.",
+                                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                                                        color = Color(0xFFB45309)
+                                                    )
+                                                }
+                                            }
+                                        }
+
+                                        HorizontalDivider(color = Color(0xFFF1F3F6), thickness = 1.dp)
+
+                                        SubTabBlackButton(
+                                            text = "Apply Salary Cycle (Day $salaryStartDay)",
+                                            icon = Icons.Rounded.Check,
+                                            onClick = {
+                                                scope.launch {
+                                                    snackbarHostState.showSnackbar("Salary cycle successfully set to Day $salaryStartDay")
+                                                }
+                                            }
+                                        )
                                     }
                                 }
                             }
 
                             SettingsSection.WIDGET -> {
                                 item {
-                                    SettingsCategoryCard(title = "Widget Settings", icon = Icons.Rounded.Info) {
-                                        SettingsSwitchRow(
-                                            title = "Show amount on widget",
-                                            subtitle = "Warning: This amount will be visible on your home screen without unlocking the app.",
+                                    SubTabBentoBanner(
+                                        tagText = "Glanceable Live Engine",
+                                        headline = "Android Home Widget",
+                                        description = "Instant glance at net worth and quick expense shortcuts right from your device's home screen without opening the app.",
+                                        statusIcon = Icons.Rounded.Widgets,
+                                        statusLabel = if (userSettings.showAmountOnWidget) "VISIBLE" else "MASKED",
+                                        statusDotColor = if (userSettings.showAmountOnWidget) Color(0xFFF59E0B) else Color(0xFF10B981),
+                                        statusIconTint = if (userSettings.showAmountOnWidget) Color(0xFFF59E0B) else Color(0xFF10B981)
+                                    )
+                                }
+                                item {
+                                    SubTabCardContainer {
+                                        SubTabSectionHeader(
+                                            title = "Widget Display Privacy",
+                                            subtitle = "Manage how sensitive numbers appear on your launcher",
+                                            icon = Icons.Rounded.Widgets
+                                        )
+
+                                        SubTabSwitchRow(
+                                            title = "Show Balance On Widget",
+                                            subtitle = "Display total net worth on the home screen widget",
                                             checked = userSettings.showAmountOnWidget,
                                             onCheckedChange = { checked ->
                                                 onUpdateShowAmountOnWidget(checked)
                                                 scope.launch {
                                                     com.patil.coconut_pfa.widget.CoconutWidget.updateAll(context)
+                                                }
+                                            }
+                                        )
+
+                                        if (userSettings.showAmountOnWidget) {
+                                            Surface(
+                                                shape = RoundedCornerShape(16.dp),
+                                                color = Color(0xFFFFFBEB),
+                                                border = BorderStroke(1.dp, Color(0xFFFEF3C7)),
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.padding(14.dp),
+                                                    verticalAlignment = Alignment.Top,
+                                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Rounded.Shield,
+                                                        contentDescription = null,
+                                                        tint = Color(0xFFD97706),
+                                                        modifier = Modifier.size(18.dp).offset(y = 2.dp)
+                                                    )
+                                                    Column {
+                                                        Text(
+                                                            text = "Privacy Notice",
+                                                            style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.5.sp),
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = Color(0xFF92400E)
+                                                        )
+                                                        Spacer(modifier = Modifier.height(2.dp))
+                                                        Text(
+                                                            text = "Your net worth will be visible on your home screen without requiring biometric or PIN unlocking.",
+                                                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                                                            color = Color(0xFFB45309)
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        HorizontalDivider(color = Color(0xFFF1F3F6), thickness = 1.dp)
+
+                                        SubTabBlackButton(
+                                            text = "Force Sync Widget Now",
+                                            icon = Icons.Rounded.Widgets,
+                                            onClick = {
+                                                scope.launch {
+                                                    com.patil.coconut_pfa.widget.CoconutWidget.updateAll(context)
+                                                    snackbarHostState.showSnackbar("Home widget refreshed successfully!")
                                                 }
                                             }
                                         )
@@ -652,10 +1158,81 @@ fun SettingsScreen(
 
                             SettingsSection.CATEGORIES -> {
                                 item {
-                                    SettingsCategoryCard(title = "Categories & Sub-Categories", icon = Icons.Rounded.Category) {
-                                        SettingsNavigationRow(
-                                            title = "Manage Categories",
-                                            subtitle = "Dining, Housing, Shopping, Utilities, Salary",
+                                    SubTabBentoBanner(
+                                        tagText = "Transaction Taxonomy",
+                                        headline = "Category & Sub-Category System",
+                                        description = "Organize personal finances with custom categories, budget thresholds, sub-category groupings, and visual color icons.",
+                                        statusIcon = Icons.Rounded.Category,
+                                        statusLabel = "HIERARCHICAL",
+                                        statusDotColor = Color(0xFFF59E0B),
+                                        statusIconTint = Color(0xFFF59E0B)
+                                    )
+                                }
+                                item {
+                                    SubTabCardContainer {
+                                        SubTabSectionHeader(
+                                            title = "Taxonomy Overview",
+                                            subtitle = "Manage expense and income classifications",
+                                            icon = Icons.Rounded.Category
+                                        )
+
+                                        val showcaseCategories = listOf(
+                                            Pair("🍽️ Dining", "Food & Drinks"),
+                                            Pair("🏠 Housing", "Rent & Utilities"),
+                                            Pair("🛍️ Shopping", "Retail & Gear"),
+                                            Pair("⚡ Utilities", "Bills & Power"),
+                                            Pair("💼 Salary", "Income Feed"),
+                                            Pair("🚗 Transport", "Fuel & Commute")
+                                        )
+
+                                        Column(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            showcaseCategories.chunked(2).forEach { rowPair ->
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                ) {
+                                                    rowPair.forEach { (name, sub) ->
+                                                        Surface(
+                                                            shape = RoundedCornerShape(14.dp),
+                                                            color = Color(0xFFF8FAFC),
+                                                            border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                                                            modifier = Modifier.weight(1f)
+                                                        ) {
+                                                            Column(modifier = Modifier.padding(12.dp)) {
+                                                                Text(
+                                                                    text = name,
+                                                                    style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.5.sp),
+                                                                    fontWeight = FontWeight.Bold,
+                                                                    color = Color(0xFF0F172A)
+                                                                )
+                                                                Text(
+                                                                    text = sub,
+                                                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.5.sp),
+                                                                    color = Color(0xFF64748B)
+                                                                )
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        HorizontalDivider(color = Color(0xFFF1F3F6), thickness = 1.dp)
+
+                                        SubTabNavigationRow(
+                                            title = "Open Full Category Editor",
+                                            subtitle = "Add, edit, delete and arrange categories & sub-categories",
+                                            icon = Icons.Rounded.Tune,
+                                            badgeText = "Editor",
+                                            onClick = { showCategoriesDialog = true }
+                                        )
+
+                                        SubTabBlackButton(
+                                            text = "Launch Category Manager",
+                                            icon = Icons.Rounded.Category,
                                             onClick = { showCategoriesDialog = true }
                                         )
                                     }
@@ -664,10 +1241,27 @@ fun SettingsScreen(
 
                             SettingsSection.SMS_PARSER -> {
                                 item {
-                                    SettingsCategoryCard(title = "SMS & Bank Parser", icon = Icons.Rounded.Sms) {
-                                        SettingsSwitchRow(
-                                            title = "Enable SMS Auto-Detection",
-                                            subtitle = "Read bank & card SMS alerts automatically",
+                                    SubTabBentoBanner(
+                                        tagText = "Offline Local Neural Parser",
+                                        headline = "Automated Bank Transaction Feed",
+                                        description = "100% on-device SMS parsing engine. Real-time extraction of debit/credit alerts from HDFC, SBI, ICICI, Axis and UPI with zero cloud leakage.",
+                                        statusIcon = Icons.Rounded.Sms,
+                                        statusLabel = if (smsAutoDetectEnabled) "ACTIVE LISTENER" else "STANDBY",
+                                        statusDotColor = if (smsAutoDetectEnabled) Color(0xFF10B981) else Color(0xFF94A3B8),
+                                        statusIconTint = if (smsAutoDetectEnabled) Color(0xFF10B981) else Color(0xFF94A3B8)
+                                    )
+                                }
+                                item {
+                                    SubTabCardContainer {
+                                        SubTabSectionHeader(
+                                            title = "Real-Time Ingestion",
+                                            subtitle = "Listen for new bank and card transactional SMS messages",
+                                            icon = Icons.Rounded.Sms
+                                        )
+
+                                        SubTabSwitchRow(
+                                            title = "SMS Auto-Detection",
+                                            subtitle = "Automatically parses incoming bank alerts as they arrive",
                                             checked = smsAutoDetectEnabled,
                                             onCheckedChange = { checked ->
                                                 if (checked) {
@@ -683,9 +1277,20 @@ fun SettingsScreen(
                                                 }
                                             }
                                         )
-                                        SettingsNavigationRow(
+
+                                        HorizontalDivider(color = Color(0xFFF1F3F6), thickness = 1.dp)
+
+                                        SubTabSectionHeader(
+                                            title = "Historical Scan & Sandbox",
+                                            subtitle = "Catchup missed alerts and test extraction algorithms",
+                                            icon = Icons.Rounded.Tune
+                                        )
+
+                                        SubTabNavigationRow(
                                             title = "Scan Last 30 Days Inbox",
-                                            subtitle = "One-time scan of past SMS transactions",
+                                            subtitle = "Retroactively parse bank messages received in past month",
+                                            icon = Icons.Rounded.Schedule,
+                                            badgeText = "Batch Ingest",
                                             onClick = {
                                                 if (hasSmsPermissions) {
                                                     scope.launch {
@@ -703,9 +1308,20 @@ fun SettingsScreen(
                                                 }
                                             }
                                         )
-                                        SettingsNavigationRow(
-                                            title = "SMS Parser Test Screen",
-                                            subtitle = "Paste raw SMS text to test live parsing logic",
+
+                                        SubTabNavigationRow(
+                                            title = "SMS Parser Test Sandbox",
+                                            subtitle = "Paste sample bank messages to test token parsing rules",
+                                            icon = Icons.Rounded.BugReport,
+                                            badgeText = "Diagnostic",
+                                            onClick = { onNavigate(Screen.ParserTest) }
+                                        )
+
+                                        HorizontalDivider(color = Color(0xFFF1F3F6), thickness = 1.dp)
+
+                                        SubTabBlackButton(
+                                            text = "Open Parser Test Sandbox",
+                                            icon = Icons.Rounded.PlayArrow,
                                             onClick = { onNavigate(Screen.ParserTest) }
                                         )
                                     }
@@ -714,50 +1330,81 @@ fun SettingsScreen(
 
                             SettingsSection.REMINDERS -> {
                                 item {
-                                    SettingsCategoryCard(title = "Bill Reminders", icon = Icons.Rounded.Alarm) {
+                                    SubTabBentoBanner(
+                                        tagText = "Scheduled Notification Guard",
+                                        headline = "Bill & Due Date Alerts",
+                                        description = "Timely offline notifications before due dates. Protect your credit rating with smart reminders that never reveal sensitive monetary amounts.",
+                                        statusIcon = Icons.Rounded.Alarm,
+                                        statusLabel = if (hasNotificationPermission) "ACTIVE" else "PERMISSION REQ.",
+                                        statusDotColor = if (hasNotificationPermission) Color(0xFF10B981) else Color(0xFFEF4444),
+                                        statusIconTint = if (hasNotificationPermission) Color(0xFF10B981) else Color(0xFFEF4444)
+                                    )
+                                }
+                                item {
+                                    SubTabCardContainer {
                                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotificationPermission) {
-                                            Card(
-                                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f)),
-                                                shape = RoundedCornerShape(12.dp),
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .padding(12.dp)
+                                            Surface(
+                                                shape = RoundedCornerShape(16.dp),
+                                                color = Color(0xFFFEF2F2),
+                                                border = BorderStroke(1.dp, Color(0xFFFEE2E2)),
+                                                modifier = Modifier.fillMaxWidth()
                                             ) {
-                                                Column(modifier = Modifier.padding(12.dp)) {
+                                                Column(modifier = Modifier.padding(14.dp)) {
                                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                                         Icon(
                                                             imageVector = Icons.Rounded.Notifications,
                                                             contentDescription = null,
-                                                            tint = MaterialTheme.colorScheme.error,
-                                                            modifier = Modifier.size(20.dp)
+                                                            tint = Color(0xFFEF4444),
+                                                            modifier = Modifier.size(18.dp)
                                                         )
                                                         Spacer(modifier = Modifier.width(8.dp))
                                                         Text(
-                                                            text = "Notification Permission Needed",
-                                                            style = MaterialTheme.typography.titleSmall,
+                                                            text = "Notification Permission Required",
+                                                            style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.5.sp),
                                                             fontWeight = FontWeight.Bold,
-                                                            color = MaterialTheme.colorScheme.error
+                                                            color = Color(0xFF991B1B)
                                                         )
                                                     }
                                                     Spacer(modifier = Modifier.height(4.dp))
                                                     Text(
-                                                        text = "Fortis requires notification permission to alert you about bills due in N days, due today, and overdue payments.\n\nPrivacy Note: Payment amounts are NEVER included in notifications.",
-                                                        style = MaterialTheme.typography.bodySmall,
-                                                        color = MaterialTheme.colorScheme.onErrorContainer
+                                                        text = "Fortis requires permission to post reminders about upcoming bills, due today items, and overdue payments.\n\nPrivacy Guarantee: Payment amounts are NEVER displayed in notifications.",
+                                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                                                        color = Color(0xFFB91C1C)
                                                     )
-                                                    Spacer(modifier = Modifier.height(8.dp))
-                                                    Button(
-                                                        onClick = { showPermissionRationaleDialog = true },
-                                                        shape = RoundedCornerShape(8.dp)
-                                                    ) {
-                                                        Text("Grant Notification Permission")
-                                                    }
+                                                    Spacer(modifier = Modifier.height(10.dp))
+                                                    SubTabBlackButton(
+                                                        text = "Grant Notification Permission",
+                                                        icon = Icons.Rounded.Notifications,
+                                                        onClick = { showPermissionRationaleDialog = true }
+                                                    )
                                                 }
                                             }
+                                            HorizontalDivider(color = Color(0xFFF1F3F6), thickness = 1.dp)
                                         }
 
-                                        SettingsDropdownRow(
-                                            title = "Daily Reminder Time",
+                                        SubTabSectionHeader(
+                                            title = "Daily Alert Schedule",
+                                            subtitle = "Choose the exact hour when Fortis scans and alerts you",
+                                            icon = Icons.Rounded.Alarm
+                                        )
+
+                                        val quickReminderTimes = listOf("08:00 AM", "09:00 AM", "12:00 PM", "08:00 PM")
+                                        SubTabSegmentedSwitch(
+                                            options = quickReminderTimes,
+                                            selectedOption = if (reminderTimeLabel in quickReminderTimes) reminderTimeLabel else "09:00 AM",
+                                            onOptionSelected = { selected ->
+                                                reminderTimeLabel = selected
+                                                val hour = labelToHour(selected)
+                                                onUpdateReminderHour(hour)
+                                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotificationPermission) {
+                                                    showPermissionRationaleDialog = true
+                                                }
+                                            },
+                                            labelProvider = { it }
+                                        )
+
+                                        SubTabDropdownRow(
+                                            title = "Specific Notification Time",
                                             currentValue = reminderTimeLabel,
                                             options = listOf("08:00 AM", "09:00 AM", "10:00 AM", "12:00 PM", "06:00 PM", "08:00 PM", "09:00 PM"),
                                             onOptionSelected = { selected ->
@@ -769,8 +1416,28 @@ fun SettingsScreen(
                                                 }
                                             }
                                         )
-                                        SettingsDropdownRow(
-                                            title = "Default Days Before Due",
+
+                                        HorizontalDivider(color = Color(0xFFF1F3F6), thickness = 1.dp)
+
+                                        SubTabSectionHeader(
+                                            title = "Advance Warning Lead Time",
+                                            subtitle = "How many days ahead to start displaying bill notifications",
+                                            icon = Icons.Rounded.Schedule
+                                        )
+
+                                        val leadOptions = listOf(1, 2, 3, 7)
+                                        SubTabSegmentedSwitch(
+                                            options = leadOptions,
+                                            selectedOption = if (reminderDaysBefore in leadOptions) reminderDaysBefore else 3,
+                                            onOptionSelected = { days ->
+                                                reminderDaysBefore = days
+                                                onUpdateDefaultReminderDays(days)
+                                            },
+                                            labelProvider = { "$it ${if (it == 1) "day" else "days"} prior" }
+                                        )
+
+                                        SubTabDropdownRow(
+                                            title = "Custom Lead Time",
                                             currentValue = "$reminderDaysBefore days before",
                                             options = listOf("1 day before", "2 days before", "3 days before", "7 days before", "14 days before"),
                                             onOptionSelected = { selected ->
@@ -779,16 +1446,52 @@ fun SettingsScreen(
                                                 onUpdateDefaultReminderDays(days)
                                             }
                                         )
+
+                                        HorizontalDivider(color = Color(0xFFF1F3F6), thickness = 1.dp)
+
+                                        SubTabBlackButton(
+                                            text = "Simulate Bill Reminder",
+                                            icon = Icons.Rounded.NotificationsActive,
+                                            onClick = {
+                                                scope.launch {
+                                                    snackbarHostState.showSnackbar("Bill reminder alert active at $reminderTimeLabel ($reminderDaysBefore days prior)")
+                                                }
+                                            }
+                                        )
                                     }
                                 }
                             }
 
                             SettingsSection.BACKUP -> {
                                 item {
-                                    SettingsCategoryCard(title = "Backup & Recovery", icon = Icons.Rounded.CloudSync) {
-                                        Column(modifier = Modifier.padding(16.dp)) {
+                                    SubTabBentoBanner(
+                                        tagText = "Encrypted Cloud & Local Vault",
+                                        headline = "Zero-Knowledge Data Backup",
+                                        description = "AES-256 encrypted database snapshots. Sync securely to your personal Google Drive or export encrypted .cbk files locally.",
+                                        statusIcon = Icons.Rounded.CloudSync,
+                                        statusLabel = if (userSettings.googleAccountEmail != null) "DRIVE CONNECTED" else "OFFLINE ONLY",
+                                        statusDotColor = if (userSettings.googleAccountEmail != null) Color(0xFF10B981) else Color(0xFFF59E0B),
+                                        statusIconTint = if (userSettings.googleAccountEmail != null) Color(0xFF10B981) else Color(0xFFF59E0B)
+                                    )
+                                }
+                                item {
+                                    SubTabCardContainer {
+                                        SubTabSectionHeader(
+                                            title = "Google Drive Cloud Vault",
+                                            subtitle = "Encrypted backup storage synced to your Google account",
+                                            icon = Icons.Rounded.CloudSync
+                                        )
+
+                                        Surface(
+                                            shape = RoundedCornerShape(16.dp),
+                                            color = Color(0xFFF8FAFC),
+                                            border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
                                             Row(
-                                                modifier = Modifier.fillMaxWidth(),
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(14.dp),
                                                 horizontalArrangement = Arrangement.SpaceBetween,
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
@@ -796,15 +1499,16 @@ fun SettingsScreen(
                                                     Text(
                                                         text = if (userSettings.googleAccountEmail != null) "Google Account Connected" else "Google Account",
                                                         style = MaterialTheme.typography.bodyMedium,
-                                                        fontWeight = FontWeight.Bold
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = Color(0xFF0F172A)
                                                     )
                                                     Text(
                                                         text = userSettings.googleAccountEmail ?: "Not connected (Required for Drive backup)",
                                                         style = MaterialTheme.typography.bodySmall,
-                                                        color = if (userSettings.googleAccountEmail != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                                                        color = if (userSettings.googleAccountEmail != null) Color(0xFF10B981) else Color(0xFF64748B)
                                                     )
                                                 }
-                                                Button(
+                                                Surface(
                                                     onClick = {
                                                         if (userSettings.googleAccountEmail != null) {
                                                             showDisconnectGoogleDialog = true
@@ -815,77 +1519,80 @@ fun SettingsScreen(
                                                             accountPickerLauncher.launch(intent)
                                                         }
                                                     },
-                                                    shape = RoundedCornerShape(8.dp)
+                                                    shape = RoundedCornerShape(12.dp),
+                                                    color = if (userSettings.googleAccountEmail != null) Color(0xFFFEF2F2) else Color(0xFF0F172A),
+                                                    border = BorderStroke(
+                                                        1.dp,
+                                                        if (userSettings.googleAccountEmail != null) Color(0xFFFEE2E2) else Color(0xFF0F172A)
+                                                    )
                                                 ) {
-                                                    Text(if (userSettings.googleAccountEmail != null) "Disconnect" else "Connect")
+                                                    Text(
+                                                        text = if (userSettings.googleAccountEmail != null) "Disconnect" else "Connect",
+                                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.5.sp),
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = if (userSettings.googleAccountEmail != null) Color(0xFFEF4444) else Color.White,
+                                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                                                    )
                                                 }
                                             }
+                                        }
 
-                                            Spacer(modifier = Modifier.height(12.dp))
-                                            HorizontalDivider()
-                                            Spacer(modifier = Modifier.height(12.dp))
-
-                                            Text(
-                                                text = if (hasBackupPwd) "Backup Password: Set & Secured in Keystore" else "Backup Password: Not set (required for encrypted backups)",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = if (hasBackupPwd) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
-                                            )
-                                            Text(
-                                                text = "Last backup: ${if (userSettings.lastBackupAt != null) java.text.SimpleDateFormat("dd MMM yyyy, hh:mm a", java.util.Locale.US).format(java.util.Date(userSettings.lastBackupAt)) else "Never"}",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.outline
-                                            )
-                                            if (!userSettings.lastBackupStatus.isNullOrBlank()) {
+                                        Surface(
+                                            shape = RoundedCornerShape(16.dp),
+                                            color = if (hasBackupPwd) Color(0xFFFFFBEB) else Color(0xFFFEF2F2),
+                                            border = BorderStroke(1.dp, if (hasBackupPwd) Color(0xFFFEF3C7) else Color(0xFFFEE2E2)),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Column(modifier = Modifier.padding(14.dp)) {
                                                 Text(
-                                                    text = "Status: ${userSettings.lastBackupStatus}",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = if (userSettings.lastBackupStatus == "Success") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                                                    text = if (hasBackupPwd) "Backup Password: Set & Secured in Keystore" else "Backup Password: Not set (required for encrypted backups)",
+                                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = if (hasBackupPwd) Color(0xFFD97706) else Color(0xFFEF4444)
                                                 )
-                                            }
-
-                                            Spacer(modifier = Modifier.height(12.dp))
-                                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                                                OutlinedButton(
-                                                    onClick = {
-                                                        newBackupPasswordInput = ""
-                                                        confirmBackupPasswordInput = ""
-                                                        showSetPasswordDialog = true
-                                                    },
-                                                    shape = RoundedCornerShape(10.dp),
-                                                    modifier = Modifier.weight(1f)
-                                                ) {
-                                                    Text(if (hasBackupPwd) "Change Password" else "Set Password")
-                                                }
-                                                Button(
-                                                    onClick = {
-                                                        if (userSettings.googleAccountEmail.isNullOrBlank()) {
-                                                            scope.launch { snackbarHostState.showSnackbar("Please connect your Google account first.") }
-                                                        } else if (!hasBackupPwd) {
-                                                            showSetPasswordDialog = true
-                                                        } else {
-                                                            scope.launch {
-                                                                isUploadingDrive = true
-                                                                try {
-                                                                    com.patil.coconut_pfa.data.repository.DriveBackupManager.uploadBackupToDrive(context)
-                                                                    snackbarHostState.showSnackbar("Backup uploaded to Google Drive successfully!")
-                                                                } catch (e: Exception) {
-                                                                    snackbarHostState.showSnackbar("Backup failed: ${e.localizedMessage}")
-                                                                } finally {
-                                                                    isUploadingDrive = false
-                                                                }
-                                                            }
-                                                        }
-                                                    },
-                                                    shape = RoundedCornerShape(10.dp),
-                                                    modifier = Modifier.weight(1f),
-                                                    enabled = !isUploadingDrive
-                                                ) {
-                                                    Text(if (isUploadingDrive) "Backing up..." else "Backup Now")
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                Text(
+                                                    text = "Last backup: ${if (userSettings.lastBackupAt != null) java.text.SimpleDateFormat("dd MMM yyyy, hh:mm a", java.util.Locale.US).format(java.util.Date(userSettings.lastBackupAt)) else "Never"}",
+                                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                                                    color = Color(0xFF64748B)
+                                                )
+                                                if (!userSettings.lastBackupStatus.isNullOrBlank()) {
+                                                    Text(
+                                                        text = "Status: ${userSettings.lastBackupStatus}",
+                                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                                                        color = if (userSettings.lastBackupStatus == "Success") Color(0xFF10B981) else Color(0xFFEF4444)
+                                                    )
                                                 }
                                             }
+                                        }
 
-                                            Spacer(modifier = Modifier.height(8.dp))
-                                            OutlinedButton(
+                                        HorizontalDivider(color = Color(0xFFF1F3F6), thickness = 1.dp)
+
+                                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                                            Surface(
+                                                onClick = {
+                                                    newBackupPasswordInput = ""
+                                                    confirmBackupPasswordInput = ""
+                                                    showSetPasswordDialog = true
+                                                },
+                                                shape = RoundedCornerShape(14.dp),
+                                                color = Color(0xFFF8FAFC),
+                                                border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .height(46.dp)
+                                            ) {
+                                                Box(contentAlignment = Alignment.Center) {
+                                                    Text(
+                                                        text = if (hasBackupPwd) "Change Password" else "Set Password",
+                                                        style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.5.sp),
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        color = Color(0xFF0F172A)
+                                                    )
+                                                }
+                                            }
+
+                                            Surface(
                                                 onClick = {
                                                     if (userSettings.googleAccountEmail.isNullOrBlank()) {
                                                         scope.launch { snackbarHostState.showSnackbar("Please connect your Google account first.") }
@@ -893,46 +1600,121 @@ fun SettingsScreen(
                                                         showSetPasswordDialog = true
                                                     } else {
                                                         scope.launch {
-                                                            isLoadingDriveList = true
+                                                            isUploadingDrive = true
                                                             try {
-                                                                val list = com.patil.coconut_pfa.data.repository.DriveBackupManager.listDriveBackups(context)
-                                                                driveBackupsList = list
-                                                                selectedDriveFileId = null
-                                                                selectedRestoreUri = null
-                                                                showDriveBackupsDialog = true
+                                                                com.patil.coconut_pfa.data.repository.DriveBackupManager.uploadBackupToDrive(context)
+                                                                snackbarHostState.showSnackbar("Backup uploaded to Google Drive successfully!")
                                                             } catch (e: Exception) {
-                                                                snackbarHostState.showSnackbar("Failed to list Drive backups: ${e.localizedMessage}")
+                                                                snackbarHostState.showSnackbar("Backup failed: ${e.localizedMessage}")
                                                             } finally {
-                                                                isLoadingDriveList = false
+                                                                isUploadingDrive = false
                                                             }
                                                         }
                                                     }
                                                 },
-                                                shape = RoundedCornerShape(10.dp),
-                                                modifier = Modifier.fillMaxWidth(),
-                                                enabled = !isLoadingDriveList
+                                                shape = RoundedCornerShape(14.dp),
+                                                color = Color(0xFF0F172A),
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .height(46.dp)
                                             ) {
-                                                Text(if (isLoadingDriveList) "Loading Drive Backups..." else "Restore from Google Drive")
-                                            }
-
-                                            Spacer(modifier = Modifier.height(8.dp))
-                                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                                                OutlinedButton(
-                                                    onClick = {
-                                                        val fileName = "coconut-${java.text.SimpleDateFormat("yyyyMMdd-HHmm", java.util.Locale.getDefault()).format(java.util.Date())}.cbk"
-                                                        exportLauncher.launch(fileName)
-                                                    },
-                                                    shape = RoundedCornerShape(10.dp),
-                                                    modifier = Modifier.weight(1f)
-                                                ) {
-                                                    Text("Export File")
+                                                Box(contentAlignment = Alignment.Center) {
+                                                    Text(
+                                                        text = if (isUploadingDrive) "Backing up..." else "Backup Now",
+                                                        style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.5.sp),
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = Color.White
+                                                    )
                                                 }
-                                                OutlinedButton(
-                                                    onClick = { restoreLauncher.launch(arrayOf("*/*")) },
-                                                    shape = RoundedCornerShape(10.dp),
-                                                    modifier = Modifier.weight(1f)
-                                                ) {
-                                                    Text("Restore File")
+                                            }
+                                        }
+
+                                        Surface(
+                                            onClick = {
+                                                if (userSettings.googleAccountEmail.isNullOrBlank()) {
+                                                    scope.launch { snackbarHostState.showSnackbar("Please connect your Google account first.") }
+                                                } else if (!hasBackupPwd) {
+                                                    showSetPasswordDialog = true
+                                                } else {
+                                                    scope.launch {
+                                                        isLoadingDriveList = true
+                                                        try {
+                                                            val list = com.patil.coconut_pfa.data.repository.DriveBackupManager.listDriveBackups(context)
+                                                            driveBackupsList = list
+                                                            selectedDriveFileId = null
+                                                            selectedRestoreUri = null
+                                                            showDriveBackupsDialog = true
+                                                        } catch (e: Exception) {
+                                                            snackbarHostState.showSnackbar("Failed to list Drive backups: ${e.localizedMessage}")
+                                                        } finally {
+                                                            isLoadingDriveList = false
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            shape = RoundedCornerShape(14.dp),
+                                            color = Color(0xFFF8FAFC),
+                                            border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(46.dp)
+                                        ) {
+                                            Box(contentAlignment = Alignment.Center) {
+                                                Text(
+                                                    text = if (isLoadingDriveList) "Loading Drive Backups..." else "Restore from Google Drive",
+                                                    style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.5.sp),
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = Color(0xFF0F172A)
+                                                )
+                                            }
+                                        }
+
+                                        HorizontalDivider(color = Color(0xFFF1F3F6), thickness = 1.dp)
+
+                                        SubTabSectionHeader(
+                                            title = "Local Encrypted File Export",
+                                            subtitle = "Save or load encrypted .cbk files directly on device storage",
+                                            icon = Icons.Rounded.Description
+                                        )
+
+                                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                                            Surface(
+                                                onClick = {
+                                                    val fileName = "coconut-${java.text.SimpleDateFormat("yyyyMMdd-HHmm", java.util.Locale.getDefault()).format(java.util.Date())}.cbk"
+                                                    exportLauncher.launch(fileName)
+                                                },
+                                                shape = RoundedCornerShape(14.dp),
+                                                color = Color(0xFFF8FAFC),
+                                                border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .height(46.dp)
+                                            ) {
+                                                Box(contentAlignment = Alignment.Center) {
+                                                    Text(
+                                                        text = "Export File",
+                                                        style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.5.sp),
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        color = Color(0xFF0F172A)
+                                                    )
+                                                }
+                                            }
+                                            Surface(
+                                                onClick = { restoreLauncher.launch(arrayOf("*/*")) },
+                                                shape = RoundedCornerShape(14.dp),
+                                                color = Color(0xFFF8FAFC),
+                                                border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .height(46.dp)
+                                            ) {
+                                                Box(contentAlignment = Alignment.Center) {
+                                                    Text(
+                                                        text = "Restore File",
+                                                        style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.5.sp),
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        color = Color(0xFF0F172A)
+                                                    )
                                                 }
                                             }
                                         }
@@ -942,23 +1724,53 @@ fun SettingsScreen(
 
                             SettingsSection.TOOLS -> {
                                 item {
-                                    SettingsCategoryCard(title = "Tools & Data Management", icon = Icons.Rounded.Description) {
-                                        SettingsNavigationRow(
+                                    SubTabBentoBanner(
+                                        tagText = "Data Management Suite",
+                                        headline = "Financial Utilities & Ingestion",
+                                        description = "High-precision optical receipt scanning, CSV bank statement parsing, and 30-day trash recovery enclave.",
+                                        statusIcon = Icons.Rounded.Tune,
+                                        statusLabel = "3 TOOLS READY",
+                                        statusDotColor = Color(0xFF10B981),
+                                        statusIconTint = Color(0xFF10B981)
+                                    )
+                                }
+                                item {
+                                    SubTabCardContainer {
+                                        SubTabSectionHeader(
+                                            title = "Document & Optical Ingestion",
+                                            subtitle = "Import bank records and scan merchant receipts",
+                                            icon = Icons.Rounded.Description
+                                        )
+
+                                        SubTabNavigationRow(
                                             title = "Import Bank Statement",
-                                            subtitle = "CSV/Excel column mapping & row review",
+                                            subtitle = "CSV & Excel column mapper with multi-row validation",
                                             icon = Icons.Rounded.Description,
+                                            badgeText = "CSV/XLSX",
                                             onClick = { onNavigate(Screen.ImportStatement) }
                                         )
-                                        SettingsNavigationRow(
-                                            title = "Receipt Scan",
-                                            subtitle = "Extract amount & merchant from receipt photos",
+
+                                        SubTabNavigationRow(
+                                            title = "Receipt Scan (OCR)",
+                                            subtitle = "Extract total, vendor & date directly from photo bills",
                                             icon = Icons.Rounded.QrCodeScanner,
+                                            badgeText = "Camera OCR",
                                             onClick = { onNavigate(Screen.ReceiptScan) }
                                         )
-                                        SettingsNavigationRow(
+
+                                        HorizontalDivider(color = Color(0xFFF1F3F6), thickness = 1.dp)
+
+                                        SubTabSectionHeader(
+                                            title = "Recycle & Storage",
+                                            subtitle = "Recover deleted items or purge permanent records",
+                                            icon = Icons.Rounded.DeleteSweep
+                                        )
+
+                                        SubTabNavigationRow(
                                             title = "Trash & Data Recovery",
-                                            subtitle = "Recover deleted transactions & bills",
+                                            subtitle = "Recover deleted transactions, accounts, and bill reminders",
                                             icon = Icons.Rounded.DeleteSweep,
+                                            badgeText = "Recovery",
                                             onClick = { onNavigate(Screen.Trash) }
                                         )
                                     }
@@ -967,93 +1779,168 @@ fun SettingsScreen(
 
                             SettingsSection.ABOUT -> {
                                 item {
-                                    SettingsCategoryCard(title = "About Fortis", icon = Icons.Rounded.Info) {
-                                        Column(modifier = Modifier.padding(16.dp)) {
-                                            Text(
-                                                text = "Fortis v1.0.0",
-                                                style = MaterialTheme.typography.titleMedium,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                            Text(
-                                                text = "100% Offline & Private Personal Finance Assistant.",
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
+                                    SubTabBentoBanner(
+                                        tagText = "Fortis Financial Core",
+                                        headline = "Architecture & Privacy Specs",
+                                        description = "100% offline, zero trackers, military-grade client-side encryption. Crafted with modern Jetpack Compose & Material 3.",
+                                        statusIcon = Icons.Rounded.Info,
+                                        statusLabel = "v1.0.0 STABLE",
+                                        statusDotColor = Color(0xFF10B981),
+                                        statusIconTint = Color(0xFF10B981)
+                                    )
+                                }
+                                item {
+                                    SubTabCardContainer {
+                                        SubTabSectionHeader(
+                                            title = "Fortis v1.0.0",
+                                            subtitle = "Offline Personal Finance Assistant",
+                                            icon = Icons.Rounded.Info
+                                        )
 
-                                            Spacer(modifier = Modifier.height(16.dp))
-                                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                                            Spacer(modifier = Modifier.height(12.dp))
+                                        val features = listOf(
+                                            Pair("🛡️ 100% Offline & Private", "Your financial records never leave this device. Zero analytics or server sync."),
+                                            Pair("🔑 Hardware Keystore Encryption", "Protected with AES-256 GCM backed by Android Hardware Keystore."),
+                                            Pair("⚡ Fluid Reactive Architecture", "Built entirely with Jetpack Compose and modern unidirectional data flow.")
+                                        )
 
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .clickable { showDebugMenu = !showDebugMenu },
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Column(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            features.forEach { (title, desc) ->
+                                                Surface(
+                                                    shape = RoundedCornerShape(14.dp),
+                                                    color = Color(0xFFF8FAFC),
+                                                    border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                                                    modifier = Modifier.fillMaxWidth()
+                                                ) {
+                                                    Column(modifier = Modifier.padding(12.dp)) {
+                                                        Text(
+                                                            text = title,
+                                                            style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.5.sp),
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = Color(0xFF0F172A)
+                                                        )
+                                                        Spacer(modifier = Modifier.height(2.dp))
+                                                        Text(
+                                                            text = desc,
+                                                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                                                            color = Color(0xFF64748B)
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        HorizontalDivider(color = Color(0xFFF1F3F6), thickness = 1.dp)
+
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable { showDebugMenu = !showDebugMenu }
+                                                .padding(vertical = 4.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(36.dp)
+                                                        .background(Color(0xFFFFFBEB), RoundedCornerShape(10.dp))
+                                                        .border(1.dp, Color(0xFFFEF3C7), RoundedCornerShape(10.dp)),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
                                                     Icon(
                                                         imageVector = Icons.Rounded.BugReport,
                                                         contentDescription = null,
-                                                        tint = MaterialTheme.colorScheme.tertiary,
+                                                        tint = Color(0xFFD97706),
                                                         modifier = Modifier.size(20.dp)
                                                     )
-                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                }
+                                                Spacer(modifier = Modifier.width(12.dp))
+                                                Column {
                                                     Text(
-                                                        text = "Developer & Debug Menu",
-                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        text = "Developer & Diagnostic Suite",
+                                                        style = MaterialTheme.typography.labelMedium.copy(fontSize = 14.sp),
                                                         fontWeight = FontWeight.Bold,
-                                                        color = MaterialTheme.colorScheme.tertiary
+                                                        color = Color(0xFF0F172A)
+                                                    )
+                                                    Text(
+                                                        text = "Stress testing, workflows & lock overlays",
+                                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.5.sp),
+                                                        color = Color(0xFF64748B)
                                                     )
                                                 }
-
-                                                Icon(
-                                                    imageVector = if (showDebugMenu) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
-                                                    contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.tertiary
-                                                )
                                             }
 
-                                            AnimatedVisibility(visible = showDebugMenu) {
-                                                Column(
+                                            Icon(
+                                                imageVector = if (showDebugMenu) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                                                contentDescription = null,
+                                                tint = Color(0xFF64748B)
+                                            )
+                                        }
+
+                                        AnimatedVisibility(visible = showDebugMenu) {
+                                            Column(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(top = 10.dp),
+                                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                                            ) {
+                                                Surface(
+                                                    onClick = { onNavigate(Screen.WelcomeWorkflow) },
+                                                    shape = RoundedCornerShape(14.dp),
+                                                    color = Color(0xFFF8FAFC),
+                                                    border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
                                                     modifier = Modifier
                                                         .fillMaxWidth()
-                                                        .padding(top = 12.dp),
-                                                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                                                        .height(48.dp)
                                                 ) {
-                                                    OutlinedButton(
-                                                        onClick = { onNavigate(Screen.WelcomeWorkflow) },
-                                                        modifier = Modifier.fillMaxWidth(),
-                                                        shape = RoundedCornerShape(12.dp)
-                                                    ) {
-                                                        Text("Replay Welcome Workflow")
-                                                    }
-
-                                                    Button(
-                                                        onClick = { onNavigate(Screen.LockScreen) },
-                                                        modifier = Modifier.fillMaxWidth(),
-                                                        shape = RoundedCornerShape(12.dp)
-                                                    ) {
-                                                        Icon(imageVector = Icons.Rounded.Lock, contentDescription = null, modifier = Modifier.size(16.dp))
-                                                        Spacer(modifier = Modifier.width(6.dp))
-                                                        Text("Show Lock Screen Overlay")
-                                                    }
-
-                                                    Button(
-                                                        onClick = {
-                                                            onGenerateFakeTransactions()
-                                                            scope.launch {
-                                                                snackbarHostState.showSnackbar("Generated 10,000 fake transactions successfully!")
-                                                            }
-                                                        },
-                                                        modifier = Modifier.fillMaxWidth(),
-                                                        shape = RoundedCornerShape(12.dp)
-                                                    ) {
-                                                        Icon(imageVector = Icons.Rounded.BugReport, contentDescription = null, modifier = Modifier.size(16.dp))
-                                                        Spacer(modifier = Modifier.width(6.dp))
-                                                        Text("Generate 10,000 Fake Transactions")
+                                                    Box(contentAlignment = Alignment.Center) {
+                                                        Text(
+                                                            text = "Replay Welcome Workflow",
+                                                            style = MaterialTheme.typography.labelMedium.copy(fontSize = 13.sp),
+                                                            fontWeight = FontWeight.SemiBold,
+                                                            color = Color(0xFF0F172A)
+                                                        )
                                                     }
                                                 }
+
+                                                Surface(
+                                                    onClick = { onNavigate(Screen.LockScreen) },
+                                                    shape = RoundedCornerShape(14.dp),
+                                                    color = Color(0xFFF8FAFC),
+                                                    border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .height(48.dp)
+                                                ) {
+                                                    Row(
+                                                        modifier = Modifier.fillMaxSize(),
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.Center
+                                                    ) {
+                                                        Icon(imageVector = Icons.Rounded.Lock, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color(0xFF0F172A))
+                                                        Spacer(modifier = Modifier.width(6.dp))
+                                                        Text(
+                                                            text = "Show Lock Screen Overlay",
+                                                            style = MaterialTheme.typography.labelMedium.copy(fontSize = 13.sp),
+                                                            fontWeight = FontWeight.SemiBold,
+                                                            color = Color(0xFF0F172A)
+                                                        )
+                                                    }
+                                                }
+
+                                                SubTabBlackButton(
+                                                    text = "Generate 10,000 Fake Transactions",
+                                                    icon = Icons.Rounded.BugReport,
+                                                    onClick = {
+                                                        onGenerateFakeTransactions()
+                                                        scope.launch {
+                                                            snackbarHostState.showSnackbar("Generated 10,000 fake transactions successfully!")
+                                                        }
+                                                    }
+                                                )
                                             }
                                         }
                                     }
@@ -1521,6 +2408,550 @@ private fun MainSettingOptionCard(
 }
 
 @Composable
+private fun SubTabBentoBanner(
+    tagText: String,
+    headline: String,
+    description: String,
+    statusIcon: ImageVector,
+    statusLabel: String,
+    modifier: Modifier = Modifier,
+    statusDotColor: Color = Color(0xFFFBBF24),
+    statusIconTint: Color = Color(0xFFFBBF24)
+) {
+    Surface(
+        shape = RoundedCornerShape(24.dp),
+        color = Color(0xFF0E1726),
+        border = BorderStroke(1.dp, Color(0xFF1E293B)),
+        shadowElevation = 2.dp,
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            Color(0xFF0E1726),
+                            Color(0xFF111C30),
+                            Color(0xFF0B1320)
+                        )
+                    )
+                )
+                .clip(RoundedCornerShape(24.dp))
+        ) {
+            // Ambient warm gold glow at top-right
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .offset(x = 24.dp, y = (-20).dp)
+                    .size(130.dp)
+                    .background(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                Color(0xFFF59E0B).copy(alpha = 0.14f),
+                                Color.Transparent
+                            )
+                        )
+                    )
+            )
+
+            // Ambient emerald glow at bottom-left
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .offset(x = (-20).dp, y = 20.dp)
+                    .size(110.dp)
+                    .background(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                Color(0xFF10B981).copy(alpha = 0.10f),
+                                Color.Transparent
+                            )
+                        )
+                    )
+            )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(18.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Surface(
+                        shape = RoundedCornerShape(percent = 50),
+                        color = Color.White.copy(alpha = 0.08f),
+                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(6.dp)
+                                    .background(statusDotColor, CircleShape)
+                            )
+                            Text(
+                                text = tagText.uppercase(),
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp),
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFFDE68A),
+                                letterSpacing = 0.8.sp
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = headline,
+                        style = MaterialTheme.typography.titleMedium.copy(fontSize = 17.sp),
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        letterSpacing = (-0.2).sp
+                    )
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Text(
+                        text = description,
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                        color = Color(0xFF94A3B8),
+                        lineHeight = 16.sp
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(14.dp))
+
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = Color.White.copy(alpha = 0.05f),
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = statusIcon,
+                            contentDescription = null,
+                            tint = statusIconTint,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = statusLabel.uppercase(),
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.5.sp),
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color(0xFFCBD5E1),
+                            letterSpacing = 0.5.sp
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SubTabCardContainer(
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        color = Color.White,
+        border = BorderStroke(1.dp, Color(0xFFF1F3F6)),
+        shadowElevation = 0.5.dp
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            content = content
+        )
+    }
+}
+
+@Composable
+private fun SubTabSectionHeader(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+    iconBgColor: Color = Color(0xFFFFFBEB),
+    iconBorderColor: Color = Color(0xFFFEF3C7),
+    iconTint: Color = Color(0xFFD97706)
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = iconBgColor,
+            border = BorderStroke(1.dp, iconBorderColor),
+            modifier = Modifier.size(36.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = iconTint,
+                    modifier = Modifier.size(19.dp)
+                )
+            }
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium.copy(fontSize = 14.sp),
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF0F172A),
+                lineHeight = 18.sp
+            )
+            Spacer(modifier = Modifier.height(1.dp))
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                color = Color(0xFF64748B),
+                lineHeight = 15.sp
+            )
+        }
+    }
+}
+
+@Composable
+private fun SubTabBlackButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+    enabled: Boolean = true
+) {
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier
+            .fillMaxWidth()
+            .height(50.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+            containerColor = Color(0xFF0F172A),
+            contentColor = Color.White,
+            disabledContainerColor = Color(0xFF0F172A).copy(alpha = 0.5f),
+            disabledContentColor = Color.White.copy(alpha = 0.6f)
+        ),
+        elevation = androidx.compose.material3.ButtonDefaults.buttonElevation(defaultElevation = 1.dp)
+    ) {
+        if (icon != null) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = Color(0xFFFBBF24),
+                modifier = Modifier.size(19.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+        }
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelLarge.copy(fontSize = 13.5.sp),
+            fontWeight = FontWeight.Bold,
+            color = Color.White,
+            letterSpacing = (-0.1).sp
+        )
+    }
+}
+
+@Composable
+private fun <T> SubTabSegmentedSwitch(
+    options: List<T>,
+    selectedOption: T,
+    onOptionSelected: (T) -> Unit,
+    labelProvider: (T) -> String,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = Color(0xFFF1F5F9),
+        border = BorderStroke(1.dp, Color(0xFFE2E8F0).copy(alpha = 0.8f))
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            options.forEach { option ->
+                val isSelected = option == selectedOption
+                Surface(
+                    onClick = { onOptionSelected(option) },
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (isSelected) Color(0xFF0F172A) else Color.Transparent,
+                    shadowElevation = if (isSelected) 1.dp else 0.dp,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 10.dp, horizontal = 4.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .background(
+                                    if (isSelected) Color(0xFFF59E0B) else Color(0xFFCBD5E1),
+                                    CircleShape
+                                )
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = labelProvider(option),
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.5.sp),
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
+                            color = if (isSelected) Color.White else Color(0xFF64748B),
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SubTabSwitchRow(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable { onCheckedChange(!checked) }
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.5.sp),
+                fontWeight = FontWeight.SemiBold,
+                color = Color(0xFF0F172A)
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                color = Color(0xFF64748B),
+                lineHeight = 15.sp
+            )
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            colors = androidx.compose.material3.SwitchDefaults.colors(
+                checkedThumbColor = Color.White,
+                checkedTrackColor = Color(0xFF0F172A),
+                uncheckedThumbColor = Color.White,
+                uncheckedTrackColor = Color(0xFFE2E8F0),
+                uncheckedBorderColor = Color(0xFFCBD5E1)
+            )
+        )
+    }
+}
+
+@Composable
+private fun SubTabNavigationRow(
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+    badgeText: String? = null
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(16.dp),
+        color = Color(0xFFF8FAFC),
+        border = BorderStroke(1.dp, Color(0xFFE2E8F0).copy(alpha = 0.8f)),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 13.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f).padding(end = 8.dp)
+            ) {
+                if (icon != null) {
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color(0xFFFFFBEB),
+                        border = BorderStroke(1.dp, Color(0xFFFEF3C7)),
+                        modifier = Modifier.size(34.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = icon,
+                                contentDescription = null,
+                                tint = Color(0xFFD97706),
+                                modifier = Modifier.size(17.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.5.sp),
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF0F172A)
+                    )
+                    Spacer(modifier = Modifier.height(1.dp))
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                        color = Color(0xFF64748B),
+                        lineHeight = 15.sp
+                    )
+                }
+            }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                if (badgeText != null) {
+                    Surface(
+                        shape = RoundedCornerShape(percent = 50),
+                        color = Color(0xFFFFFBEB),
+                        border = BorderStroke(1.dp, Color(0xFFFEF3C7))
+                    ) {
+                        Text(
+                            text = badgeText,
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFB45309),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                        )
+                    }
+                }
+                Icon(
+                    imageVector = Icons.Rounded.ChevronRight,
+                    contentDescription = null,
+                    tint = Color(0xFF94A3B8),
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SubTabDropdownRow(
+    title: String,
+    currentValue: String,
+    options: List<String>,
+    onOptionSelected: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    subtitle: String? = null
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.5.sp),
+                fontWeight = FontWeight.SemiBold,
+                color = Color(0xFF0F172A)
+            )
+            if (!subtitle.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                    color = Color(0xFF64748B)
+                )
+            }
+        }
+
+        ExposedDropdownMenuBox(
+            expanded = expanded,
+            onExpandedChange = { expanded = !expanded }
+        ) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = Color(0xFFF1F5F9),
+                border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = currentValue,
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.5.sp),
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF0F172A)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+                }
+            }
+
+            ExposedDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+                shape = RoundedCornerShape(18.dp),
+                containerColor = Color.White,
+                border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+            ) {
+                options.forEach { opt ->
+                    CoconutDropdownMenuItem(
+                        text = opt,
+                        isSelected = opt == currentValue,
+                        onClick = {
+                            onOptionSelected(opt)
+                            expanded = false
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun SettingsCategoryCard(
     title: String,
     icon: ImageVector,
@@ -1780,20 +3211,27 @@ private fun VaultSettingsSection(
         }
     }
 
-    if (!isUnlocked) {
-        SettingsCategoryCard(title = "Vault Settings (Locked)", icon = Icons.Rounded.Lock) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text(
-                    text = "The vault is currently locked. Enter your master password to unlock and manage vault settings.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        SubTabBentoBanner(
+            tagText = "Zero-Knowledge Enclave",
+            headline = if (isUnlocked) "Vault Enclave Unlocked" else "Cryptographic Enclave Locked",
+            description = "Zero-knowledge AES-256 GCM hardware encryption protects your payment cards, credentials and private records.",
+            statusIcon = if (isUnlocked) Icons.Rounded.LockOpen else Icons.Rounded.Lock,
+            statusLabel = if (isUnlocked) "ACTIVE" else "LOCKED",
+            statusDotColor = if (isUnlocked) Color(0xFF10B981) else Color(0xFFE11D48),
+            statusIconTint = if (isUnlocked) Color(0xFF10B981) else Color(0xFFE11D48)
+        )
 
+        SubTabCardContainer {
+            if (!isUnlocked) {
+                SubTabSectionHeader(
+                    title = "Master Key Unlock",
+                    subtitle = "Enter master password to access encrypted vault enclave",
+                    icon = Icons.Rounded.Lock
+                )
                 OutlinedTextField(
                     value = masterPwdForUnlock,
                     onValueChange = { masterPwdForUnlock = it },
@@ -1804,109 +3242,140 @@ private fun VaultSettingsSection(
                         IconButton(onClick = { isPwdVisible = !isPwdVisible }) {
                             Icon(
                                 imageVector = if (isPwdVisible) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
-                                contentDescription = null
+                                contentDescription = null,
+                                tint = Color(0xFF64748B)
                             )
                         }
                     },
+                    shape = RoundedCornerShape(14.dp),
+                    colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Color(0xFFF59E0B),
+                        unfocusedBorderColor = Color(0xFFE2E8F0),
+                        focusedContainerColor = Color(0xFFF8FAFC),
+                        unfocusedContainerColor = Color(0xFFF8FAFC)
+                    ),
                     modifier = Modifier.fillMaxWidth()
                 )
-
-                Button(
+                SubTabBlackButton(
+                    text = "Unlock Vault Enclave",
+                    icon = Icons.Rounded.LockOpen,
+                    enabled = masterPwdForUnlock.isNotBlank(),
                     onClick = {
                         vaultViewModel?.unlockWithMasterPassword(masterPwdForUnlock)
                         masterPwdForUnlock = ""
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = masterPwdForUnlock.isNotBlank()
-                ) {
-                    Icon(imageVector = Icons.Rounded.LockOpen, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Unlock Vault")
-                }
-            }
-        }
-    } else {
-        SettingsCategoryCard(title = "Vault Settings", icon = Icons.Rounded.Lock) {
-            SettingsNavigationRow(
-                title = "Change Master Password*",
-                subtitle = "Re-wrap Vault Key with new master password",
-                onClick = { showChangeMasterPwdDialog = true }
-            )
-
-            SettingsSwitchRow(
-                title = "Fingerprint Unlock",
-                subtitle = "Unlock vault using device fingerprint sensor",
-                checked = uiState.deviceSettings.vaultBioEnabled,
-                onCheckedChange = { enabled ->
-                    if (enabled) {
-                        launchBiometricEncryptionPrompt { cipher ->
-                            vaultViewModel?.toggleFingerprint(true, cipher)
+                    }
+                )
+            } else {
+                SubTabSectionHeader(
+                    title = "Master Credentials",
+                    subtitle = "Master key lifecycle and biometric wrapping",
+                    icon = Icons.Rounded.Key
+                )
+                SubTabNavigationRow(
+                    title = "Change Master Password*",
+                    subtitle = "Re-wrap Vault Key with new master password",
+                    icon = Icons.Rounded.Key,
+                    badgeText = "Security",
+                    onClick = { showChangeMasterPwdDialog = true }
+                )
+                SubTabSwitchRow(
+                    title = "Fingerprint Unlock",
+                    subtitle = "Unlock vault using device biometric sensor",
+                    checked = uiState.deviceSettings.vaultBioEnabled,
+                    onCheckedChange = { enabled ->
+                        if (enabled) {
+                            launchBiometricEncryptionPrompt { cipher ->
+                                vaultViewModel?.toggleFingerprint(true, cipher)
+                            }
+                        } else {
+                            vaultViewModel?.toggleFingerprint(false)
                         }
-                    } else {
-                        vaultViewModel?.toggleFingerprint(false)
                     }
-                }
-            )
+                )
 
-            val backgroundLockLabel = when (uiState.deviceSettings.vaultBackgroundLockSeconds) {
-                0 -> "Immediately"
-                30 -> "30 seconds"
-                60 -> "1 minute"
-                300 -> "5 minutes"
-                else -> "${uiState.deviceSettings.vaultBackgroundLockSeconds} seconds"
+                HorizontalDivider(color = Color(0xFFF1F3F6), thickness = 1.dp)
+
+                SubTabSectionHeader(
+                    title = "Enclave Lock Policies",
+                    subtitle = "Background inactivity and clipboard sanitization",
+                    icon = Icons.Rounded.Schedule
+                )
+                val backgroundLockLabel = when (uiState.deviceSettings.vaultBackgroundLockSeconds) {
+                    0 -> "Immediately"
+                    30 -> "30 seconds"
+                    60 -> "1 minute"
+                    300 -> "5 minutes"
+                    else -> "${uiState.deviceSettings.vaultBackgroundLockSeconds} seconds"
+                }
+                SubTabDropdownRow(
+                    title = "Lock After Leaving App",
+                    subtitle = "Re-locks enclave when navigating outside Fortis",
+                    currentValue = backgroundLockLabel,
+                    options = listOf("Immediately", "30 seconds", "1 minute", "5 minutes"),
+                    onOptionSelected = { selected ->
+                        val seconds = when (selected) {
+                            "Immediately" -> 0
+                            "30 seconds" -> 30
+                            "1 minute" -> 60
+                            "5 minutes" -> 300
+                            else -> 30
+                        }
+                        vaultViewModel?.updateBackgroundLockSeconds(seconds)
+                    }
+                )
+
+                val clipboardClearLabel = when (uiState.deviceSettings.clipboardClearSeconds) {
+                    15 -> "15 seconds"
+                    30 -> "30 seconds"
+                    60 -> "60 seconds"
+                    90 -> "90 seconds"
+                    else -> "${uiState.deviceSettings.clipboardClearSeconds} seconds"
+                }
+                SubTabDropdownRow(
+                    title = "Clear Clipboard After",
+                    subtitle = "Automatically purge copied card and password data",
+                    currentValue = clipboardClearLabel,
+                    options = listOf("15 seconds", "30 seconds", "60 seconds", "90 seconds"),
+                    onOptionSelected = { selected ->
+                        val seconds = when (selected) {
+                            "15 seconds" -> 15
+                            "30 seconds" -> 30
+                            "60 seconds" -> 60
+                            "90 seconds" -> 90
+                            else -> 30
+                        }
+                        vaultViewModel?.updateClipboardClearSeconds(seconds)
+                    }
+                )
+
+                HorizontalDivider(color = Color(0xFFF1F3F6), thickness = 1.dp)
+
+                SubTabSectionHeader(
+                    title = "Cryptographic Enclave Lifecycle",
+                    subtitle = "Emergency recovery code and key rotation",
+                    icon = Icons.Rounded.Shield
+                )
+                SubTabNavigationRow(
+                    title = "Generate New Recovery Code*",
+                    subtitle = "Invalidates old code and issues fresh 16-char emergency code",
+                    icon = Icons.Rounded.Description,
+                    onClick = { showNewRecoveryCodePrompt = true }
+                )
+                SubTabNavigationRow(
+                    title = "Rotate Vault Key*",
+                    subtitle = "Re-encrypts all vault items in 1 atomic database transaction",
+                    icon = Icons.Rounded.CloudSync,
+                    onClick = { showRotateKeyPrompt = true }
+                )
+
+                HorizontalDivider(color = Color(0xFFF1F3F6), thickness = 1.dp)
+
+                SubTabBlackButton(
+                    text = "Lock Vault Enclave Now",
+                    icon = Icons.Rounded.Lock,
+                    onClick = { com.patil.coconut_pfa.data.local.security.VaultSession.lock() }
+                )
             }
-
-            SettingsDropdownRow(
-                title = "Lock After Leaving App",
-                currentValue = backgroundLockLabel,
-                options = listOf("Immediately", "30 seconds", "1 minute", "5 minutes"),
-                onOptionSelected = { selected ->
-                    val seconds = when (selected) {
-                        "Immediately" -> 0
-                        "30 seconds" -> 30
-                        "1 minute" -> 60
-                        "5 minutes" -> 300
-                        else -> 30
-                    }
-                    vaultViewModel?.updateBackgroundLockSeconds(seconds)
-                }
-            )
-
-            val clipboardClearLabel = when (uiState.deviceSettings.clipboardClearSeconds) {
-                15 -> "15 seconds"
-                30 -> "30 seconds"
-                60 -> "60 seconds"
-                90 -> "90 seconds"
-                else -> "${uiState.deviceSettings.clipboardClearSeconds} seconds"
-            }
-
-            SettingsDropdownRow(
-                title = "Clear Clipboard After",
-                currentValue = clipboardClearLabel,
-                options = listOf("15 seconds", "30 seconds", "60 seconds", "90 seconds"),
-                onOptionSelected = { selected ->
-                    val seconds = when (selected) {
-                        "15 seconds" -> 15
-                        "30 seconds" -> 30
-                        "60 seconds" -> 60
-                        "90 seconds" -> 90
-                        else -> 30
-                    }
-                    vaultViewModel?.updateClipboardClearSeconds(seconds)
-                }
-            )
-
-            SettingsNavigationRow(
-                title = "New Recovery Code*",
-                subtitle = "Generate a new 16-character recovery code (invalidates old code)",
-                onClick = { showNewRecoveryCodePrompt = true }
-            )
-
-            SettingsNavigationRow(
-                title = "Rotate Vault Key*",
-                subtitle = "Re-encrypt all vault items with a new Vault Key in 1 transaction",
-                onClick = { showRotateKeyPrompt = true }
-            )
         }
     }
 

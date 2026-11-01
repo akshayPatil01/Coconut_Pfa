@@ -8,11 +8,37 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Menu
+import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -23,8 +49,15 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.patil.coconut_pfa.ui.screens.SettingsSection
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -234,8 +267,11 @@ fun CoconutApp(
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val backStack = remember { mutableStateListOf<Screen>(Screen.Home) }
     val currentDestination = backStack.lastOrNull() ?: Screen.Home
+    var activeSettingsSection by remember { mutableStateOf<SettingsSection?>(null) }
+    var showSettingsDebugDialog by remember { mutableStateOf(false) }
 
     val navigateTo: (Screen) -> Unit = { destination ->
+        activeSettingsSection = null
         if (destination == Screen.Home) {
             backStack.clear()
             backStack.add(Screen.Home)
@@ -321,18 +357,234 @@ fun CoconutApp(
                 Scaffold(
                     modifier = modifier.fillMaxSize(),
                     topBar = {
-                        CoconutTopBar(
-                            title = currentDestination.title,
-                            subtitle = currentDestination.subtitle,
-                            onMenuClick = {
-                                scope.launch {
-                                    if (drawerState.isClosed) drawerState.open() else drawerState.close()
-                                }
-                            },
-                            onSettingsClick = {
-                                navigateTo(Screen.Settings)
+                        if (currentDestination == Screen.Settings) {
+                            if (activeSettingsSection == null) {
+                                CoconutTopBar(
+                                    title = "Settings",
+                                    subtitle = "Preferences, security & vault",
+                                    onMenuClick = {
+                                        scope.launch {
+                                            if (drawerState.isClosed) drawerState.open() else drawerState.close()
+                                        }
+                                    },
+                                    onSettingsClick = {},
+                                    navigationIcon = {
+                                        Surface(
+                                            shape = RoundedCornerShape(12.dp),
+                                            color = Color(0xFFF8FAFC),
+                                            border = BorderStroke(1.dp, Color(0xFFE2E8F0).copy(alpha = 0.6f)),
+                                            shadowElevation = 0.5.dp,
+                                            modifier = Modifier.padding(start = 12.dp)
+                                        ) {
+                                            IconButton(
+                                                onClick = {
+                                                    scope.launch {
+                                                        if (drawerState.isClosed) drawerState.open() else drawerState.close()
+                                                    }
+                                                },
+                                                modifier = Modifier.size(40.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Rounded.Menu,
+                                                    contentDescription = "Open drawer",
+                                                    tint = Color(0xFF334155),
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                            }
+                                        }
+                                    },
+                                    titleContent = {
+                                        Column {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                Text(
+                                                    text = "Settings",
+                                                    style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp),
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color(0xFF0F172A)
+                                                )
+                                                Surface(
+                                                    shape = RoundedCornerShape(percent = 50),
+                                                    color = Color(0xFFE6F9F2),
+                                                    border = BorderStroke(1.dp, Color(0xFFD1FAE5))
+                                                ) {
+                                                    Text(
+                                                        text = "Fortis Core",
+                                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        color = Color(0xFF047857),
+                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                    )
+                                                }
+                                            }
+                                            Spacer(modifier = Modifier.height(1.dp))
+                                            Text(
+                                                text = "Preferences, security & vault",
+                                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                                fontWeight = FontWeight.Medium,
+                                                color = Color(0xFF64748B)
+                                            )
+                                        }
+                                    },
+                                    actionsContent = {
+                                        Surface(
+                                            shape = RoundedCornerShape(12.dp),
+                                            color = Color(0xFFF8FAFC),
+                                            border = BorderStroke(1.dp, Color(0xFFE2E8F0).copy(alpha = 0.6f)),
+                                            shadowElevation = 0.5.dp,
+                                            modifier = Modifier.padding(end = 12.dp)
+                                        ) {
+                                            IconButton(
+                                                onClick = { showSettingsDebugDialog = true },
+                                                modifier = Modifier.size(40.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Rounded.Tune,
+                                                    contentDescription = "Quick Action",
+                                                    tint = Color(0xFF334155),
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                )
+                            } else {
+                                CoconutTopBar(
+                                    title = activeSettingsSection?.title.orEmpty(),
+                                    subtitle = null,
+                                    onMenuClick = { activeSettingsSection = null },
+                                    onSettingsClick = {},
+                                    navigationIcon = {
+                                        Surface(
+                                            shape = RoundedCornerShape(14.dp),
+                                            color = Color.White,
+                                            border = BorderStroke(1.dp, Color(0xFFE2E8F0).copy(alpha = 0.8f)),
+                                            shadowElevation = 0.5.dp,
+                                            modifier = Modifier.padding(start = 12.dp)
+                                        ) {
+                                            IconButton(
+                                                onClick = { activeSettingsSection = null },
+                                                modifier = Modifier.size(40.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                                                    contentDescription = "Back to Settings",
+                                                    tint = Color(0xFF334155),
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                            }
+                                        }
+                                    },
+                                    titleContent = {
+                                        Column {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                Text(
+                                                    text = "SETTINGS",
+                                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color(0xFF94A3B8),
+                                                    letterSpacing = 1.sp
+                                                )
+                                                Text(
+                                                    text = "/",
+                                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color(0xFFCBD5E1)
+                                                )
+                                                val sectionTag = when (activeSettingsSection) {
+                                                    SettingsSection.APPEARANCE -> "APPEARANCE"
+                                                    SettingsSection.SECURITY -> "SECURITY"
+                                                    SettingsSection.VAULT -> "VAULT"
+                                                    SettingsSection.SALARY_CYCLE -> "SALARY CYCLE"
+                                                    SettingsSection.WIDGET -> "WIDGET"
+                                                    SettingsSection.CATEGORIES -> "CATEGORIES"
+                                                    SettingsSection.SMS_PARSER -> "SMS PARSER"
+                                                    SettingsSection.REMINDERS -> "REMINDERS"
+                                                    SettingsSection.BACKUP -> "BACKUP"
+                                                    SettingsSection.TOOLS -> "TOOLS"
+                                                    SettingsSection.ABOUT -> "ABOUT"
+                                                    null -> ""
+                                                }
+                                                Text(
+                                                    text = sectionTag,
+                                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                                    fontWeight = FontWeight.ExtraBold,
+                                                    color = Color(0xFFD97706),
+                                                    letterSpacing = 1.sp
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.height(1.dp))
+                                            Text(
+                                                text = activeSettingsSection?.title.orEmpty(),
+                                                style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp),
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF0F172A),
+                                                maxLines = 1,
+                                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    },
+                                    actionsContent = {
+                                        val badgeText = when (activeSettingsSection) {
+                                            SettingsSection.APPEARANCE -> "Dynamic"
+                                            SettingsSection.SECURITY -> "Active"
+                                            SettingsSection.VAULT -> "Enclave"
+                                            SettingsSection.SALARY_CYCLE -> "Active"
+                                            SettingsSection.WIDGET -> "Live"
+                                            SettingsSection.CATEGORIES -> "Taxonomy"
+                                            SettingsSection.SMS_PARSER -> "Parser"
+                                            SettingsSection.REMINDERS -> "Alerts"
+                                            SettingsSection.BACKUP -> "Cloud"
+                                            SettingsSection.TOOLS -> "Utility"
+                                            SettingsSection.ABOUT -> "v1.0.4"
+                                            null -> ""
+                                        }
+                                        Surface(
+                                            shape = RoundedCornerShape(percent = 50),
+                                            color = Color(0xFFF1F5F9),
+                                            border = BorderStroke(1.dp, Color(0xFFE2E8F0).copy(alpha = 0.8f)),
+                                            modifier = Modifier.padding(end = 12.dp)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(6.dp)
+                                                        .background(Color(0xFF10B981), CircleShape)
+                                                )
+                                                Text(
+                                                    text = badgeText,
+                                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = Color(0xFF475569)
+                                                )
+                                            }
+                                        }
+                                    }
+                                )
                             }
-                        )
+                        } else {
+                            CoconutTopBar(
+                                title = currentDestination.title,
+                                subtitle = currentDestination.subtitle,
+                                onMenuClick = {
+                                    scope.launch {
+                                        if (drawerState.isClosed) drawerState.open() else drawerState.close()
+                                    }
+                                },
+                                onSettingsClick = {
+                                    navigateTo(Screen.Settings)
+                                }
+                            )
+                        }
                     },
                     bottomBar = {
                         CoconutBottomBar(
@@ -521,6 +773,8 @@ fun CoconutApp(
                                 userSettings = userSettings,
                                 vaultViewModel = vaultViewModel,
                                 vaultUiState = vaultUiState,
+                                activeSection = activeSettingsSection,
+                                onActiveSectionChange = { activeSettingsSection = it },
                                 onUpdateBiometricEnabled = { enabled -> scope.launch { settingsRepository.setBiometricEnabled(enabled) } },
                                 onUpdateAutoLockSeconds = { seconds -> scope.launch { settingsRepository.setAutoLockSeconds(seconds) } },
                                 onUpdatePrivacyByDefault = { enabled -> scope.launch { settingsRepository.setPrivacyModeDefault(enabled) } },
@@ -700,6 +954,86 @@ fun CoconutApp(
                     }
                 }
             }
+        }
+
+        if (showSettingsDebugDialog) {
+            AlertDialog(
+                onDismissRequest = { showSettingsDebugDialog = false },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = Color(0xFFF1F5F9),
+                            modifier = Modifier.size(34.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Tune,
+                                    contentDescription = null,
+                                    tint = Color(0xFF0F172A),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text("Quick Actions & Tools", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                    }
+                },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = {
+                                showSettingsDebugDialog = false
+                                navigateTo(Screen.WelcomeWorkflow)
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("Replay Welcome Workflow")
+                        }
+                        OutlinedButton(
+                            onClick = {
+                                showSettingsDebugDialog = false
+                                navigateTo(Screen.LockScreen)
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("Show Lock Screen Overlay")
+                        }
+                        Button(
+                            onClick = {
+                                showSettingsDebugDialog = false
+                                scope.launch {
+                                    val txns = (1..10000).map { i ->
+                                        com.patil.coconut_pfa.data.local.entity.TxnEntity(
+                                            id = "fake_txn_$i",
+                                            type = if (i % 5 == 0) com.patil.coconut_pfa.data.local.entity.DbTxnType.INCOME else com.patil.coconut_pfa.data.local.entity.DbTxnType.EXPENSE,
+                                            amountPaise = (100..50000L).random(),
+                                            accountId = "acc_1",
+                                            categoryId = "cat_exp_groceries",
+                                            payee = "Merchant $i",
+                                            note = "Fake txn #$i",
+                                            occurredAt = System.currentTimeMillis() - (i.toLong() * 60 * 1000L),
+                                            source = com.patil.coconut_pfa.data.local.entity.DbTxnSource.MANUAL
+                                        )
+                                    }
+                                    transactionRepository.saveTransactions(txns)
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("Generate 10,000 Fake Transactions")
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showSettingsDebugDialog = false }) {
+                        Text("Close")
+                    }
+                }
+            )
         }
     }
 }
