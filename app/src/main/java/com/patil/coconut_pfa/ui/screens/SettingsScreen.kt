@@ -367,39 +367,26 @@ fun SettingsScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            // Screen Header Bar
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = {
-                    if (activeSection != null) {
-                        activeSection = null
-                    } else {
-                        onNavigate(Screen.Home)
+            // Sub-section Header Bar (shown only when viewing a specific settings section)
+            if (activeSection != null) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = { activeSection = null }) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                            contentDescription = "Back to Settings"
+                        )
                     }
-                }) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                        contentDescription = if (activeSection != null) "Back to Settings" else "Back to Dashboard"
-                    )
-                }
-                Spacer(modifier = Modifier.width(4.dp))
-                Column {
+                    Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = activeSection?.title ?: "Settings",
+                        text = activeSection?.title.orEmpty(),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )
-                    if (activeSection == null) {
-                        Text(
-                            text = "Preferences, security & app options",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
                 }
             }
 
